@@ -534,12 +534,25 @@ public partial class MainWindow : Window
     {
         if (_suppressEditor || _selected is null || _currentDocument is null) return;
 
-        _selected.Translation = TranslationBox.Text;
+        var before = _selected.Translation;
+        var after = TranslationBox.Text;
+
+        if (string.Equals(before, after, StringComparison.Ordinal))
+            return;
+
+        RecordEditBatch(new EditBatch(
+            new List<TranslationEdit>
+            {
+                new(_currentDocument, _selected, before, after)
+            },
+            "Изменение перевода"));
+
+        _selected.Translation = after;
         ValidationService.Validate(_selected);
         _currentDocument.IsDirty = true;
         _currentDocument.RefreshComputedProperties();
 
-        LengthLabel.Text = $"{TranslationBox.Text.Length:N0} символов";
+        LengthLabel.Text = $"{after.Length:N0} символов";
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateCounters();
@@ -549,7 +562,7 @@ public partial class MainWindow : Window
 
     private void UpdateExactMatchesPanel()
     {
-        if (_selected is null || _currentDocument is null || string.IsNullOrEmpty(_selected.Source))
+        if (_selected is null || string.IsNullOrEmpty(_selected.Source))
         {
             ExactMatchesCountText.Text = "0";
             ExactMatchesInfoText.Text = "Точные совпадения не найдены";
@@ -558,7 +571,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var matches = GetExactSourceMatches(_selected).ToList();
+        var matches = GetExactSourceMatches(_selected);
         var otherMatches = Math.Max(0, matches.Count - 1);
 
         ExactMatchesCountText.Text = matches.Count.ToString("N0");
@@ -572,71 +585,73 @@ public partial class MainWindow : Window
         }
 
         var distinctTranslations = matches
-            .Select(e => e.Translation)
-            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(item => item.Entry.Translation)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+        var fileCount = matches
+            .Select(item => item.Document.FilePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
 
         if (distinctTranslations.Count > 1)
         {
             ExactMatchesInfoText.Text =
-                $"⚠ Найдено разных вариантов перевода: {distinctTranslations.Count}. Совпадение оригинала — 100%.";
+                $"⚠ Найдено разных вариантов перевода: {distinctTranslations.Count}. " +
+                $"100% совпадений: {matches.Count:N0} в {fileCount:N0} открытых файлах.";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0xB3, 0x3A, 0x2B));
         }
         else
         {
             ExactMatchesInfoText.Text =
-                $"Найдено ещё {otherMatches:N0} строк с полностью идентичным оригиналом.";
+                $"Найдено ещё {otherMatches:N0} строк с 100% идентичным оригиналом " +
+                $"в {fileCount:N0} открытых файлах.";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x75, 0x40));
         }
 
         ApplyExactMatchesButton.IsEnabled = !string.IsNullOrWhiteSpace(_selected.Translation);
     }
 
-    private IEnumerable<LocalizationEntry> GetExactSourceMatches(LocalizationEntry entry)
-    {
-        if (_currentDocument is null)
-            return Enumerable.Empty<LocalizationEntry>();
-
-        return _currentDocument.Entries.Where(candidate =>
-            string.Equals(candidate.Source, entry.Source, StringComparison.Ordinal));
-    }
-
     private void ApplyExactMatchesButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_selected is null || _currentDocument is null || string.IsNullOrWhiteSpace(_selected.Translation))
+        if (_selected is null || string.IsNullOrWhiteSpace(_selected.Translation))
             return;
 
         var translation = _selected.Translation;
-        var matches = GetExactSourceMatches(_selected).ToList();
-        var changed = 0;
+        var matches = GetExactSourceMatches(_selected);
+        var edits = new List<TranslationEdit>();
 
-        foreach (var match in matches)
+        foreach (var item in matches)
         {
-            if (string.Equals(match.Translation, translation, StringComparison.Ordinal))
+            if (string.Equals(item.Entry.Translation, translation, StringComparison.Ordinal))
                 continue;
 
-            match.Translation = translation;
-            ValidationService.Validate(match);
-            changed++;
+            edits.Add(new TranslationEdit(
+                item.Document,
+                item.Entry,
+                item.Entry.Translation,
+                translation));
         }
 
-        if (changed == 0)
+        if (edits.Count == 0)
         {
             StatusText.Text = "Все точные совпадения уже имеют этот перевод";
             UpdateExactMatchesPanel();
             return;
         }
 
-        _currentDocument.IsDirty = true;
-        _currentDocument.RefreshComputedProperties();
-        EntriesGrid.Items.Refresh();
-        _view?.Refresh();
-        UpdateCounters();
-        UpdateExactMatchesPanel();
+        var batch = new EditBatch(edits, "Применение к точным совпадениям");
+        RecordEditBatch(batch);
+        ApplyEditBatch(batch, useAfter: true);
+
+        var affectedFiles = edits
+            .Select(edit => edit.Document.FilePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
 
         StatusText.Text =
-            $"Перевод применён к {changed:N0} строкам с 100% совпадением оригинала";
+            $"Перевод применён к {edits.Count:N0} строкам с 100% совпадением в {affectedFiles:N0} файлах";
     }
 
     private void UpdateValidationPanel()
