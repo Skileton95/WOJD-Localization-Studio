@@ -38,9 +38,35 @@
                   Background="White">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Время" Binding="{Binding LocalTimestamp}" Width="145"/>
-                <DataGridTextColumn Header="Оригинал" Binding="{Binding Source}" Width="1.3*"/>
-                <DataGridTextColumn Header="Было" Binding="{Binding Before}" Width="1.4*"/>
-                <DataGridTextColumn Header="Стало" Binding="{Binding After}" Width="1.4*"/>
+                <DataGridTextColumn Header="Оригинал" Binding="{Binding Source}" Width="1.2*"/>
+
+                <DataGridTemplateColumn Header="Было" Width="1.5*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock TextWrapping="Wrap" Margin="4,2">
+                                <Run Text="{Binding CommonPrefix}"/>
+                                <Run Text="{Binding BeforeChanged}"
+                                     Foreground="#B33A2B"
+                                     FontWeight="Bold"/>
+                                <Run Text="{Binding CommonSuffix}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Стало" Width="1.5*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock TextWrapping="Wrap" Margin="4,2">
+                                <Run Text="{Binding CommonPrefix}"/>
+                                <Run Text="{Binding AfterChanged}"
+                                     Foreground="#267540"
+                                     FontWeight="Bold"/>
+                                <Run Text="{Binding CommonSuffix}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 
