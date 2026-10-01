@@ -32,7 +32,7 @@ public partial class SimilarityWindow : Window
         if (SourceMatchesGrid.SelectedItem is not SimilarityMatch match)
             return;
 
-        SelectedTranslation = match.Entry.Translation;
+        SelectedTranslation = match.Translation;
         DialogResult = true;
     }
 }
