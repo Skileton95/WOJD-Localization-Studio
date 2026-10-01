@@ -20,6 +20,59 @@ public static class ValidationService
             Validate(entry);
     }
 
+    public static string AutoFixTechnicalTokens(string source, string translation)
+    {
+        if (string.IsNullOrEmpty(translation))
+            return translation;
+
+        var requiredCounts = TokenRegex.Matches(source ?? string.Empty)
+            .Select(match => NormalizeToken(match.Value))
+            .GroupBy(token => token, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        var keptCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        var cleaned = TokenRegex.Replace(translation, match =>
+        {
+            var normalized = NormalizeToken(match.Value);
+            requiredCounts.TryGetValue(normalized, out var required);
+
+            keptCounts.TryGetValue(normalized, out var kept);
+            if (kept >= required)
+                return string.Empty;
+
+            keptCounts[normalized] = kept + 1;
+            return match.Value;
+        });
+
+        var missingRawTokens = new List<string>();
+        var existingCounts = TokenRegex.Matches(cleaned)
+            .Select(match => NormalizeToken(match.Value))
+            .GroupBy(token => token, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        var consumedSourceCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (Match match in TokenRegex.Matches(source ?? string.Empty))
+        {
+            var normalized = NormalizeToken(match.Value);
+            consumedSourceCounts.TryGetValue(normalized, out var sourceSeen);
+            existingCounts.TryGetValue(normalized, out var existing);
+
+            sourceSeen++;
+            consumedSourceCounts[normalized] = sourceSeen;
+
+            if (sourceSeen > existing)
+                missingRawTokens.Add(match.Value);
+        }
+
+        if (missingRawTokens.Count == 0)
+            return cleaned;
+
+        var separator = cleaned.Length == 0 || char.IsWhiteSpace(cleaned[^1]) ? string.Empty : " ";
+        return cleaned + separator + string.Join(" ", missingRawTokens);
+    }
+
     public static string BuildSummary(string source, string translation)
     {
         if (string.IsNullOrWhiteSpace(translation)) return string.Empty;
