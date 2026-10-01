@@ -2635,26 +2635,73 @@ public partial class MainWindow : Window
         StatusText.Text = $"Сохранено файлов: {dirty.Count}";
     }
 
-    private async Task<bool> SaveDocumentAsync(LocalizationDocument document, bool showStatus = true)
+    private QualityReport BuildQualityReport(LocalizationDocument document)
+    {
+        ValidationService.ValidateAll(document.Entries);
+
+        var total = document.Entries.Count;
+        var translated = document.Entries.Count(entry =>
+            !string.IsNullOrWhiteSpace(entry.Translation));
+        var untranslated = total - translated;
+
+        var validationErrors = document.Entries.Count(entry =>
+            entry.HasValidationIssues);
+        var critical = document.Entries.Count(entry =>
+            entry.HasCriticalValidationIssues);
+        var chinese = document.Entries.Count(entry =>
+            ValidationService.HasIssueKind(
+                entry,
+                ValidationIssueKind.ChineseText));
+        var conflicts = document.Entries.Count(HasTranslationConflict);
+        var glossaryMismatches = document.Entries.Count(entry =>
+            GetGlossaryMismatches(entry).Count > 0);
+        var glossaryDefinitionConflicts = _glossaryService.GetConflicts().Count;
+
+        return new QualityReport(
+            total,
+            translated,
+            untranslated,
+            validationErrors,
+            critical,
+            chinese,
+            conflicts,
+            glossaryMismatches,
+            glossaryDefinitionConflicts);
+    }
+
+    private async Task<bool> SaveDocumentAsync(
+        LocalizationDocument document,
+        bool showStatus = true)
     {
         try
         {
-            ValidationService.ValidateAll(document.Entries);
+            var quality = BuildQualityReport(document);
 
-            var criticalCount = document.Entries.Count(entry => entry.HasCriticalValidationIssues);
-            if (criticalCount > 0)
+            if (quality.HasWarnings)
             {
                 var result = MessageBox.Show(
                     this,
-                    $"В файле «{document.FileName}» осталось критических ошибок: {criticalCount:N0}.\n\n" +
-                    "Это ошибки технических тегов, плейсхолдеров или переносов строки. Всё равно сохранить файл?",
-                    "Критические ошибки",
+                    $"Контроль качества перед сохранением «{document.FileName}»:\n\n" +
+                    $"Всего строк: {quality.Total:N0}\n" +
+                    $"Переведено: {quality.Translated:N0}\n" +
+                    $"Пустых: {quality.Untranslated:N0}\n\n" +
+                    $"Ошибки проверки: {quality.ValidationErrors:N0}\n" +
+                    $"Критические технические: {quality.CriticalErrors:N0}\n" +
+                    $"Остался китайский текст: {quality.ChineseText:N0}\n" +
+                    $"Конфликты одинаковых source: {quality.SourceConflicts:N0}\n" +
+                    $"Нарушения закреплённого глоссария: {quality.GlossaryMismatches:N0}\n" +
+                    $"Конфликты внутри глоссария: {quality.GlossaryDefinitionConflicts:N0}\n\n" +
+                    "Сохранение не блокируется. Сохранить файл с этими замечаниями?",
+                    "Контроль качества",
                     MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
+                    quality.CriticalErrors > 0
+                        ? MessageBoxImage.Warning
+                        : MessageBoxImage.Question);
 
                 if (result != MessageBoxResult.Yes)
                 {
-                    StatusText.Text = $"Сохранение отменено: {document.FileName}";
+                    StatusText.Text =
+                        $"Сохранение отменено после контроля качества: {document.FileName}";
                     return false;
                 }
             }
@@ -2666,13 +2713,21 @@ public partial class MainWindow : Window
                     StringComparison.Ordinal))
                 .ToList();
 
-            if (showStatus) StatusText.Text = $"Сохранение: {document.FileName}…";
-            await _service.SaveAsync(document.FilePath, document.Entries);
+            if (showStatus)
+                StatusText.Text = $"Сохранение: {document.FileName}…";
+
+            await _service.SaveAsync(
+                document.FilePath,
+                document.Entries);
 
             try
             {
-                await _translationHistoryService.AppendSavedChangesAsync(document, changedEntries);
-                await _translationMemoryService.RememberDocumentAsync(document);
+                await _translationHistoryService.AppendSavedChangesAsync(
+                    document,
+                    changedEntries);
+
+                await _translationMemoryService.RememberDocumentAsync(
+                    document);
             }
             catch
             {
@@ -2687,22 +2742,33 @@ public partial class MainWindow : Window
 
             if (ReferenceEquals(document, _currentDocument))
             {
+                RebuildGlossaryMismatchCache();
                 EntriesGrid.Items.Refresh();
                 RefreshFilteredViewPreservingSelection();
                 UpdateCounters();
+                UpdateButtons();
             }
 
-            if (showStatus) StatusText.Text = $"Сохранено: {document.FileName}";
+            if (showStatus)
+            {
+                StatusText.Text = quality.HasWarnings
+                    ? $"Сохранено с замечаниями контроля качества: {document.FileName}"
+                    : $"Сохранено: {document.FileName} • контроль качества пройден";
+            }
+
             return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this,
+            MessageBox.Show(
+                this,
                 $"Не удалось сохранить {document.FileName}.\n\n{ex.Message}",
                 "Ошибка сохранения",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
-            StatusText.Text = $"Ошибка сохранения: {document.FileName}";
+
+            StatusText.Text =
+                $"Ошибка сохранения: {document.FileName}";
             return false;
         }
     }
@@ -2749,6 +2815,26 @@ public partial class MainWindow : Window
 
         if (result != MessageBoxResult.Yes)
             e.Cancel = true;
+    }
+
+    private sealed record QualityReport(
+        int Total,
+        int Translated,
+        int Untranslated,
+        int ValidationErrors,
+        int CriticalErrors,
+        int ChineseText,
+        int SourceConflicts,
+        int GlossaryMismatches,
+        int GlossaryDefinitionConflicts)
+    {
+        public bool HasWarnings =>
+            ValidationErrors > 0 ||
+            CriticalErrors > 0 ||
+            ChineseText > 0 ||
+            SourceConflicts > 0 ||
+            GlossaryMismatches > 0 ||
+            GlossaryDefinitionConflicts > 0;
     }
 
     private sealed record ContextEntryView(int Offset, LocalizationEntry Entry)
