@@ -654,6 +654,99 @@ public partial class MainWindow : Window
             $"Перевод применён к {edits.Count:N0} строкам с 100% совпадением в {affectedFiles:N0} файлах";
     }
 
+    private void RecordEditBatch(EditBatch batch)
+    {
+        if (batch.Edits.Count == 0)
+            return;
+
+        _undoStack.Push(batch);
+        _redoStack.Clear();
+    }
+
+    private void ApplyEditBatch(EditBatch batch, bool useAfter)
+    {
+        var affectedDocuments = new HashSet<LocalizationDocument>();
+
+        foreach (var edit in batch.Edits)
+        {
+            var value = useAfter ? edit.After : edit.Before;
+
+            if (!string.Equals(edit.Entry.Translation, value, StringComparison.Ordinal))
+                edit.Entry.Translation = value;
+
+            ValidationService.Validate(edit.Entry);
+            edit.Document.IsDirty = true;
+            affectedDocuments.Add(edit.Document);
+        }
+
+        foreach (var document in affectedDocuments)
+            document.RefreshComputedProperties();
+
+        if (_selected is not null)
+        {
+            _suppressEditor = true;
+            TranslationBox.Text = _selected.Translation;
+            LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
+            _suppressEditor = false;
+
+            UpdateExactMatchesPanel();
+            UpdateValidationPanel();
+        }
+
+        EntriesGrid.Items.Refresh();
+        _view?.Refresh();
+        UpdateCounters();
+    }
+
+    private void UndoLastEdit()
+    {
+        if (_undoStack.Count == 0)
+        {
+            StatusText.Text = "Нет изменений для отмены";
+            return;
+        }
+
+        var batch = _undoStack.Pop();
+        ApplyEditBatch(batch, useAfter: false);
+        _redoStack.Push(batch);
+        StatusText.Text = $"Отменено: {batch.Description}";
+    }
+
+    private void RedoLastEdit()
+    {
+        if (_redoStack.Count == 0)
+        {
+            StatusText.Text = "Нет изменений для повтора";
+            return;
+        }
+
+        var batch = _redoStack.Pop();
+        ApplyEditBatch(batch, useAfter: true);
+        _undoStack.Push(batch);
+        StatusText.Text = $"Повторено: {batch.Description}";
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+            return;
+
+        if (Keyboard.FocusedElement is TextBox focusedTextBox &&
+            !ReferenceEquals(focusedTextBox, TranslationBox))
+            return;
+
+        if (e.Key == Key.Z)
+        {
+            UndoLastEdit();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Y)
+        {
+            RedoLastEdit();
+            e.Handled = true;
+        }
+    }
+
     private void UpdateValidationPanel()
     {
         if (_selected is null)
