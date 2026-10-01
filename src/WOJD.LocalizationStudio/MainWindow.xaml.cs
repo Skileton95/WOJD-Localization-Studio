@@ -1791,7 +1791,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var edits = new List<TranslationEdit>();
+        var proposals = new List<ProposedTranslationChange>();
 
         foreach (var entry in targets)
         {
@@ -1799,45 +1799,50 @@ public partial class MainWindow : Window
                 entry.Source,
                 entry.Translation);
 
-            if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
+            if (string.Equals(
+                    corrected,
+                    entry.Translation,
+                    StringComparison.Ordinal))
                 continue;
 
-            edits.Add(new TranslationEdit(
-                _currentDocument,
-                entry,
-                entry.Translation,
-                corrected));
+            proposals.Add(new ProposedTranslationChange
+            {
+                Document = _currentDocument,
+                Entry = entry,
+                Before = entry.Translation,
+                After = corrected,
+                Reason = "Безопасное локальное автоисправление"
+            });
         }
 
-        if (edits.Count == 0)
+        if (proposals.Count == 0)
         {
-            MassFixStatusText.Text = $"Локально исправить нечего • осталось ошибок: {targets.Count:N0}";
-            StatusText.Text = "Автоматически исправляемых ошибок не найдено";
+            MassFixStatusText.Text =
+                $"Локально исправить нечего • осталось ошибок: {targets.Count:N0}";
+            StatusText.Text =
+                "Автоматически исправляемых ошибок не найдено";
             return;
         }
 
-        var batch = new EditBatch(edits, "Массовое локальное исправление");
-        RecordEditBatch(batch);
-        ApplyEditBatch(batch, useAfter: true);
+        var applied = ApplyProposedChangesWithPreview(
+            "Массовое локальное исправление",
+            proposals,
+            "Массовое локальное исправление");
 
-        var fullyFixed = edits.Count(edit => !edit.Entry.HasValidationIssues);
+        if (applied == 0)
+        {
+            StatusText.Text = "Массовое локальное исправление отменено";
+            return;
+        }
+
         var remaining = _currentDocument.Entries.Count(entry => entry.HasValidationIssues);
+        var fullyFixed = proposals.Count(change => !change.Entry.HasValidationIssues);
 
         MassFixStatusText.Text =
-            $"Локально изменено: {edits.Count:N0} • полностью исправлено: {fullyFixed:N0} • осталось: {remaining:N0}";
+            $"Локально изменено: {applied:N0} • полностью исправлено: {fullyFixed:N0} • осталось: {remaining:N0}";
 
         StatusText.Text =
-            $"Массовое локальное исправление: {fullyFixed:N0} строк исправлено, осталось {remaining:N0}";
-
-        MessageBox.Show(
-            this,
-            $"Обработано проблемных строк: {targets.Count:N0}\n" +
-            $"Изменено локально: {edits.Count:N0}\n" +
-            $"Полностью исправлено: {fullyFixed:N0}\n" +
-            $"Ошибок осталось: {remaining:N0}",
-            "Массовое локальное исправление",
-            MessageBoxButton.OK,
-            remaining == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            $"Массовое локальное исправление: применено {applied:N0}, осталось ошибок {remaining:N0}";
     }
 
     private async void MassAiFixButton_Click(object sender, RoutedEventArgs e)
