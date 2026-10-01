@@ -26,11 +26,14 @@ public partial class MainWindow : Window
     private bool _isUpdating;
     private bool _allowCloseWithoutPrompt;
     private UpdateInfo? _availableUpdate;
+    private string _statusFilter = "All";
 
     public MainWindow()
     {
         InitializeComponent();
         FilesList.ItemsSource = _documents;
+        UpdateFilterVisuals();
+        UpdateBottomSummary();
 
         Loaded += MainWindow_Loaded;
         _updateTimer.Tick += UpdateTimer_Tick;
@@ -281,6 +284,17 @@ public partial class MainWindow : Window
     {
         if (obj is not LocalizationEntry entry) return false;
 
+        var matchesStatus = _statusFilter switch
+        {
+            "Translated" => !string.IsNullOrWhiteSpace(entry.Translation),
+            "Untranslated" => string.IsNullOrWhiteSpace(entry.Translation),
+            "Errors" => entry.HasValidationIssues,
+            "Modified" => entry.IsModified,
+            _ => true
+        };
+
+        if (!matchesStatus) return false;
+
         var query = SearchBox.Text.Trim();
         if (string.IsNullOrEmpty(query)) return true;
 
@@ -304,6 +318,41 @@ public partial class MainWindow : Window
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => _view?.Refresh();
     private void SearchScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => _view?.Refresh();
+
+    private void FilterBadge_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string filter)
+            return;
+
+        _statusFilter = filter;
+        UpdateFilterVisuals();
+        _view?.Refresh();
+
+        if (EntriesGrid.SelectedItem is LocalizationEntry selected && _view is not null && !_view.Contains(selected))
+            EntriesGrid.SelectedItem = null;
+    }
+
+    private void UpdateFilterVisuals()
+    {
+        var buttons = new[]
+        {
+            AllFilterButton,
+            TranslatedFilterButton,
+            UntranslatedFilterButton,
+            ErrorFilterButton,
+            ModifiedFilterButton
+        };
+
+        foreach (var button in buttons)
+        {
+            var selected = string.Equals(button.Tag?.ToString(), _statusFilter, StringComparison.Ordinal);
+            button.BorderBrush = new SolidColorBrush(selected
+                ? Color.FromRgb(0x2F, 0x7B, 0xEA)
+                : Color.FromRgb(0xD6, 0xE1, 0xEC));
+            button.BorderThickness = new Thickness(selected ? 2 : 1);
+            button.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
+        }
+    }
 
     private void EntriesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -397,6 +446,8 @@ public partial class MainWindow : Window
             TranslatedBadge.Text = "Переведено  0";
             UntranslatedBadge.Text = "Не переведено  0";
             ErrorBadge.Text = "Ошибки  0";
+            ModifiedBadge.Text = "Изменённые  0";
+            UpdateBottomSummary();
             return;
         }
 
@@ -404,11 +455,30 @@ public partial class MainWindow : Window
         var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
         var untranslated = total - translated;
         var errors = _currentDocument.Entries.Count(e => e.HasValidationIssues);
+        var modified = _currentDocument.Entries.Count(e => e.IsModified);
 
         TotalBadge.Text = $"Все  {total:N0}";
         TranslatedBadge.Text = $"Переведено  {translated:N0}";
         UntranslatedBadge.Text = $"Не переведено  {untranslated:N0}";
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
+        ModifiedBadge.Text = $"Изменённые  {modified:N0}";
+        UpdateBottomSummary();
+    }
+
+    private void UpdateBottomSummary()
+    {
+        if (_currentDocument is null)
+        {
+            FileSummaryText.Text = "Файлы не открыты";
+            return;
+        }
+
+        var total = _currentDocument.Entries.Count;
+        var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
+        var untranslated = total - translated;
+
+        FileSummaryText.Text =
+            $"{_currentDocument.FileName}  •  {total:N0} строк  •  {translated:N0} переведено  •  {untranslated:N0} пустых";
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
@@ -478,6 +548,9 @@ public partial class MainWindow : Window
             document.RefreshComputedProperties();
             EntriesGrid.Items.Refresh();
             _view?.Refresh();
+
+            if (ReferenceEquals(document, _currentDocument))
+                UpdateCounters();
 
             if (showStatus) StatusText.Text = $"Сохранено: {document.FileName}";
             return true;
