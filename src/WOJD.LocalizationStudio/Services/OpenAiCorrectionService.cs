@@ -35,6 +35,7 @@ public sealed class OpenAiCorrectionService
 
     public Task<string> CorrectAsync(
         LocalizationEntry entry,
+        string? glossaryContext = null,
         CancellationToken cancellationToken = default)
     {
         const string instructions =
@@ -62,6 +63,9 @@ public sealed class OpenAiCorrectionService
 
             Ошибки проверки:
             {entry.ValidationSummary}
+
+            Терминология глоссария:
+            {FormatGlossaryContext(glossaryContext)}
             """;
 
         return SendTextAsync(instructions, input, 2048, cancellationToken);
@@ -69,6 +73,7 @@ public sealed class OpenAiCorrectionService
 
     public Task<string> ExplainAsync(
         LocalizationEntry entry,
+        string? glossaryContext = null,
         CancellationToken cancellationToken = default)
     {
         const string instructions =
@@ -93,6 +98,9 @@ public sealed class OpenAiCorrectionService
 
             Найденные программой проблемы:
             {entry.ValidationSummary}
+
+            Терминология глоссария:
+            {FormatGlossaryContext(glossaryContext)}
             """;
 
         return SendTextAsync(instructions, input, 1800, cancellationToken);
@@ -100,6 +108,7 @@ public sealed class OpenAiCorrectionService
 
     public async Task<IReadOnlyList<string>> SuggestVariantsAsync(
         LocalizationEntry entry,
+        string? glossaryContext = null,
         int count = 3,
         CancellationToken cancellationToken = default)
     {
@@ -126,6 +135,9 @@ public sealed class OpenAiCorrectionService
             Текущий перевод, если он уже есть:
             {entry.Translation}
 
+            Терминология глоссария:
+            {FormatGlossaryContext(glossaryContext)}
+
             Предложи {count} разных качественных варианта русского перевода.
             """;
 
@@ -141,6 +153,11 @@ public sealed class OpenAiCorrectionService
 
         return variants;
     }
+
+    private static string FormatGlossaryContext(string? glossaryContext) =>
+        string.IsNullOrWhiteSpace(glossaryContext)
+            ? "Нет подходящих терминов."
+            : glossaryContext;
 
     private async Task<string> SendTextAsync(
         string instructions,
