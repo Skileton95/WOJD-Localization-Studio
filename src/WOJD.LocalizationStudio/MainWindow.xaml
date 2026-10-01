@@ -340,6 +340,14 @@
                                  VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"
                                  BorderBrush="#B9C7D3" BorderThickness="1"/>
                         <TextBlock x:Name="LengthLabel" Text="0 символов" Foreground="#718094" HorizontalAlignment="Right" Margin="0,5,0,0"/>
+                        <TextBlock x:Name="TechnicalProtectionText"
+                                   Text="⚠ Нарушены технические элементы оригинала"
+                                   Foreground="#B33A2B"
+                                   FontWeight="SemiBold"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Visibility="Collapsed"
+                                   Margin="0,5,0,0"/>
 
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
