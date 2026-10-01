@@ -49,12 +49,15 @@ public sealed class UpdateService
 
         try
         {
+            var commandProcessor = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
             Process.Start(new ProcessStartInfo
             {
-                FileName = updater,
-                Arguments = "--from-app",
+                FileName = commandProcessor,
+                Arguments = $"/d /c \"\"{updater}\" --from-app\"",
                 WorkingDirectory = Path.GetDirectoryName(updater)!,
-                UseShellExecute = true
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             });
             return true;
         }
