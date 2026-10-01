@@ -1405,10 +1405,38 @@ public partial class MainWindow : Window
         ValidationService.ValidateAll(_currentDocument.Entries);
         _currentDocument.RefreshComputedProperties();
         EntriesGrid.Items.Refresh();
-        _view?.Refresh();
+        RefreshFilteredViewPreservingSelection();
         UpdateCounters();
 
-        var firstError = _currentDocument.Entries.FirstOrDefault(e => e.HasValidationIssues);
+        var entries = _currentDocument.Entries;
+        var errorLines = entries.Count(entry => entry.HasValidationIssues);
+        var critical = entries.Count(entry => entry.HasCriticalValidationIssues);
+        var technical = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.Technical));
+        var chinese = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.ChineseText));
+        var brackets = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.Brackets));
+        var whitespace = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.Whitespace));
+        var punctuation = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.Punctuation));
+        var sourceCopy = entries.Count(entry => ValidationService.HasIssueKind(entry, ValidationIssueKind.SourceCopy));
+
+        var report =
+            $"Проверено строк: {entries.Count:N0}\n" +
+            $"Строк с проблемами: {errorLines:N0}\n" +
+            $"Критические: {critical:N0}\n\n" +
+            $"Технические элементы: {technical:N0}\n" +
+            $"Китайский текст: {chinese:N0}\n" +
+            $"Скобки: {brackets:N0}\n" +
+            $"Пробелы: {whitespace:N0}\n" +
+            $"Пунктуация: {punctuation:N0}\n" +
+            $"Копия оригинала: {sourceCopy:N0}";
+
+        MessageBox.Show(
+            this,
+            report,
+            $"Проверка — {_currentDocument.FileName}",
+            MessageBoxButton.OK,
+            errorLines == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+
+        var firstError = entries.FirstOrDefault(entry => entry.HasValidationIssues);
         if (firstError is null)
         {
             StatusText.Text = $"Проверка завершена: ошибок нет — {_currentDocument.FileName}";
@@ -1417,7 +1445,7 @@ public partial class MainWindow : Window
         {
             EntriesGrid.SelectedItem = firstError;
             EntriesGrid.ScrollIntoView(firstError);
-            StatusText.Text = $"Проверка завершена: {_currentDocument.ValidationErrorCount:N0} ошибок — {_currentDocument.FileName}";
+            StatusText.Text = $"Проверка завершена: {errorLines:N0} проблем — {_currentDocument.FileName}";
         }
     }
 
@@ -1454,19 +1482,57 @@ public partial class MainWindow : Window
     {
         try
         {
+            ValidationService.ValidateAll(document.Entries);
+
+            var criticalCount = document.Entries.Count(entry => entry.HasCriticalValidationIssues);
+            if (criticalCount > 0)
+            {
+                var result = MessageBox.Show(
+                    this,
+                    $"В файле «{document.FileName}» осталось критических ошибок: {criticalCount:N0}.\n\n" +
+                    "Это ошибки технических тегов, плейсхолдеров или переносов строки. Всё равно сохранить файл?",
+                    "Критические ошибки",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result != MessageBoxResult.Yes)
+                {
+                    StatusText.Text = $"Сохранение отменено: {document.FileName}";
+                    return false;
+                }
+            }
+
+            var changedEntries = document.Entries
+                .Where(entry => !string.Equals(
+                    entry.LastSavedTranslation,
+                    entry.Translation,
+                    StringComparison.Ordinal))
+                .ToList();
+
             if (showStatus) StatusText.Text = $"Сохранение: {document.FileName}…";
             await _service.SaveAsync(document.FilePath, document.Entries);
 
+            try
+            {
+                await _translationHistoryService.AppendSavedChangesAsync(document, changedEntries);
+            }
+            catch
+            {
+                // Ошибка журнала истории не должна отменять уже успешное сохранение локализации.
+            }
+
             foreach (var entry in document.Entries)
-                entry.IsModified = false;
+                entry.MarkSaved();
 
             document.IsDirty = false;
             document.RefreshComputedProperties();
-            EntriesGrid.Items.Refresh();
-            _view?.Refresh();
 
             if (ReferenceEquals(document, _currentDocument))
+            {
+                EntriesGrid.Items.Refresh();
+                RefreshFilteredViewPreservingSelection();
                 UpdateCounters();
+            }
 
             if (showStatus) StatusText.Text = $"Сохранено: {document.FileName}";
             return true;
