@@ -124,6 +124,18 @@ public static class ValidationService
         return cleaned + separator + string.Join(" ", missingRawTokens);
     }
 
+    public static string AutoFixDeterministic(string source, string translation)
+    {
+        var fixedText = AutoFixTechnicalTokens(source, translation);
+
+        fixedText = DoubleSpaceRegex.Replace(fixedText, " ");
+        fixedText = SpaceBeforePunctuationRegex.Replace(
+            fixedText,
+            match => match.Value.TrimStart());
+
+        return fixedText;
+    }
+
     public static string BuildSummary(string source, string translation) =>
         string.Join(Environment.NewLine, GetIssues(source, translation).Select(issue => issue.Message));
 
