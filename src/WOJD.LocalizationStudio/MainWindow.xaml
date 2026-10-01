@@ -72,6 +72,39 @@
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
+        <Style x:Key="FilterBadgeButton" TargetType="Button">
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Background" Value="#F5F7FA"/>
+            <Setter Property="Foreground" Value="#526579"/>
+            <Setter Property="BorderBrush" Value="#D6E1EC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="FilterBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FilterBorder" Property="Opacity" Value="0.82"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="FilterBorder" Property="Opacity" Value="0.66"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -144,7 +177,7 @@
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Separator Background="#31526A"/>
                         <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.5" Foreground="#88A5B9" FontSize="11"/>
+                        <TextBlock Text="v0.2.6" Foreground="#88A5B9" FontSize="11"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -175,18 +208,26 @@
                     </Grid>
 
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
-                        <Border Background="#E8F1FF" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
-                            <TextBlock x:Name="TotalBadge" Style="{StaticResource BadgeText}" Text="Все  0" Foreground="#225AA7"/>
-                        </Border>
-                        <Border Background="#ECF8EF" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
-                            <TextBlock x:Name="TranslatedBadge" Style="{StaticResource BadgeText}" Text="Переведено  0" Foreground="#267540"/>
-                        </Border>
-                        <Border Background="#F5F7FA" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
-                            <TextBlock x:Name="UntranslatedBadge" Style="{StaticResource BadgeText}" Text="Не переведено  0" Foreground="#647386"/>
-                        </Border>
-                        <Border Background="#FFF2F0" CornerRadius="6" Padding="10,6">
-                            <TextBlock x:Name="ErrorBadge" Style="{StaticResource BadgeText}" Text="Ошибки  0" Foreground="#B33A2B"/>
-                        </Border>
+                        <Button x:Name="AllFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="All"
+                                Background="#E8F1FF" Foreground="#225AA7" Click="FilterBadge_Click">
+                            <TextBlock x:Name="TotalBadge" Style="{StaticResource BadgeText}" Text="Все  0"/>
+                        </Button>
+                        <Button x:Name="TranslatedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Translated"
+                                Background="#ECF8EF" Foreground="#267540" Click="FilterBadge_Click">
+                            <TextBlock x:Name="TranslatedBadge" Style="{StaticResource BadgeText}" Text="Переведено  0"/>
+                        </Button>
+                        <Button x:Name="UntranslatedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Untranslated"
+                                Background="#F5F7FA" Foreground="#647386" Click="FilterBadge_Click">
+                            <TextBlock x:Name="UntranslatedBadge" Style="{StaticResource BadgeText}" Text="Не переведено  0"/>
+                        </Button>
+                        <Button x:Name="ErrorFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Errors"
+                                Background="#FFF2F0" Foreground="#B33A2B" Click="FilterBadge_Click">
+                            <TextBlock x:Name="ErrorBadge" Style="{StaticResource BadgeText}" Text="Ошибки  0"/>
+                        </Button>
+                        <Button x:Name="ModifiedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Modified"
+                                Background="#FFF8E8" Foreground="#9A6814" Click="FilterBadge_Click" Margin="0">
+                            <TextBlock x:Name="ModifiedBadge" Style="{StaticResource BadgeText}" Text="Изменённые  0"/>
+                        </Button>
                     </StackPanel>
 
                     <DataGrid x:Name="EntriesGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
@@ -254,7 +295,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock x:Name="StatusText" Text="Готово" VerticalAlignment="Center" Foreground="#526579"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="FileSummaryText" Text="Файлы не открыты" Foreground="#334B60"
+                               FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="StatusText" Text="" Foreground="#7B8B9A"
+                               VerticalAlignment="Center" Margin="14,0,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
 
                 <Border x:Name="UpdatePanel" Grid.Column="1" Background="#EEF4FA" BorderBrush="#D3DEE8"
                         BorderThickness="1" CornerRadius="7" Padding="9,4" Margin="8,0">
