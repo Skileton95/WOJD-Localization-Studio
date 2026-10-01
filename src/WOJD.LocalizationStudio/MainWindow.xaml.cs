@@ -691,6 +691,7 @@ public partial class MainWindow : Window
             TranslatedBadge.Text = "Переведено  0";
             UntranslatedBadge.Text = "Не переведено  0";
             ErrorBadge.Text = "Ошибки  0";
+            ConflictBadge.Text = "Конфликты  0";
             ModifiedBadge.Text = "Изменённые  0";
             UpdateBottomSummary();
             return;
@@ -700,12 +701,14 @@ public partial class MainWindow : Window
         var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
         var untranslated = total - translated;
         var errors = _currentDocument.Entries.Count(e => e.HasValidationIssues);
+        var conflicts = _currentDocument.Entries.Count(HasTranslationConflict);
         var modified = _currentDocument.Entries.Count(e => e.IsModified);
 
         TotalBadge.Text = $"Все  {total:N0}";
         TranslatedBadge.Text = $"Переведено  {translated:N0}";
         UntranslatedBadge.Text = $"Не переведено  {untranslated:N0}";
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
+        ConflictBadge.Text = $"Конфликты  {conflicts:N0}";
         ModifiedBadge.Text = $"Изменённые  {modified:N0}";
         UpdateBottomSummary();
     }
@@ -721,9 +724,12 @@ public partial class MainWindow : Window
         var total = _currentDocument.Entries.Count;
         var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
         var untranslated = total - translated;
+        var namespaceSuffix = _namespaceFilter is null
+            ? string.Empty
+            : $"  •  Namespace: {_namespaceFilter}";
 
         FileSummaryText.Text =
-            $"{_currentDocument.FileName}  •  {total:N0} строк  •  {translated:N0} переведено  •  {untranslated:N0} пустых";
+            $"{_currentDocument.FileName}  •  {total:N0} строк  •  {translated:N0} переведено  •  {untranslated:N0} пустых{namespaceSuffix}";
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
