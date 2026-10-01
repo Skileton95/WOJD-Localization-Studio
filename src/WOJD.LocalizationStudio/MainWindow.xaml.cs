@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private bool _isCheckingForUpdates;
     private bool _isUpdating;
     private bool _isAiFixing;
+    private bool _isMassFixing;
     private bool _allowCloseWithoutPrompt;
     private UpdateInfo? _availableUpdate;
     private string _statusFilter = "All";
@@ -1097,6 +1098,222 @@ public partial class MainWindow : Window
             : "Ошибки строки исправлены";
     }
 
+    private void MassLocalFixButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null || _isMassFixing || _isAiFixing)
+            return;
+
+        ValidationService.ValidateAll(_currentDocument.Entries);
+
+        var targets = _currentDocument.Entries
+            .Where(entry =>
+                entry.HasValidationIssues &&
+                !string.IsNullOrWhiteSpace(entry.Translation))
+            .ToList();
+
+        if (targets.Count == 0)
+        {
+            StatusText.Text = "Нет ошибок, которые можно исправить";
+            UpdateCounters();
+            return;
+        }
+
+        var edits = new List<TranslationEdit>();
+
+        foreach (var entry in targets)
+        {
+            var corrected = ValidationService.AutoFixDeterministic(
+                entry.Source,
+                entry.Translation);
+
+            if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
+                continue;
+
+            edits.Add(new TranslationEdit(
+                _currentDocument,
+                entry,
+                entry.Translation,
+                corrected));
+        }
+
+        if (edits.Count == 0)
+        {
+            MassFixStatusText.Text = $"Локально исправить нечего • осталось ошибок: {targets.Count:N0}";
+            StatusText.Text = "Автоматически исправляемых ошибок не найдено";
+            return;
+        }
+
+        var batch = new EditBatch(edits, "Массовое локальное исправление");
+        RecordEditBatch(batch);
+        ApplyEditBatch(batch, useAfter: true);
+
+        var fullyFixed = edits.Count(edit => !edit.Entry.HasValidationIssues);
+        var remaining = _currentDocument.Entries.Count(entry => entry.HasValidationIssues);
+
+        MassFixStatusText.Text =
+            $"Локально изменено: {edits.Count:N0} • полностью исправлено: {fullyFixed:N0} • осталось: {remaining:N0}";
+
+        StatusText.Text =
+            $"Массовое локальное исправление: {fullyFixed:N0} строк исправлено, осталось {remaining:N0}";
+
+        MessageBox.Show(
+            this,
+            $"Обработано проблемных строк: {targets.Count:N0}\n" +
+            $"Изменено локально: {edits.Count:N0}\n" +
+            $"Полностью исправлено: {fullyFixed:N0}\n" +
+            $"Ошибок осталось: {remaining:N0}",
+            "Массовое локальное исправление",
+            MessageBoxButton.OK,
+            remaining == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async void MassAiFixButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null || _isMassFixing || _isAiFixing)
+            return;
+
+        ValidationService.ValidateAll(_currentDocument.Entries);
+
+        var document = _currentDocument;
+        var targets = document.Entries
+            .Where(entry =>
+                entry.HasValidationIssues &&
+                !string.IsNullOrWhiteSpace(entry.Translation))
+            .ToList();
+
+        if (targets.Count == 0)
+        {
+            StatusText.Text = "Нет ошибок для исправления ChatGPT";
+            UpdateCounters();
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            $"ChatGPT обработает {targets.Count:N0} проблемных строк файла «{document.FileName}».\n\n" +
+            "Для каждой строки выполняется отдельный запрос OpenAI API. " +
+            "Это может занять время и расходует API-баланс.\n\nПродолжить?",
+            "Массовое исправление ChatGPT",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        if (!EnsureOpenAiKey())
+            return;
+
+        _isMassFixing = true;
+        _isAiFixing = true;
+
+        FilesList.IsEnabled = false;
+        EntriesGrid.IsEnabled = false;
+        TranslationBox.IsEnabled = false;
+        MassLocalFixButton.IsEnabled = false;
+        MassAiFixButton.IsEnabled = false;
+        ValidationButton.IsEnabled = false;
+
+        var edits = new List<TranslationEdit>();
+        var skipped = 0;
+        var failed = 0;
+        string? firstError = null;
+
+        try
+        {
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var entry = targets[i];
+                var current = i + 1;
+
+                MassAiFixButton.Content = $"ChatGPT {current:N0}/{targets.Count:N0}";
+                MassFixStatusText.Text =
+                    $"ChatGPT: {current:N0}/{targets.Count:N0} • исправлено: {edits.Count:N0} • пропущено: {skipped + failed:N0}";
+                StatusText.Text =
+                    $"Массовое исправление ChatGPT: {current:N0} из {targets.Count:N0} — {entry.Key}";
+
+                try
+                {
+                    var corrected = await _openAiCorrectionService.CorrectAsync(entry);
+
+                    if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    var remainingIssues = ValidationService.GetIssues(entry.Source, corrected);
+                    if (remainingIssues.Count > 0)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    edits.Add(new TranslationEdit(
+                        document,
+                        entry,
+                        entry.Translation,
+                        corrected));
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    firstError ??= ex.Message;
+                }
+            }
+
+            if (edits.Count > 0)
+            {
+                var batch = new EditBatch(edits, "Массовое исправление ChatGPT");
+                RecordEditBatch(batch);
+                ApplyEditBatch(batch, useAfter: true);
+            }
+
+            ValidationService.ValidateAll(document.Entries);
+            document.RefreshComputedProperties();
+
+            var remaining = document.Entries.Count(entry => entry.HasValidationIssues);
+            MassFixStatusText.Text =
+                $"ChatGPT исправил: {edits.Count:N0} • пропущено: {skipped:N0} • ошибок API: {failed:N0} • осталось: {remaining:N0}";
+
+            StatusText.Text =
+                $"ChatGPT: исправлено {edits.Count:N0}, осталось ошибок {remaining:N0}";
+
+            var summary =
+                $"Запрошено строк: {targets.Count:N0}\n" +
+                $"Исправлено ChatGPT: {edits.Count:N0}\n" +
+                $"Пропущено из-за оставшихся ошибок/без изменений: {skipped:N0}\n" +
+                $"Ошибок API: {failed:N0}\n" +
+                $"Ошибок в файле осталось: {remaining:N0}";
+
+            if (!string.IsNullOrWhiteSpace(firstError))
+                summary += $"\n\nПервая ошибка API:\n{firstError}";
+
+            MessageBox.Show(
+                this,
+                summary,
+                "Массовое исправление ChatGPT",
+                MessageBoxButton.OK,
+                remaining == 0 && failed == 0
+                    ? MessageBoxImage.Information
+                    : MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _isAiFixing = false;
+            _isMassFixing = false;
+
+            MassAiFixButton.Content = "Исправить все с ChatGPT";
+            FilesList.IsEnabled = true;
+            EntriesGrid.IsEnabled = true;
+            TranslationBox.IsEnabled = _selected is not null;
+
+            UpdateValidationPanel();
+            UpdateCounters();
+            UpdateButtons();
+            RefreshFilteredViewPreservingSelection();
+        }
+    }
+
     private bool EnsureOpenAiKey()
     {
         if (_openAiCorrectionService.HasApiKey)
@@ -1375,6 +1592,9 @@ public partial class MainWindow : Window
             ErrorBadge.Text = "Ошибки  0";
             ConflictBadge.Text = "Конфликты  0";
             ModifiedBadge.Text = "Изменённые  0";
+            MassLocalFixButton.IsEnabled = false;
+            MassAiFixButton.IsEnabled = false;
+            MassFixStatusText.Text = "Исправляет все ошибки активного файла";
             return;
         }
 
@@ -1404,6 +1624,13 @@ public partial class MainWindow : Window
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
         ConflictBadge.Text = $"Конфликты  {conflicts:N0}";
         ModifiedBadge.Text = $"Изменённые  {modified:N0}";
+
+        var canMassFix = errors > 0 && !_isAiFixing && !_isMassFixing;
+        MassLocalFixButton.IsEnabled = canMassFix;
+        MassAiFixButton.IsEnabled = canMassFix;
+        MassFixStatusText.Text = errors == 0
+            ? "Ошибок в активном файле нет"
+            : $"Ошибок в активном файле: {errors:N0}";
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
