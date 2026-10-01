@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace WOJD.LocalizationStudio.Models;
 
@@ -60,6 +61,7 @@ public sealed class GlossaryEntry : INotifyPropertyChanged
         }
     }
 
+    [JsonIgnore]
     public string LockText => IsLocked ? "Закреплён" : "Подсказка";
 
     public event PropertyChangedEventHandler? PropertyChanged;
