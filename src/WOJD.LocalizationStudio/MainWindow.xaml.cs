@@ -831,6 +831,9 @@ public partial class MainWindow : Window
 
         _statusFilter = "All";
         _namespaceFilter = null;
+        _validationTypeFilter = ValidationIssueKind.None;
+        if (ValidationTypeFilterBox.SelectedIndex != 0)
+            ValidationTypeFilterBox.SelectedIndex = 0;
         SearchBox.Clear();
         UpdateFilterVisuals();
 
