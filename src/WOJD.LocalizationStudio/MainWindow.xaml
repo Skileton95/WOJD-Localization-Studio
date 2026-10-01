@@ -1,0 +1,264 @@
+<Window x:Class="WOJD.LocalizationStudio.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WOJD Localization Studio" Width="1480" Height="880" MinWidth="1180" MinHeight="700"
+        WindowStartupLocation="CenterScreen" Background="#EEF4FA"
+        Closing="Window_Closing">
+    <Window.Resources>
+        <LinearGradientBrush x:Key="HeaderGradient" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#17354E" Offset="0"/>
+            <GradientStop Color="#EAF4FA" Offset="0.55"/>
+            <GradientStop Color="#DCEAF4" Offset="1"/>
+        </LinearGradientBrush>
+
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#22374A"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="18,9"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#E5EFF7"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#D6E7F3"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7C8E9D"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FileListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,2"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="7" Padding="10,9">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#234762"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#2C6184"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BadgeText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="110"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="58"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource HeaderGradient}" BorderBrush="#CBD8E3" BorderThickness="0,0,0,1">
+            <Grid Margin="24,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="WOJD" Foreground="White" FontFamily="Georgia" FontSize="34" FontWeight="Bold"/>
+                    <TextBlock Text="Localization Studio" Foreground="#EFF7FC" FontFamily="Georgia" FontSize="19"/>
+                    <TextBlock Text="ZHU XIAN WORLD" Foreground="#CBDCE9" FontSize="9" Margin="1,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left">
+                    <Button Style="{StaticResource NavButton}" Content="✎  Редактор" Background="#FFFFFF"/>
+                    <Button Style="{StaticResource NavButton}" Content="⇄  Сравнение" IsEnabled="False"/>
+                    <Button Style="{StaticResource NavButton}" Content="✦  AI-перевод" IsEnabled="False"/>
+                    <Button Style="{StaticResource NavButton}" Content="☷  Глоссарий" IsEnabled="False"/>
+                    <Button x:Name="ValidationButton" Style="{StaticResource NavButton}" Content="✓  Проверка" Click="ValidationButton_Click" IsEnabled="False"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="16,14,16,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="285"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="370"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#173149" CornerRadius="10" BorderBrush="#2A4A63" BorderThickness="1">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Margin="0,0,0,12">
+                        <TextBlock Text="Файлы локализации" Foreground="White" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Button DockPanel.Dock="Right" Width="38" Height="32" Margin="6,0,0,0" Content="+" Click="OpenFile_Click" Background="#274B67" Foreground="White" BorderBrush="#52728A" ToolTip="Открыть ru.ndjson / ru.fmtstring.ndjson"/>
+                    </DockPanel>
+
+                    <ListBox x:Name="FilesList" Grid.Row="1" Background="Transparent" BorderThickness="0"
+                             ItemContainerStyle="{StaticResource FileListItemStyle}"
+                             SelectionChanged="FilesList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="{Binding DisplayName}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="1" Text="{Binding CountText}" Foreground="#BBD1E0" FontSize="11" Margin="0,4,0,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                        <Separator Background="#31526A"/>
+                        <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
+                        <TextBlock Text="v0.2.1" Foreground="#88A5B9" FontSize="11"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Background="#F9FBFD" BorderBrush="#D3DEE8" BorderThickness="1" CornerRadius="10">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="165"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SearchBox" Height="38" VerticalContentAlignment="Center"
+                                 TextChanged="SearchBox_TextChanged"
+                                 ToolTip="Поиск по Key, Namespace, китайскому оригиналу или русскому переводу"/>
+                        <ComboBox x:Name="SearchScopeBox" Grid.Column="1" Margin="8,0,0,0" Height="38" SelectionChanged="SearchScopeBox_SelectionChanged">
+                            <ComboBoxItem Content="Все поля" IsSelected="True"/>
+                            <ComboBoxItem Content="Key"/>
+                            <ComboBoxItem Content="Namespace"/>
+                            <ComboBoxItem Content="Китайский"/>
+                            <ComboBoxItem Content="Русский"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
+                        <Border Background="#E8F1FF" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
+                            <TextBlock x:Name="TotalBadge" Style="{StaticResource BadgeText}" Text="Все  0" Foreground="#225AA7"/>
+                        </Border>
+                        <Border Background="#ECF8EF" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
+                            <TextBlock x:Name="TranslatedBadge" Style="{StaticResource BadgeText}" Text="Переведено  0" Foreground="#267540"/>
+                        </Border>
+                        <Border Background="#F5F7FA" CornerRadius="6" Padding="10,6" Margin="0,0,8,0">
+                            <TextBlock x:Name="UntranslatedBadge" Style="{StaticResource BadgeText}" Text="Не переведено  0" Foreground="#647386"/>
+                        </Border>
+                        <Border Background="#FFF2F0" CornerRadius="6" Padding="10,6">
+                            <TextBlock x:Name="ErrorBadge" Style="{StaticResource BadgeText}" Text="Ошибки  0" Foreground="#B33A2B"/>
+                        </Border>
+                    </StackPanel>
+
+                    <DataGrid x:Name="EntriesGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                              SelectionChanged="EntriesGrid_SelectionChanged" BorderThickness="0" GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column" RowHeaderWidth="0" Background="White" AlternatingRowBackground="#FAFCFE"
+                              EnableRowVirtualization="True" EnableColumnVirtualization="True">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasValidationIssues}" Value="True">
+                                        <Setter Property="Background" Value="#FFF2F0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="1.0*"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="0.8*"/>
+                            <DataGridTextColumn Header="Китайский оригинал" Binding="{Binding Source}" Width="1.25*"/>
+                            <DataGridTextColumn Header="Русский перевод" Binding="{Binding Translation}" Width="1.55*"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="105"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4" Background="#F9FBFD" BorderBrush="#D3DEE8" BorderThickness="1" CornerRadius="10">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <TextBlock x:Name="SelectedKey" Text="Строка не выбрана" FontSize="20" FontWeight="SemiBold" Foreground="#18283A" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="SelectedNamespace" Text="" Foreground="#748596" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="Китайский оригинал" FontWeight="SemiBold" Margin="0,22,0,7"/>
+                        <Border Background="#EFF3F7" CornerRadius="6" Padding="12">
+                            <TextBox x:Name="SourceText" Text="—" FontSize="16" TextWrapping="Wrap" IsReadOnly="True"
+                                     Background="Transparent" BorderThickness="0" Padding="0" IsReadOnlyCaretVisible="True"/>
+                        </Border>
+
+                        <TextBlock Text="Русский перевод" FontWeight="SemiBold" Margin="0,18,0,7"/>
+                        <TextBox x:Name="TranslationBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"/>
+                        <TextBlock x:Name="LengthLabel" Text="0 символов" Foreground="#718094" HorizontalAlignment="Right" Margin="0,5,0,0"/>
+
+                        <Separator Margin="0,20,0,15"/>
+                        <TextBlock Text="Проверка строки" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ValidationStatusText" Text="Выберите строку" Foreground="#68798A" Margin="0,8,0,0" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
+                        <TextBlock Text="{}{0}, {1}  •  %s, %d  •  
+  •  &lt;tag&gt;...&lt;/tag&gt;" Foreground="#667789" TextWrapping="Wrap"/>
+
+                        <Separator Margin="0,20,0,15"/>
+                        <TextBlock Text="Горячие клавиши" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="Ctrl+O — открыть файл&#10;Ctrl+S — сохранить текущий файл" Foreground="#667789" Margin="0,8,0,0" LineHeight="22"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#F8FBFE" BorderBrush="#CFDAE4" BorderThickness="0,1,0,0">
+            <Grid Margin="16,7">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Text="Готово" VerticalAlignment="Center" Foreground="#526579"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="Открыть файлы" Click="OpenFile_Click"/>
+                    <Button x:Name="SaveCurrentButton" Content="Сохранить текущий" Click="SaveCurrentButton_Click" IsEnabled="False"/>
+                    <Button x:Name="SaveAllButton" Content="Сохранить всё" Click="SaveAllButton_Click" Background="#2F7BEA" Foreground="White" BorderBrush="#266ACB" IsEnabled="False"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
