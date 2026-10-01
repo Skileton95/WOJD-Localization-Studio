@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Services;
@@ -126,5 +127,58 @@ public sealed class TranslationHistoryRecord
     public string Before { get; set; } = string.Empty;
     public string After { get; set; } = string.Empty;
 
+    [JsonIgnore]
     public string LocalTimestamp => TimestampUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss");
+
+    [JsonIgnore]
+    public string CommonPrefix => BuildDiff().Prefix;
+
+    [JsonIgnore]
+    public string BeforeChanged => BuildDiff().BeforeChanged;
+
+    [JsonIgnore]
+    public string AfterChanged => BuildDiff().AfterChanged;
+
+    [JsonIgnore]
+    public string CommonSuffix => BuildDiff().Suffix;
+
+    private (string Prefix, string BeforeChanged, string AfterChanged, string Suffix) BuildDiff()
+    {
+        var before = Before ?? string.Empty;
+        var after = After ?? string.Empty;
+
+        var prefixLength = 0;
+        var maxPrefix = Math.Min(before.Length, after.Length);
+
+        while (prefixLength < maxPrefix &&
+               before[prefixLength] == after[prefixLength])
+        {
+            prefixLength++;
+        }
+
+        var suffixLength = 0;
+        var maxSuffix = Math.Min(
+            before.Length - prefixLength,
+            after.Length - prefixLength);
+
+        while (suffixLength < maxSuffix &&
+               before[before.Length - 1 - suffixLength] ==
+               after[after.Length - 1 - suffixLength])
+        {
+            suffixLength++;
+        }
+
+        var prefix = before[..prefixLength];
+        var beforeChanged = before.Substring(
+            prefixLength,
+            before.Length - prefixLength - suffixLength);
+        var afterChanged = after.Substring(
+            prefixLength,
+            after.Length - prefixLength - suffixLength);
+        var suffix = suffixLength == 0
+            ? string.Empty
+            : before[^suffixLength..];
+
+        return (prefix, beforeChanged, afterChanged, suffix);
+    }
 }
