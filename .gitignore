@@ -20,3 +20,7 @@ Thumbs.db
 # Localization working files / backups
 *.bak
 *.tmp
+
+# In-app updater
+.update-stage/
+.apply-update.cmd
