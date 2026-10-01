@@ -1237,6 +1237,7 @@ public partial class MainWindow : Window
         RebuildGlossaryMismatchCache();
         UpdateGlossaryPanel();
         UpdateCounters();
+        UpdateButtons();
         RefreshFilteredViewPreservingSelection();
         StatusText.Text = $"Глоссарий: {_glossaryService.Entries.Count:N0} терминов";
     }
@@ -2237,6 +2238,13 @@ public partial class MainWindow : Window
         MassFixStatusText.Text = errors == 0
             ? "Ошибок в активном файле нет"
             : $"Ошибок в активном файле: {errors:N0}";
+
+        GlossaryCheckButton.IsEnabled = _glossaryService.Entries.Count > 0;
+        GlossaryConsistencyButton.IsEnabled = _glossaryService.Entries.Any(entry => entry.IsLocked);
+        GlossaryMassAiFixButton.IsEnabled =
+            glossaryMismatches > 0 &&
+            !_isAiFixing &&
+            !_isMassFixing;
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
@@ -2428,6 +2436,11 @@ public partial class MainWindow : Window
 
         if (result != MessageBoxResult.Yes)
             e.Cancel = true;
+    }
+
+    private sealed record ContextEntryView(int Offset, LocalizationEntry Entry)
+    {
+        public string PositionText => Offset < 0 ? $"{Offset}" : $"+{Offset}";
     }
 
     private sealed record EntryLocation(LocalizationDocument Document, LocalizationEntry Entry);
