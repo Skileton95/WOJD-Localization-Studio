@@ -1100,6 +1100,172 @@ public partial class MainWindow : Window
             .ToList();
     }
 
+    private int GetGlossaryMismatchCount(
+        LocalizationEntry entry,
+        string translation)
+    {
+        if (string.IsNullOrWhiteSpace(translation))
+            return 0;
+
+        return _glossaryService
+            .FindMatches(entry.Source, entry.Namespace)
+            .Count(term =>
+                term.IsLocked &&
+                !term.IsTranslationAccepted(translation));
+    }
+
+    private IReadOnlyList<string> GetObservedWrongGlossaryVariants(
+        GlossaryEntry term)
+    {
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var document in _documents)
+        {
+            foreach (var entry in document.Entries)
+            {
+                if (!string.Equals(
+                        entry.Source,
+                        term.Source,
+                        StringComparison.Ordinal) ||
+                    string.IsNullOrWhiteSpace(entry.Translation) ||
+                    term.IsTranslationAccepted(entry.Translation))
+                    continue;
+
+                values.Add(entry.Translation.Trim());
+            }
+        }
+
+        foreach (var memory in _translationMemoryService.Entries)
+        {
+            if (!string.Equals(
+                    memory.Source,
+                    term.Source,
+                    StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(memory.Translation) ||
+                term.IsTranslationAccepted(memory.Translation))
+                continue;
+
+            values.Add(memory.Translation.Trim());
+        }
+
+        return values
+            .OrderByDescending(value => value.Length)
+            .ToList();
+    }
+
+    private void GlossaryMassLocalFixButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null || _isMassFixing || _isAiFixing)
+            return;
+
+        RebuildGlossaryMismatchCache();
+
+        var document = _currentDocument;
+        var proposals = new List<ProposedTranslationChange>();
+
+        foreach (var entry in document.Entries.Where(entry =>
+                     _glossaryMismatchEntries.Contains(entry) &&
+                     !string.IsNullOrWhiteSpace(entry.Translation)))
+        {
+            var before = entry.Translation;
+            var corrected = before;
+            var reasons = new List<string>();
+            var beforeMismatchCount = GetGlossaryMismatchCount(entry, before);
+
+            var terms = _glossaryService
+                .FindMatches(entry.Source, entry.Namespace)
+                .Where(term =>
+                    term.IsLocked &&
+                    !term.IsTranslationAccepted(corrected))
+                .ToList();
+
+            foreach (var term in terms)
+            {
+                if (string.Equals(
+                        entry.Source,
+                        term.Source,
+                        StringComparison.Ordinal))
+                {
+                    corrected = term.Translation;
+                    reasons.Add($"{term.Source} → {term.Translation}");
+                    continue;
+                }
+
+                foreach (var wrongVariant in GetObservedWrongGlossaryVariants(term))
+                {
+                    if (!corrected.Contains(
+                            wrongVariant,
+                            StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    corrected = corrected.Replace(
+                        wrongVariant,
+                        term.Translation,
+                        StringComparison.OrdinalIgnoreCase);
+
+                    reasons.Add(
+                        $"{wrongVariant} → {term.Translation}");
+                }
+            }
+
+            if (string.Equals(
+                    corrected,
+                    before,
+                    StringComparison.Ordinal))
+                continue;
+
+            if (ValidationService.GetIssues(
+                    entry.Source,
+                    corrected).Count > 0)
+                continue;
+
+            var afterMismatchCount = GetGlossaryMismatchCount(
+                entry,
+                corrected);
+
+            if (afterMismatchCount >= beforeMismatchCount)
+                continue;
+
+            proposals.Add(new ProposedTranslationChange
+            {
+                Document = document,
+                Entry = entry,
+                Before = before,
+                After = corrected,
+                Reason = reasons.Count == 0
+                    ? "Закреплённый термин глоссария"
+                    : string.Join("; ", reasons.Distinct())
+            });
+        }
+
+        if (proposals.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Безопасных локальных замен не найдено.\n\n" +
+                "Локально исправляются точные строки термина и уже известные варианты перевода. " +
+                "Остальные нарушения можно исправить через ChatGPT.",
+                "Глоссарий",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var applied = ApplyProposedChangesWithPreview(
+            "Массовое локальное применение глоссария",
+            proposals,
+            "Массовое локальное исправление глоссария");
+
+        RebuildGlossaryMismatchCache();
+        UpdateCounters();
+        UpdateButtons();
+        RefreshFilteredViewPreservingSelection();
+
+        StatusText.Text = applied == 0
+            ? "Локальное исправление глоссария отменено"
+            : $"Локально применено терминов: {applied:N0} • осталось нарушений: {_glossaryMismatchEntries.Count:N0}";
+    }
+
     private async void GlossaryMassAiFixButton_Click(object sender, RoutedEventArgs e)
     {
         if (_currentDocument is null || _isMassFixing || _isAiFixing)
@@ -2353,6 +2519,10 @@ public partial class MainWindow : Window
 
         GlossaryCheckButton.IsEnabled = _glossaryService.Entries.Count > 0;
         GlossaryConsistencyButton.IsEnabled = _glossaryService.Entries.Any(entry => entry.IsLocked);
+        GlossaryMassLocalFixButton.IsEnabled =
+            glossaryMismatches > 0 &&
+            !_isAiFixing &&
+            !_isMassFixing;
         GlossaryMassAiFixButton.IsEnabled =
             glossaryMismatches > 0 &&
             !_isAiFixing &&
@@ -2521,6 +2691,11 @@ public partial class MainWindow : Window
         ValidationButton.IsEnabled = hasCurrent;
         GlossaryCheckButton.IsEnabled = hasCurrent && _glossaryService.Entries.Count > 0;
         GlossaryConsistencyButton.IsEnabled = hasCurrent && _glossaryService.Entries.Any(entry => entry.IsLocked);
+        GlossaryMassLocalFixButton.IsEnabled =
+            hasCurrent &&
+            _glossaryMismatchEntries.Count > 0 &&
+            !_isAiFixing &&
+            !_isMassFixing;
         GlossaryMassAiFixButton.IsEnabled =
             hasCurrent &&
             _glossaryMismatchEntries.Count > 0 &&
