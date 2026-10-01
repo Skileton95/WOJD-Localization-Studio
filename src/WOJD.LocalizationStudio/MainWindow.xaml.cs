@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly UpdateService _updateService = new();
     private readonly UpdateSessionService _updateSessionService = new();
     private readonly OpenAiCorrectionService _openAiCorrectionService = new();
+    private readonly TranslationHistoryService _translationHistoryService = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private UpdateInfo? _availableUpdate;
     private string _statusFilter = "All";
     private string? _namespaceFilter;
+    private ValidationIssueKind _validationTypeFilter = ValidationIssueKind.None;
     private readonly Dictionary<string, List<EntryLocation>> _sourceIndex = new(StringComparer.Ordinal);
     private readonly HashSet<string> _conflictingSources = new(StringComparer.Ordinal);
     private readonly Stack<EditBatch> _undoStack = new();
@@ -494,6 +496,7 @@ public partial class MainWindow : Window
 
         var hasFilter =
             _namespaceFilter is not null ||
+            _validationTypeFilter != ValidationIssueKind.None ||
             !string.Equals(_statusFilter, "All", StringComparison.Ordinal) ||
             !string.IsNullOrWhiteSpace(SearchBox.Text);
 
@@ -549,6 +552,10 @@ public partial class MainWindow : Window
 
         if (!matchesStatus) return false;
 
+        if (_validationTypeFilter != ValidationIssueKind.None &&
+            !ValidationService.HasIssueKind(entry, _validationTypeFilter))
+            return false;
+
         var query = SearchBox.Text.Trim();
         if (string.IsNullOrEmpty(query)) return true;
 
@@ -573,6 +580,21 @@ public partial class MainWindow : Window
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyViewFilter();
     private void SearchScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyViewFilter();
 
+    private void ValidationTypeFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var tag = (ValidationTypeFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "All";
+
+        _validationTypeFilter = Enum.TryParse<ValidationIssueKind>(tag, out var kind)
+            ? kind
+            : ValidationIssueKind.None;
+
+        if (_validationTypeFilter != ValidationIssueKind.None)
+            _statusFilter = "Errors";
+
+        UpdateFilterVisuals();
+        ApplyViewFilter();
+    }
+
     private void FilterBadge_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not string filter)
@@ -581,7 +603,12 @@ public partial class MainWindow : Window
         _statusFilter = filter;
 
         if (string.Equals(filter, "All", StringComparison.Ordinal))
+        {
             _namespaceFilter = null;
+            _validationTypeFilter = ValidationIssueKind.None;
+            if (ValidationTypeFilterBox.SelectedIndex != 0)
+                ValidationTypeFilterBox.SelectedIndex = 0;
+        }
 
         UpdateFilterVisuals();
         ApplyViewFilter();
@@ -649,6 +676,8 @@ public partial class MainWindow : Window
         TranslationBox.IsEnabled = true;
         TranslationBox.Text = _selected.Translation;
         LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
+        TranslationVariantsButton.IsEnabled = !_isAiFixing && !string.IsNullOrWhiteSpace(_selected.Source);
+        TranslationHistoryButton.IsEnabled = true;
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateRowNavigationButtons();
@@ -665,6 +694,8 @@ public partial class MainWindow : Window
         TranslationBox.Text = string.Empty;
         TranslationBox.IsEnabled = false;
         LengthLabel.Text = "0 символов";
+        TranslationVariantsButton.IsEnabled = false;
+        TranslationHistoryButton.IsEnabled = false;
         ExactMatchesCountText.Text = "0";
         ExactMatchesInfoText.Text = "Выберите строку";
         ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0";
@@ -677,6 +708,7 @@ public partial class MainWindow : Window
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
         FixValidationButton.IsEnabled = false;
         AiFixValidationButton.IsEnabled = false;
+        ExplainValidationButton.IsEnabled = false;
         _suppressEditor = false;
     }
 
