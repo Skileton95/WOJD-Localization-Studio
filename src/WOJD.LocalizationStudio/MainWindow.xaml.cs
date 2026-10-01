@@ -505,6 +505,28 @@ public partial class MainWindow : Window
         UpdateRowNavigationButtons();
     }
 
+    private void RefreshFilteredViewPreservingSelection()
+    {
+        if (_view is null)
+            return;
+
+        // При обычном режиме «Все» обновлять CollectionView после каждого символа
+        // не нужно: это сбрасывало выделение строки на больших файлах.
+        if (_view.Filter is null)
+        {
+            UpdateRowNavigationButtons();
+            return;
+        }
+
+        var selected = _selected;
+        _view.Refresh();
+
+        if (selected is not null && _view.Contains(selected))
+            EntriesGrid.SelectedItem = selected;
+
+        UpdateRowNavigationButtons();
+    }
+
     private bool FilterEntry(object obj)
     {
         if (obj is not LocalizationEntry entry) return false;
@@ -681,7 +703,7 @@ public partial class MainWindow : Window
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateCounters();
-        _view?.Refresh();
+        RefreshFilteredViewPreservingSelection();
         StatusText.Text = $"Есть несохранённые изменения: {_currentDocument.FileName}";
     }
 
@@ -943,6 +965,14 @@ public partial class MainWindow : Window
     {
         if (Keyboard.Modifiers != ModifierKeys.Control)
             return;
+
+        if (e.Key == Key.F)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
 
         if (Keyboard.FocusedElement is TextBox focusedTextBox &&
             !ReferenceEquals(focusedTextBox, TranslationBox))
