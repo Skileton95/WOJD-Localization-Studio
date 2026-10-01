@@ -389,11 +389,16 @@ public partial class MainWindow : Window
     {
         if (obj is not LocalizationEntry entry) return false;
 
+        if (_namespaceFilter is not null &&
+            !string.Equals(entry.Namespace, _namespaceFilter, StringComparison.Ordinal))
+            return false;
+
         var matchesStatus = _statusFilter switch
         {
             "Translated" => !string.IsNullOrWhiteSpace(entry.Translation),
             "Untranslated" => string.IsNullOrWhiteSpace(entry.Translation),
             "Errors" => entry.HasValidationIssues,
+            "Conflicts" => HasTranslationConflict(entry),
             "Modified" => entry.IsModified,
             _ => true
         };
@@ -430,7 +435,12 @@ public partial class MainWindow : Window
             return;
 
         _statusFilter = filter;
+
+        if (string.Equals(filter, "All", StringComparison.Ordinal))
+            _namespaceFilter = null;
+
         UpdateFilterVisuals();
+        UpdateBottomSummary();
         _view?.Refresh();
 
         if (EntriesGrid.SelectedItem is LocalizationEntry selected && _view is not null && !_view.Contains(selected))
@@ -445,6 +455,7 @@ public partial class MainWindow : Window
             TranslatedFilterButton,
             UntranslatedFilterButton,
             ErrorFilterButton,
+            ConflictFilterButton,
             ModifiedFilterButton
         };
 
@@ -457,6 +468,23 @@ public partial class MainWindow : Window
             button.BorderThickness = new Thickness(selected ? 2 : 1);
             button.FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal;
         }
+    }
+
+    private void NamespaceCell_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not LocalizationEntry entry)
+            return;
+
+        _namespaceFilter = entry.Namespace;
+        _statusFilter = "All";
+        SearchBox.Clear();
+
+        UpdateFilterVisuals();
+        UpdateBottomSummary();
+        _view?.Refresh();
+
+        StatusText.Text = $"Показаны все строки Namespace: {entry.Namespace}";
+        e.Handled = true;
     }
 
     private void EntriesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
