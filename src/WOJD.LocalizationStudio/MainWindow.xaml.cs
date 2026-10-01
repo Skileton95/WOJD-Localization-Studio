@@ -1081,21 +1081,39 @@ public partial class MainWindow : Window
         if (_selected is null || _currentDocument is null || !_selected.HasValidationIssues)
             return;
 
-        var corrected = ValidationService.AutoFixDeterministic(
-            _selected.Source,
-            _selected.Translation);
+        var entry = _selected;
 
-        if (string.Equals(corrected, _selected.Translation, StringComparison.Ordinal))
+        try
         {
-            StatusText.Text = "Эту проблему нельзя безопасно исправить автоматически";
-            return;
+            var corrected = ValidationService.AutoFixDeterministic(
+                entry.Source,
+                entry.Translation);
+
+            if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
+            {
+                StatusText.Text = "Эту проблему нельзя безопасно исправить автоматически";
+                return;
+            }
+
+            ApplyCorrectedTranslation(corrected, "Автоисправление проверки");
+
+            // После исправления строка может исчезнуть из активного фильтра ошибок,
+            // поэтому используем сохранённую ссылку entry, а не _selected.
+            StatusText.Text = entry.HasValidationIssues
+                ? "Автоисправление применено; оставшиеся проблемы требуют проверки"
+                : "Ошибки строки исправлены";
         }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось исправить строку.\n\n{ex.Message}",
+                "Ошибка автоисправления",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
 
-        ApplyCorrectedTranslation(corrected, "Автоисправление проверки");
-
-        StatusText.Text = _selected.HasValidationIssues
-            ? "Автоисправление применено; оставшиеся проблемы требуют проверки"
-            : "Ошибки строки исправлены";
+            StatusText.Text = "Ошибка автоисправления — изменения не применены";
+        }
     }
 
     private void MassLocalFixButton_Click(object sender, RoutedEventArgs e)
