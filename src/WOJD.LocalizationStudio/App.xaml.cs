@@ -15,6 +15,9 @@ public partial class App : Application
         DiagnosticDirectory,
         "crash.log");
 
+    private static string? _lastUiErrorMessage;
+    private static DateTimeOffset _lastUiErrorShownAt;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += App_DispatcherUnhandledException;
@@ -59,6 +62,20 @@ public partial class App : Application
             return;
 
         e.Handled = true;
+
+        var now = DateTimeOffset.UtcNow;
+        var isDuplicate =
+            string.Equals(
+                _lastUiErrorMessage,
+                e.Exception.Message,
+                StringComparison.Ordinal) &&
+            now - _lastUiErrorShownAt < TimeSpan.FromSeconds(5);
+
+        if (isDuplicate)
+            return;
+
+        _lastUiErrorMessage = e.Exception.Message;
+        _lastUiErrorShownAt = now;
 
         try
         {
