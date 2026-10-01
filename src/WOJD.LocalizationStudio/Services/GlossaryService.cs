@@ -37,9 +37,18 @@ public sealed class GlossaryService
             return;
 
         foreach (var entry in entries
-                     .Where(entry => !string.IsNullOrWhiteSpace(entry.Source))
+                     .Where(entry =>
+                         !string.IsNullOrWhiteSpace(entry.Source) &&
+                         !string.IsNullOrWhiteSpace(entry.Translation))
+                     .GroupBy(entry => entry.Source, StringComparer.Ordinal)
+                     .Select(group => group.Last())
                      .OrderBy(entry => entry.Source, StringComparer.Ordinal))
+        {
+            if (entry.Id == Guid.Empty)
+                entry.Id = Guid.NewGuid();
+
             Entries.Add(entry);
+        }
     }
 
     public async Task SaveAsync(CancellationToken cancellationToken = default)
@@ -103,9 +112,12 @@ public sealed class GlossaryService
         if (replace)
             Entries.Clear();
 
-        var bySource = Entries.ToDictionary(
-            entry => entry.Source,
-            StringComparer.Ordinal);
+        var bySource = Entries
+            .GroupBy(entry => entry.Source, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.Ordinal);
 
         var changed = 0;
 
