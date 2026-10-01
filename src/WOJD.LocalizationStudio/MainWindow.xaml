@@ -442,12 +442,14 @@
 
                             <Button x:Name="AiFixValidationButton"
                                     Grid.Column="2"
-                                    Content="Умное исправление с ChatGPT"
                                     ToolTip="Использует OpenAI API"
                                     Click="AiFixValidationButton_Click"
                                     IsEnabled="False"
-                                    Margin="0"
-                                    TextBlock.TextWrapping="Wrap"/>
+                                    Margin="0">
+                                <TextBlock Text="Умное исправление с ChatGPT"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                            </Button>
                         </Grid>
 
                         <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
