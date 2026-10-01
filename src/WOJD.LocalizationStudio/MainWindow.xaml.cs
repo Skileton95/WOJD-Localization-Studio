@@ -1291,7 +1291,7 @@ public partial class MainWindow : Window
             this,
             $"ChatGPT исправит терминологию в {targets.Count:N0} строках файла «{document.FileName}».\n\n" +
             "Для каждой строки выполняется отдельный запрос OpenAI API. " +
-            "Будут применены только ответы без ошибок проверки и без нарушений закреплённого глоссария.\n\nПродолжить?",
+            "После обработки откроется предпросмотр, где можно снять отдельные изменения.\n\nПродолжить?",
             "Массовое исправление глоссария",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -1301,10 +1301,11 @@ public partial class MainWindow : Window
 
         _isMassFixing = true;
         _isAiFixing = true;
+        GlossaryMassLocalFixButton.IsEnabled = false;
         GlossaryMassAiFixButton.IsEnabled = false;
         GlossaryMassAiFixButton.Content = "ChatGPT исправляет…";
 
-        var edits = new List<TranslationEdit>();
+        var proposals = new List<ProposedTranslationChange>();
         var skipped = 0;
         var failed = 0;
         string? firstError = null;
@@ -1314,6 +1315,7 @@ public partial class MainWindow : Window
             for (var i = 0; i < targets.Count; i++)
             {
                 var entry = targets[i];
+
                 StatusText.Text =
                     $"Глоссарий ChatGPT: {i + 1:N0}/{targets.Count:N0} — {entry.Key}";
                 GlossaryMassAiFixButton.Content =
@@ -1334,18 +1336,26 @@ public partial class MainWindow : Window
                         continue;
                     }
 
-                    if (ValidationService.GetIssues(entry.Source, corrected).Count > 0 ||
-                        TranslationHasGlossaryMismatch(entry.Source, entry.Namespace, corrected))
+                    if (ValidationService.GetIssues(
+                            entry.Source,
+                            corrected).Count > 0 ||
+                        TranslationHasGlossaryMismatch(
+                            entry.Source,
+                            entry.Namespace,
+                            corrected))
                     {
                         skipped++;
                         continue;
                     }
 
-                    edits.Add(new TranslationEdit(
-                        document,
-                        entry,
-                        entry.Translation,
-                        corrected));
+                    proposals.Add(new ProposedTranslationChange
+                    {
+                        Document = document,
+                        Entry = entry,
+                        Before = entry.Translation,
+                        After = corrected,
+                        Reason = "ChatGPT: закреплённая терминология"
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -1354,24 +1364,26 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (edits.Count > 0)
-            {
-                var batch = new EditBatch(
-                    edits,
-                    "Массовое исправление глоссария ChatGPT");
+            var applied = 0;
 
-                RecordEditBatch(batch);
-                ApplyEditBatch(batch, useAfter: true);
+            if (proposals.Count > 0)
+            {
+                applied = ApplyProposedChangesWithPreview(
+                    "Массовое исправление глоссария ChatGPT",
+                    proposals,
+                    "Массовое исправление глоссария ChatGPT");
             }
 
             RebuildGlossaryMismatchCache();
             UpdateCounters();
+            UpdateButtons();
             RefreshFilteredViewPreservingSelection();
 
             var remaining = _glossaryMismatchEntries.Count;
             var summary =
                 $"Запрошено строк: {targets.Count:N0}\n" +
-                $"Исправлено: {edits.Count:N0}\n" +
+                $"Подготовлено исправлений: {proposals.Count:N0}\n" +
+                $"Применено после предпросмотра: {applied:N0}\n" +
                 $"Пропущено: {skipped:N0}\n" +
                 $"Ошибок API: {failed:N0}\n" +
                 $"Нарушений глоссария осталось: {remaining:N0}";
@@ -1389,13 +1401,13 @@ public partial class MainWindow : Window
                     : MessageBoxImage.Warning);
 
             StatusText.Text =
-                $"Глоссарий: исправлено {edits.Count:N0}, осталось {remaining:N0}";
+                $"Глоссарий: применено {applied:N0}, осталось {remaining:N0}";
         }
         finally
         {
             _isAiFixing = false;
             _isMassFixing = false;
-            GlossaryMassAiFixButton.Content = "Исправить нарушения с ChatGPT";
+            GlossaryMassAiFixButton.Content = "Исправить с ChatGPT";
             UpdateCounters();
             UpdateButtons();
             UpdateValidationPanel();
