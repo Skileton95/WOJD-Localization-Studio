@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly UpdateSessionService _updateSessionService = new();
     private readonly OpenAiCorrectionService _openAiCorrectionService = new();
     private readonly TranslationHistoryService _translationHistoryService = new();
+    private readonly TranslationMemoryService _translationMemoryService = new();
     private readonly GlossaryService _glossaryService = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
@@ -62,11 +63,13 @@ public partial class MainWindow : Window
 
         try
         {
-            await _glossaryService.LoadAsync();
+            await Task.WhenAll(
+                _glossaryService.LoadAsync(),
+                _translationMemoryService.LoadAsync());
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Не удалось загрузить глоссарий: {ex.Message}";
+            StatusText.Text = $"Не удалось загрузить локальные данные: {ex.Message}";
         }
 
         await RestoreUpdateSessionAsync();
@@ -862,8 +865,15 @@ public partial class MainWindow : Window
         {
             var result = await Task.Run(() =>
             {
-                var sourceMatches = SimilarityService.FindSourceMatches(entry, documents);
-                var translationMatches = SimilarityService.FindTranslationMatches(entry, documents);
+                var sourceMatches = SimilarityService.FindSourceMatches(
+                    entry,
+                    documents,
+                    _translationMemoryService.Entries);
+
+                var translationMatches = SimilarityService.FindTranslationMatches(
+                    entry,
+                    documents,
+                    _translationMemoryService.Entries);
                 return (sourceMatches, translationMatches);
             });
 
@@ -2368,10 +2378,11 @@ public partial class MainWindow : Window
             try
             {
                 await _translationHistoryService.AppendSavedChangesAsync(document, changedEntries);
+                await _translationMemoryService.RememberDocumentAsync(document);
             }
             catch
             {
-                // Ошибка журнала истории не должна отменять уже успешное сохранение локализации.
+                // Ошибка локальной истории/памяти не должна отменять уже успешное сохранение локализации.
             }
 
             foreach (var entry in document.Entries)
