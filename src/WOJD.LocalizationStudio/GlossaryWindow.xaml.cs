@@ -215,13 +215,20 @@ public partial class GlossaryWindow : Window
 
         var window = new GlossaryUsageWindow(
             _selected,
-            rows,
-            _navigate)
+            rows)
         {
             Owner = this
         };
 
-        window.ShowDialog();
+        if (window.ShowDialog() == true &&
+            window.SelectedUsage is not null)
+        {
+            _navigate?.Invoke(
+                window.SelectedUsage.Document,
+                window.SelectedUsage.Entry);
+
+            Close();
+        }
     }
 
     private void ConflictsButton_Click(object sender, RoutedEventArgs e)
