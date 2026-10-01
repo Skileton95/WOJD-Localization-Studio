@@ -144,7 +144,7 @@
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Separator Background="#31526A"/>
                         <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.4" Foreground="#88A5B9" FontSize="11"/>
+                        <TextBlock Text="v0.2.5" Foreground="#88A5B9" FontSize="11"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -251,9 +251,23 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+
                 <TextBlock x:Name="StatusText" Text="Готово" VerticalAlignment="Center" Foreground="#526579"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+
+                <Border x:Name="UpdatePanel" Grid.Column="1" Background="#EEF4FA" BorderBrush="#D3DEE8"
+                        BorderThickness="1" CornerRadius="7" Padding="9,4" Margin="8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#7E94A7" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="UpdateStatusText" Text="Проверка обновлений…" Foreground="#526579"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Button x:Name="UpdateButton" Content="Проверить" Padding="10,4" Margin="0"
+                                Click="UpdateButton_Click"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="Открыть файлы" Click="OpenFile_Click"/>
                     <Button x:Name="SaveCurrentButton" Content="Сохранить текущий" Click="SaveCurrentButton_Click" IsEnabled="False"/>
                     <Button x:Name="SaveAllButton" Content="Сохранить всё" Click="SaveAllButton_Click" Background="#2F7BEA" Foreground="White" BorderBrush="#266ACB" IsEnabled="False"/>
