@@ -502,6 +502,8 @@ public partial class MainWindow : Window
             _view.Filter = desiredFilter;
         else if (hasFilter)
             _view.Refresh();
+
+        UpdateRowNavigationButtons();
     }
 
     private bool FilterEntry(object obj)
@@ -628,6 +630,7 @@ public partial class MainWindow : Window
         LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
+        UpdateRowNavigationButtons();
 
         _suppressEditor = false;
     }
@@ -643,8 +646,12 @@ public partial class MainWindow : Window
         LengthLabel.Text = "0 символов";
         ExactMatchesCountText.Text = "0";
         ExactMatchesInfoText.Text = "Выберите строку";
+        ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0";
+        ExactMatchesConflictCountText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
         ExactMatchesList.ItemsSource = null;
         ApplyExactMatchesButton.IsEnabled = false;
+        PreviousRowButton.IsEnabled = false;
+        NextRowButton.IsEnabled = false;
         ValidationStatusText.Text = "Выберите строку";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
         _suppressEditor = false;
@@ -688,6 +695,8 @@ public partial class MainWindow : Window
             ExactMatchesCountText.Text = "0";
             ExactMatchesInfoText.Text = "Точные совпадения не найдены";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0";
+            ExactMatchesConflictCountText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
             ExactMatchesList.ItemsSource = null;
             ApplyExactMatchesButton.IsEnabled = false;
             return;
@@ -703,15 +712,31 @@ public partial class MainWindow : Window
         {
             ExactMatchesInfoText.Text = "Других строк с полностью идентичным оригиналом нет.";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0  •  вариантов перевода: 1";
+            ExactMatchesConflictCountText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
             ApplyExactMatchesButton.IsEnabled = false;
             return;
         }
 
-        var distinctTranslations = matches
+        var translatedMatches = matches
+            .Where(item => !string.IsNullOrWhiteSpace(item.Entry.Translation))
+            .ToList();
+
+        var distinctTranslations = translatedMatches
             .Select(item => item.Entry.Translation)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+        var conflictingRows = distinctTranslations.Count > 1
+            ? translatedMatches.Count
+            : 0;
+
+        ExactMatchesConflictCountText.Text =
+            $"Конфликтующих строк: {conflictingRows:N0}  •  вариантов перевода: {distinctTranslations.Count:N0}";
+        ExactMatchesConflictCountText.Foreground = new SolidColorBrush(
+            conflictingRows > 0
+                ? Color.FromRgb(0xB3, 0x3A, 0x2B)
+                : Color.FromRgb(0x6B, 0x7D, 0x8E));
 
         var fileCount = matches
             .Select(item => item.Document.FilePath)
@@ -759,6 +784,53 @@ public partial class MainWindow : Window
             $"Открыто точное совпадение: {match.Document.FileName} • {match.Entry.Namespace} • {match.Entry.Key}";
 
         e.Handled = true;
+    }
+
+    private void PreviousRowButton_Click(object sender, RoutedEventArgs e) =>
+        NavigateVisibleRow(-1);
+
+    private void NextRowButton_Click(object sender, RoutedEventArgs e) =>
+        NavigateVisibleRow(1);
+
+    private void NavigateVisibleRow(int delta)
+    {
+        if (_view is null || _selected is null)
+            return;
+
+        var visibleEntries = _view.Cast<object>()
+            .OfType<LocalizationEntry>()
+            .ToList();
+
+        var currentIndex = visibleEntries.IndexOf(_selected);
+        if (currentIndex < 0)
+            return;
+
+        var targetIndex = currentIndex + delta;
+        if (targetIndex < 0 || targetIndex >= visibleEntries.Count)
+            return;
+
+        var target = visibleEntries[targetIndex];
+        EntriesGrid.SelectedItem = target;
+        EntriesGrid.ScrollIntoView(target);
+        EntriesGrid.Focus();
+    }
+
+    private void UpdateRowNavigationButtons()
+    {
+        if (_view is null || _selected is null)
+        {
+            PreviousRowButton.IsEnabled = false;
+            NextRowButton.IsEnabled = false;
+            return;
+        }
+
+        var visibleEntries = _view.Cast<object>()
+            .OfType<LocalizationEntry>()
+            .ToList();
+
+        var currentIndex = visibleEntries.IndexOf(_selected);
+        PreviousRowButton.IsEnabled = currentIndex > 0;
+        NextRowButton.IsEnabled = currentIndex >= 0 && currentIndex < visibleEntries.Count - 1;
     }
 
     private void ApplyExactMatchesButton_Click(object sender, RoutedEventArgs e)
