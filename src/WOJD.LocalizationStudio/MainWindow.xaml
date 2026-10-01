@@ -273,6 +273,10 @@
                                 Background="#FFF0F3" Foreground="#A53551" Click="FilterBadge_Click">
                             <TextBlock x:Name="ConflictBadge" Style="{StaticResource BadgeText}" Text="Конфликты  0"/>
                         </Button>
+                        <Button x:Name="GlossaryFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Glossary"
+                                Background="#F0F5FF" Foreground="#365A9C" Click="FilterBadge_Click">
+                            <TextBlock x:Name="GlossaryBadge" Style="{StaticResource BadgeText}" Text="Глоссарий  0"/>
+                        </Button>
                         <Button x:Name="ModifiedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Modified"
                                 Background="#FFF8E8" Foreground="#9A6814" Click="FilterBadge_Click" Margin="0">
                             <TextBlock x:Name="ModifiedBadge" Style="{StaticResource BadgeText}" Text="Изменённые  0"/>
@@ -333,7 +337,8 @@
 
                         <TextBlock Text="Русский перевод" FontWeight="SemiBold" Margin="0,18,0,7"/>
                         <TextBox x:Name="TranslationBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"/>
+                                 VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"
+                                 BorderBrush="#B9C7D3" BorderThickness="1"/>
                         <TextBlock x:Name="LengthLabel" Text="0 символов" Foreground="#718094" HorizontalAlignment="Right" Margin="0,5,0,0"/>
 
                         <Grid Margin="0,8,0,0">
@@ -357,6 +362,81 @@
                                     IsEnabled="False"
                                     Margin="0"/>
                         </Grid>
+
+                        <Button x:Name="SimilarityButton"
+                                Content="Похожие строки / память переводов"
+                                Click="SimilarityButton_Click"
+                                IsEnabled="False"
+                                Margin="0,8,0,0"/>
+
+                        <Border Background="#F2F6FA"
+                                BorderBrush="#D9E3EC"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="10"
+                                Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Качество файла"
+                                           FontWeight="SemiBold"
+                                           Foreground="#25384A"/>
+                                <TextBlock x:Name="QualityStatsText"
+                                           Text="Файл не открыт"
+                                           Foreground="#6B7D8E"
+                                           FontSize="12"
+                                           Margin="0,5,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#F2F6FA"
+                                BorderBrush="#D9E3EC"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="10"
+                                Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Контекст"
+                                           FontWeight="SemiBold"
+                                           Foreground="#25384A"/>
+                                <TextBlock x:Name="ContextInfoText"
+                                           Text="Выберите строку"
+                                           Foreground="#6B7D8E"
+                                           FontSize="12"
+                                           Margin="0,5,0,6"/>
+                                <ItemsControl x:Name="ContextList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="White"
+                                                    BorderBrush="#D6E1EA"
+                                                    BorderThickness="1"
+                                                    CornerRadius="5"
+                                                    Padding="7"
+                                                    Margin="0,0,0,5">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="#667789"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold">
+                                                        <Run Text="{Binding PositionText}"/>
+                                                        <Run Text="  •  "/>
+                                                        <Run Text="{Binding Entry.Key}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Entry.Source}"
+                                                               Foreground="#26394A"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding Entry.Translation}"
+                                                               Foreground="#526579"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
 
                         <Border x:Name="GlossaryMatchPanel"
                                 Background="#F2F6FA"
@@ -423,6 +503,34 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button x:Name="GlossaryCheckButton"
+                                            Grid.Column="0"
+                                            Content="Проверить файл"
+                                            Click="GlossaryCheckButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+
+                                    <Button x:Name="GlossaryConsistencyButton"
+                                            Grid.Column="2"
+                                            Content="Единообразие"
+                                            Click="GlossaryConsistencyButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+                                </Grid>
+
+                                <Button x:Name="GlossaryMassAiFixButton"
+                                        Content="Исправить нарушения с ChatGPT"
+                                        Click="GlossaryMassAiFixButton_Click"
+                                        IsEnabled="False"
+                                        Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
 
