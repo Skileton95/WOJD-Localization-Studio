@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private readonly NdjsonService _service = new();
     private readonly UpdateService _updateService = new();
     private readonly UpdateSessionService _updateSessionService = new();
+    private readonly OpenAiCorrectionService _openAiCorrectionService = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     private bool _suppressEditor;
     private bool _isCheckingForUpdates;
     private bool _isUpdating;
+    private bool _isAiFixing;
     private bool _allowCloseWithoutPrompt;
     private UpdateInfo? _availableUpdate;
     private string _statusFilter = "All";
@@ -673,6 +675,8 @@ public partial class MainWindow : Window
         NextRowButton.IsEnabled = false;
         ValidationStatusText.Text = "Выберите строку";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
+        FixValidationButton.IsEnabled = false;
+        AiFixValidationButton.IsEnabled = false;
         _suppressEditor = false;
     }
 
@@ -992,9 +996,19 @@ public partial class MainWindow : Window
 
     private void UpdateValidationPanel()
     {
+        var canFix =
+            !_isAiFixing &&
+            _selected is not null &&
+            !string.IsNullOrWhiteSpace(_selected.Translation) &&
+            _selected.HasValidationIssues;
+
+        FixValidationButton.IsEnabled = canFix;
+        AiFixValidationButton.IsEnabled = canFix;
+
         if (_selected is null)
         {
             ValidationStatusText.Text = "Выберите строку";
+            ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
             return;
         }
 
@@ -1017,6 +1031,125 @@ public partial class MainWindow : Window
             ? "✓ Служебные элементы не найдены."
             : $"✓ Все служебные элементы сохранены: {string.Join(", ", tokens)}";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x75, 0x40));
+    }
+
+    private void FixValidationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || _currentDocument is null || !_selected.HasValidationIssues)
+            return;
+
+        var corrected = ValidationService.AutoFixTechnicalTokens(
+            _selected.Source,
+            _selected.Translation);
+
+        if (string.Equals(corrected, _selected.Translation, StringComparison.Ordinal))
+        {
+            StatusText.Text = "Автоматическое исправление для этой ошибки не найдено";
+            return;
+        }
+
+        ApplyCorrectedTranslation(corrected, "Автоисправление проверки");
+
+        StatusText.Text = _selected.HasValidationIssues
+            ? "Исправление применено, но строку нужно проверить вручную"
+            : "Ошибка строки исправлена";
+    }
+
+    private async void AiFixValidationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || _currentDocument is null || !_selected.HasValidationIssues || _isAiFixing)
+            return;
+
+        if (!_openAiCorrectionService.HasApiKey)
+        {
+            var keyWindow = new OpenAiKeyWindow { Owner = this };
+            if (keyWindow.ShowDialog() != true)
+                return;
+
+            try
+            {
+                _openAiCorrectionService.SetApiKey(keyWindow.ApiKey, keyWindow.Remember);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    ex.Message,
+                    "ChatGPT",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+        }
+
+        var entry = _selected;
+        _isAiFixing = true;
+        AiFixValidationButton.Content = "ChatGPT исправляет…";
+        UpdateValidationPanel();
+        StatusText.Text = "ChatGPT исправляет строку…";
+
+        try
+        {
+            var corrected = await _openAiCorrectionService.CorrectAsync(entry);
+
+            if (!ReferenceEquals(_selected, entry))
+            {
+                StatusText.Text = "Строка изменилась во время запроса — ответ ChatGPT не применён";
+                return;
+            }
+
+            var remainingError = ValidationService.BuildSummary(entry.Source, corrected);
+            if (!string.IsNullOrWhiteSpace(remainingError))
+            {
+                MessageBox.Show(
+                    this,
+                    $"ChatGPT вернул перевод, который всё ещё не проходит проверку:\n\n{remainingError}",
+                    "Умное исправление",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                StatusText.Text = "Ответ ChatGPT не применён: проверка не пройдена";
+                return;
+            }
+
+            ApplyCorrectedTranslation(corrected, "Умное исправление ChatGPT");
+            StatusText.Text = "ChatGPT исправил строку";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Ошибка ChatGPT",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            StatusText.Text = "Не удалось выполнить умное исправление";
+        }
+        finally
+        {
+            _isAiFixing = false;
+            AiFixValidationButton.Content = "Умное исправление с ChatGPT";
+            UpdateValidationPanel();
+        }
+    }
+
+    private void ApplyCorrectedTranslation(string corrected, string description)
+    {
+        if (_selected is null || _currentDocument is null)
+            return;
+
+        if (string.Equals(_selected.Translation, corrected, StringComparison.Ordinal))
+            return;
+
+        var batch = new EditBatch(
+            new List<TranslationEdit>
+            {
+                new(_currentDocument, _selected, _selected.Translation, corrected)
+            },
+            description);
+
+        RecordEditBatch(batch);
+        ApplyEditBatch(batch, useAfter: true);
+        RefreshFilteredViewPreservingSelection();
     }
 
     private void UpdateCounters()
