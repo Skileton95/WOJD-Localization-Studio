@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private bool _isUpdating;
     private bool _isAiFixing;
     private bool _isMassFixing;
+    private int _glossaryScanGeneration;
     private bool _allowCloseWithoutPrompt;
     private UpdateInfo? _availableUpdate;
     private string _statusFilter = "All";
@@ -466,31 +467,66 @@ public partial class MainWindow : Window
             : $"Открыто файлов: {_documents.Count}";
     }
 
-    private void FilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void FilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _namespaceFilter = null;
-        _currentDocument = FilesList.SelectedItem as LocalizationDocument;
-        _selected = null;
+        var scanGeneration = ++_glossaryScanGeneration;
 
-        if (_currentDocument is null)
+        try
         {
-            EntriesGrid.ItemsSource = null;
-            _view = null;
-            ClearEditor();
+            _namespaceFilter = null;
+            _currentDocument = FilesList.SelectedItem as LocalizationDocument;
+            _selected = null;
+            _glossaryMismatchEntries.Clear();
+
+            if (_currentDocument is null)
+            {
+                EntriesGrid.ItemsSource = null;
+                _view = null;
+                ClearEditor();
+                UpdateCounters();
+                UpdateButtons();
+                return;
+            }
+
+            var document = _currentDocument;
+
+            // Сначала показываем документ. Полный анализ глоссария больше
+            // не блокирует критический путь открытия большого файла.
+            EntriesGrid.ItemsSource = document.Entries;
+            SetupView();
             UpdateCounters();
             UpdateButtons();
-            return;
+            StatusText.Text = $"Активный файл: {document.FileName}";
+
+            if (document.Entries.Count > 0)
+                EntriesGrid.SelectedIndex = 0;
+
+            await RebuildGlossaryMismatchCacheAsync(
+                document,
+                scanGeneration);
         }
+        catch (Exception ex)
+        {
+            _glossaryMismatchEntries.Clear();
+            UpdateCounters();
+            UpdateButtons();
 
-        EntriesGrid.ItemsSource = _currentDocument.Entries;
-        RebuildGlossaryMismatchCache();
-        SetupView();
-        UpdateCounters();
-        UpdateButtons();
-        StatusText.Text = $"Активный файл: {_currentDocument.FileName}";
+            StatusText.Text =
+                $"Файл открыт, но фоновая проверка интерфейса завершилась с ошибкой: {ex.Message}";
 
-        if (_currentDocument.Entries.Count > 0)
-            EntriesGrid.SelectedIndex = 0;
+            App.WriteDiagnostic(
+                "FilesList_SelectionChanged",
+                ex);
+
+            MessageBox.Show(
+                this,
+                "Файл удалось загрузить, но при подготовке редактора произошла ошибка.\n\n" +
+                ex.Message +
+                "\n\nПодробности записаны в crash.log.",
+                "Ошибка открытия файла",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void SetupView()
@@ -685,32 +721,51 @@ public partial class MainWindow : Window
         _selected = EntriesGrid.SelectedItem as LocalizationEntry;
         _suppressEditor = true;
 
-        if (_selected is null)
+        try
         {
-            ClearEditor();
-            _suppressEditor = false;
-            return;
+            if (_selected is null)
+            {
+                ClearEditor();
+                return;
+            }
+
+            SelectedKey.Text = _selected.Key;
+            SelectedNamespace.Text = string.IsNullOrWhiteSpace(_selected.Namespace)
+                ? "Namespace: —"
+                : $"Namespace: {_selected.Namespace}";
+            SourceText.Text = string.IsNullOrWhiteSpace(_selected.Source)
+                ? "—"
+                : _selected.Source;
+            TranslationBox.IsEnabled = true;
+            TranslationBox.Text = _selected.Translation;
+            LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
+            TranslationVariantsButton.IsEnabled =
+                !_isAiFixing &&
+                !string.IsNullOrWhiteSpace(_selected.Source);
+            TranslationHistoryButton.IsEnabled = true;
+            SimilarityButton.IsEnabled =
+                !string.IsNullOrWhiteSpace(_selected.Source);
+
+            UpdateTranslationProtection(_selected);
+            UpdateContextPanel();
+            UpdateGlossaryPanel();
+            UpdateExactMatchesPanel();
+            UpdateValidationPanel();
+            UpdateRowNavigationButtons();
         }
+        catch (Exception ex)
+        {
+            App.WriteDiagnostic(
+                "EntriesGrid_SelectionChanged",
+                ex);
 
-        SelectedKey.Text = _selected.Key;
-        SelectedNamespace.Text = string.IsNullOrWhiteSpace(_selected.Namespace)
-            ? "Namespace: —"
-            : $"Namespace: {_selected.Namespace}";
-        SourceText.Text = string.IsNullOrWhiteSpace(_selected.Source) ? "—" : _selected.Source;
-        TranslationBox.IsEnabled = true;
-        TranslationBox.Text = _selected.Translation;
-        LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
-        TranslationVariantsButton.IsEnabled = !_isAiFixing && !string.IsNullOrWhiteSpace(_selected.Source);
-        TranslationHistoryButton.IsEnabled = true;
-        SimilarityButton.IsEnabled = !string.IsNullOrWhiteSpace(_selected.Source);
-        UpdateTranslationProtection(_selected);
-        UpdateContextPanel();
-        UpdateGlossaryPanel();
-        UpdateExactMatchesPanel();
-        UpdateValidationPanel();
-        UpdateRowNavigationButtons();
-
-        _suppressEditor = false;
+            StatusText.Text =
+                $"Не удалось полностью отобразить выбранную строку: {ex.Message}";
+        }
+        finally
+        {
+            _suppressEditor = false;
+        }
     }
 
     private void ClearEditor()
@@ -964,11 +1019,95 @@ public partial class MainWindow : Window
     {
         _glossaryMismatchEntries.Clear();
 
-        if (_currentDocument is null || _glossaryService.Entries.Count == 0)
+        if (_currentDocument is null ||
+            _glossaryService.Entries.Count == 0)
             return;
 
         foreach (var entry in _currentDocument.Entries)
             RefreshGlossaryMismatchState(entry);
+    }
+
+    private async Task RebuildGlossaryMismatchCacheAsync(
+        LocalizationDocument document,
+        int scanGeneration)
+    {
+        if (_glossaryService.Entries.Count == 0)
+            return;
+
+        var glossarySnapshot = _glossaryService.Entries
+            .Select(term => new GlossaryEntry
+            {
+                Id = term.Id,
+                Source = term.Source,
+                Translation = term.Translation,
+                Note = term.Note,
+                IsLocked = term.IsLocked,
+                AllowedTranslations = term.AllowedTranslations.ToList(),
+                NamespaceScopes = term.NamespaceScopes.ToList(),
+                Priority = term.Priority
+            })
+            .ToList();
+
+        var entrySnapshot = document.Entries
+            .Where(entry =>
+                !string.IsNullOrWhiteSpace(entry.Translation))
+            .Select(entry => new
+            {
+                Entry = entry,
+                Source = entry.Source,
+                Namespace = entry.Namespace,
+                Translation = entry.Translation
+            })
+            .ToList();
+
+        StatusText.Text =
+            $"Активный файл: {document.FileName} • проверка глоссария…";
+
+        var mismatches = await Task.Run(() =>
+        {
+            var result = new List<LocalizationEntry>();
+
+            foreach (var item in entrySnapshot)
+            {
+                var hasMismatch = GlossaryService
+                    .FindMatchesFromSnapshot(
+                        item.Source,
+                        item.Namespace,
+                        glossarySnapshot)
+                    .Any(term =>
+                        term.IsLocked &&
+                        !term.IsTranslationAccepted(
+                            item.Translation));
+
+                if (hasMismatch)
+                    result.Add(item.Entry);
+            }
+
+            return result;
+        });
+
+        // Пользователь мог переключить файл, пока шёл фоновый расчёт.
+        if (scanGeneration != _glossaryScanGeneration ||
+            !ReferenceEquals(_currentDocument, document))
+            return;
+
+        _glossaryMismatchEntries.Clear();
+        foreach (var entry in mismatches)
+            _glossaryMismatchEntries.Add(entry);
+
+        UpdateCounters();
+        UpdateButtons();
+
+        if (string.Equals(
+                _statusFilter,
+                "Glossary",
+                StringComparison.Ordinal))
+        {
+            RefreshFilteredViewPreservingSelection();
+        }
+
+        StatusText.Text =
+            $"Активный файл: {document.FileName} • нарушений глоссария: {mismatches.Count:N0}";
     }
 
     private void GlossaryCheckButton_Click(object sender, RoutedEventArgs e)
