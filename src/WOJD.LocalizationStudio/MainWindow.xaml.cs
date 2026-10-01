@@ -1056,27 +1056,27 @@ public partial class MainWindow : Window
 
         foreach (var term in _glossaryService.Entries
                      .Where(term => term.IsLocked)
-                     .OrderBy(term => term.Source, StringComparer.Ordinal))
+                     .OrderByDescending(term => term.Priority)
+                     .ThenByDescending(term => term.Source.Length)
+                     .ThenBy(term => term.Source, StringComparer.Ordinal))
         {
             var hits = _currentDocument.Entries
                 .Where(entry =>
                     !string.IsNullOrWhiteSpace(entry.Translation) &&
-                    entry.Source.Contains(term.Source, StringComparison.Ordinal))
+                    _glossaryService
+                        .FindMatches(entry.Source, entry.Namespace)
+                        .Contains(term))
                 .ToList();
 
             if (hits.Count == 0)
                 continue;
 
             var correct = hits.Count(entry =>
-                entry.Translation.Contains(
-                    term.Translation,
-                    StringComparison.OrdinalIgnoreCase));
+                term.IsTranslationAccepted(entry.Translation));
 
             var mismatches = hits
                 .Where(entry =>
-                    !entry.Translation.Contains(
-                        term.Translation,
-                        StringComparison.OrdinalIgnoreCase))
+                    !term.IsTranslationAccepted(entry.Translation))
                 .ToList();
 
             var samples = string.Join(
