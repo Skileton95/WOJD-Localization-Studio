@@ -177,7 +177,7 @@
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Separator Background="#31526A"/>
                         <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.7" Foreground="#88A5B9" FontSize="11"/>
+                        <TextBlock Text="v0.2.8" Foreground="#88A5B9" FontSize="11"/>
                     </StackPanel>
                 </Grid>
             </Border>
