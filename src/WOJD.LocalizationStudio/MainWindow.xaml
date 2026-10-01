@@ -534,11 +534,27 @@
                                             Margin="0"/>
                                 </Grid>
 
-                                <Button x:Name="GlossaryMassAiFixButton"
-                                        Content="Исправить нарушения с ChatGPT"
-                                        Click="GlossaryMassAiFixButton_Click"
-                                        IsEnabled="False"
-                                        Margin="0,8,0,0"/>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button x:Name="GlossaryMassLocalFixButton"
+                                            Grid.Column="0"
+                                            Content="Исправить локально"
+                                            Click="GlossaryMassLocalFixButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+
+                                    <Button x:Name="GlossaryMassAiFixButton"
+                                            Grid.Column="2"
+                                            Content="Исправить с ChatGPT"
+                                            Click="GlossaryMassAiFixButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
