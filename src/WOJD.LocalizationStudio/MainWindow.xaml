@@ -262,6 +262,10 @@
                         <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#7E94A7" Margin="0,0,7,0"/>
                         <TextBlock x:Name="UpdateStatusText" Text="Проверка обновлений…" Foreground="#526579"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ProgressBar x:Name="UpdateProgressBar" Width="110" Height="8" Minimum="0" Maximum="100"
+                                     Value="0" Visibility="Collapsed" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="UpdatePercentText" Text="0%" Foreground="#526579" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,8,0"/>
                         <Button x:Name="UpdateButton" Content="Проверить" Padding="10,4" Margin="0"
                                 Click="UpdateButton_Click"/>
                     </StackPanel>
