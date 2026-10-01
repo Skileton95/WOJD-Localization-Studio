@@ -91,38 +91,33 @@ public sealed class GlossaryService
         if (candidates.Count <= 1)
             return candidates;
 
-        // Более приоритетный или более длинный термин подавляет вложенный
-        // термин, если оба описывают один и тот же участок исходной строки.
+        // Приоритет и длина подавляют только перекрывающиеся вхождения.
+        // Если короткий термин встречается отдельно от длинного, он остаётся активным.
         var accepted = new List<GlossaryEntry>();
 
         foreach (var candidate in candidates)
         {
-            var candidateStart = source.IndexOf(candidate.Source, StringComparison.Ordinal);
-            if (candidateStart < 0)
+            var candidateRanges = FindRanges(source, candidate.Source);
+            if (candidateRanges.Count == 0)
                 continue;
 
-            var candidateEnd = candidateStart + candidate.Source.Length;
+            var hasUncoveredOccurrence = candidateRanges.Any(candidateRange =>
+                !accepted.Any(existing =>
+                {
+                    var stronger =
+                        existing.Priority > candidate.Priority ||
+                        (existing.Priority == candidate.Priority &&
+                         existing.Source.Length >= candidate.Source.Length);
 
-            var shadowed = accepted.Any(existing =>
-            {
-                var existingStart = source.IndexOf(existing.Source, StringComparison.Ordinal);
-                if (existingStart < 0)
-                    return false;
+                    if (!stronger)
+                        return false;
 
-                var existingEnd = existingStart + existing.Source.Length;
-                var overlaps = candidateStart < existingEnd && existingStart < candidateEnd;
+                    return FindRanges(source, existing.Source)
+                        .Any(existingRange =>
+                            RangesOverlap(candidateRange, existingRange));
+                }));
 
-                if (!overlaps)
-                    return false;
-
-                if (existing.Priority > candidate.Priority)
-                    return true;
-
-                return existing.Priority == candidate.Priority &&
-                       existing.Source.Length >= candidate.Source.Length;
-            });
-
-            if (!shadowed)
+            if (hasUncoveredOccurrence)
                 accepted.Add(candidate);
         }
 
@@ -265,6 +260,37 @@ public sealed class GlossaryService
         await SaveAsync(cancellationToken);
         return changed;
     }
+
+    private static List<(int Start, int End)> FindRanges(
+        string source,
+        string term)
+    {
+        var ranges = new List<(int Start, int End)>();
+        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(term))
+            return ranges;
+
+        var index = 0;
+        while (index <= source.Length - term.Length)
+        {
+            var found = source.IndexOf(
+                term,
+                index,
+                StringComparison.Ordinal);
+
+            if (found < 0)
+                break;
+
+            ranges.Add((found, found + term.Length));
+            index = found + Math.Max(1, term.Length);
+        }
+
+        return ranges;
+    }
+
+    private static bool RangesOverlap(
+        (int Start, int End) left,
+        (int Start, int End) right) =>
+        left.Start < right.End && right.Start < left.End;
 
     private static bool ScopesEqual(
         IReadOnlyCollection<string> left,
