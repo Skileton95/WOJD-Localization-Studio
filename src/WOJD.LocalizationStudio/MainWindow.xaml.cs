@@ -1870,15 +1870,12 @@ public partial class MainWindow : Window
             this,
             $"ChatGPT обработает {targets.Count:N0} проблемных строк файла «{document.FileName}».\n\n" +
             "Для каждой строки выполняется отдельный запрос OpenAI API. " +
-            "Это может занять время и расходует API-баланс.\n\nПродолжить?",
+            "Это может занять время и расходует API-баланс. После обработки откроется предпросмотр всех изменений.\n\nПродолжить?",
             "Массовое исправление ChatGPT",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
-        if (confirm != MessageBoxResult.Yes)
-            return;
-
-        if (!EnsureOpenAiKey())
+        if (confirm != MessageBoxResult.Yes || !EnsureOpenAiKey())
             return;
 
         _isMassFixing = true;
@@ -1891,7 +1888,7 @@ public partial class MainWindow : Window
         MassAiFixButton.IsEnabled = false;
         ValidationButton.IsEnabled = false;
 
-        var edits = new List<TranslationEdit>();
+        var proposals = new List<ProposedTranslationChange>();
         var skipped = 0;
         var failed = 0;
         string? firstError = null;
@@ -1905,7 +1902,7 @@ public partial class MainWindow : Window
 
                 MassAiFixButton.Content = $"ChatGPT {current:N0}/{targets.Count:N0}";
                 MassFixStatusText.Text =
-                    $"ChatGPT: {current:N0}/{targets.Count:N0} • исправлено: {edits.Count:N0} • пропущено: {skipped + failed:N0}";
+                    $"ChatGPT: {current:N0}/{targets.Count:N0} • готово: {proposals.Count:N0} • пропущено: {skipped + failed:N0}";
                 StatusText.Text =
                     $"Массовое исправление ChatGPT: {current:N0} из {targets.Count:N0} — {entry.Key}";
 
@@ -1915,24 +1912,37 @@ public partial class MainWindow : Window
                         entry,
                         BuildGlossaryContext(entry));
 
-                    if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
+                    if (string.Equals(
+                            corrected,
+                            entry.Translation,
+                            StringComparison.Ordinal))
                     {
                         skipped++;
                         continue;
                     }
 
-                    var remainingIssues = ValidationService.GetIssues(entry.Source, corrected);
-                    if (remainingIssues.Count > 0)
+                    var remainingIssues = ValidationService.GetIssues(
+                        entry.Source,
+                        corrected);
+
+                    if (remainingIssues.Count > 0 ||
+                        TranslationHasGlossaryMismatch(
+                            entry.Source,
+                            entry.Namespace,
+                            corrected))
                     {
                         skipped++;
                         continue;
                     }
 
-                    edits.Add(new TranslationEdit(
-                        document,
-                        entry,
-                        entry.Translation,
-                        corrected));
+                    proposals.Add(new ProposedTranslationChange
+                    {
+                        Document = document,
+                        Entry = entry,
+                        Before = entry.Translation,
+                        After = corrected,
+                        Reason = "ChatGPT: исправление ошибки"
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -1941,26 +1951,38 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (edits.Count > 0)
+            var applied = 0;
+
+            if (proposals.Count > 0)
             {
-                var batch = new EditBatch(edits, "Массовое исправление ChatGPT");
-                RecordEditBatch(batch);
-                ApplyEditBatch(batch, useAfter: true);
+                FilesList.IsEnabled = true;
+                EntriesGrid.IsEnabled = true;
+
+                applied = ApplyProposedChangesWithPreview(
+                    "Массовое исправление ChatGPT",
+                    proposals,
+                    "Массовое исправление ChatGPT");
+
+                FilesList.IsEnabled = false;
+                EntriesGrid.IsEnabled = false;
             }
 
             ValidationService.ValidateAll(document.Entries);
             document.RefreshComputedProperties();
+            RebuildGlossaryMismatchCache();
 
             var remaining = document.Entries.Count(entry => entry.HasValidationIssues);
+
             MassFixStatusText.Text =
-                $"ChatGPT исправил: {edits.Count:N0} • пропущено: {skipped:N0} • ошибок API: {failed:N0} • осталось: {remaining:N0}";
+                $"ChatGPT применено: {applied:N0} • пропущено: {skipped:N0} • ошибок API: {failed:N0} • осталось: {remaining:N0}";
 
             StatusText.Text =
-                $"ChatGPT: исправлено {edits.Count:N0}, осталось ошибок {remaining:N0}";
+                $"ChatGPT: применено {applied:N0}, осталось ошибок {remaining:N0}";
 
             var summary =
                 $"Запрошено строк: {targets.Count:N0}\n" +
-                $"Исправлено ChatGPT: {edits.Count:N0}\n" +
+                $"Подготовлено исправлений: {proposals.Count:N0}\n" +
+                $"Применено после предпросмотра: {applied:N0}\n" +
                 $"Пропущено из-за оставшихся ошибок/без изменений: {skipped:N0}\n" +
                 $"Ошибок API: {failed:N0}\n" +
                 $"Ошибок в файле осталось: {remaining:N0}";
