@@ -16,7 +16,7 @@ public partial class MainWindow : Window
 {
     private readonly NdjsonService _service = new();
     private readonly UpdateService _updateService = new();
-    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromMinutes(5) };
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
     private LocalizationDocument? _currentDocument;
