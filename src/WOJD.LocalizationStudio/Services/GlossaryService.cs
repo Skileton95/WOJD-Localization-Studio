@@ -73,13 +73,23 @@ public sealed class GlossaryService
 
     public IReadOnlyList<GlossaryEntry> FindMatches(
         string source,
-        string? entryNamespace = null)
+        string? entryNamespace = null) =>
+        FindMatchesFromSnapshot(
+            source,
+            entryNamespace,
+            Entries.ToList());
+
+    public static IReadOnlyList<GlossaryEntry> FindMatchesFromSnapshot(
+        string source,
+        string? entryNamespace,
+        IReadOnlyList<GlossaryEntry> entries)
     {
-        if (string.IsNullOrWhiteSpace(source))
+        if (string.IsNullOrWhiteSpace(source) || entries.Count == 0)
             return Array.Empty<GlossaryEntry>();
 
-        var candidates = Entries
+        var candidates = entries
             .Where(entry =>
+                entry is not null &&
                 !string.IsNullOrWhiteSpace(entry.Source) &&
                 entry.AppliesToNamespace(entryNamespace) &&
                 source.Contains(entry.Source, StringComparison.Ordinal))
