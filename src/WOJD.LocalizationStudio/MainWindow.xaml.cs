@@ -1164,6 +1164,7 @@ public partial class MainWindow : Window
 
         var document = _currentDocument;
         var proposals = new List<ProposedTranslationChange>();
+        var wrongVariantCache = new Dictionary<Guid, IReadOnlyList<string>>();
 
         foreach (var entry in document.Entries.Where(entry =>
                      _glossaryMismatchEntries.Contains(entry) &&
@@ -1193,7 +1194,13 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                foreach (var wrongVariant in GetObservedWrongGlossaryVariants(term))
+                if (!wrongVariantCache.TryGetValue(term.Id, out var wrongVariants))
+                {
+                    wrongVariants = GetObservedWrongGlossaryVariants(term);
+                    wrongVariantCache[term.Id] = wrongVariants;
+                }
+
+                foreach (var wrongVariant in wrongVariants)
                 {
                     if (!corrected.Contains(
                             wrongVariant,
