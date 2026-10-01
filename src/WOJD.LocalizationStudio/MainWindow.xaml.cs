@@ -273,11 +273,57 @@ public partial class MainWindow : Window
                 lastOpened = preferred;
         }
 
+        RebuildSourceIndex();
+
         if (lastOpened is not null)
             FilesList.SelectedItem = lastOpened;
 
         UpdateButtons();
         UpdateCounters();
+    }
+
+    private void RebuildSourceIndex()
+    {
+        _sourceIndex.Clear();
+
+        foreach (var document in _documents)
+        {
+            foreach (var entry in document.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Source))
+                    continue;
+
+                if (!_sourceIndex.TryGetValue(entry.Source, out var list))
+                {
+                    list = new List<EntryLocation>();
+                    _sourceIndex.Add(entry.Source, list);
+                }
+
+                list.Add(new EntryLocation(document, entry));
+            }
+        }
+    }
+
+    private IReadOnlyList<EntryLocation> GetExactSourceMatches(LocalizationEntry entry)
+    {
+        if (string.IsNullOrEmpty(entry.Source))
+            return Array.Empty<EntryLocation>();
+
+        return _sourceIndex.TryGetValue(entry.Source, out var matches)
+            ? matches
+            : Array.Empty<EntryLocation>();
+    }
+
+    private bool HasTranslationConflict(LocalizationEntry entry)
+    {
+        var translations = GetExactSourceMatches(entry)
+            .Select(item => item.Entry.Translation)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .Count();
+
+        return translations > 1;
     }
 
     private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
