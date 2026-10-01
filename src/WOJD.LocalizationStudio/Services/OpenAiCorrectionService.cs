@@ -105,9 +105,9 @@ public sealed class OpenAiCorrectionService
                     !part.TryGetProperty("text", out var text))
                     continue;
 
-                var value = text.GetString()?.Trim();
+                var value = text.GetString();
                 if (!string.IsNullOrWhiteSpace(value))
-                    return value;
+                    return value.Trim('\r', '\n');
             }
         }
 
