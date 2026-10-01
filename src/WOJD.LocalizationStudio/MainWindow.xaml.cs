@@ -374,6 +374,7 @@ public partial class MainWindow : Window
         TranslationBox.IsEnabled = true;
         TranslationBox.Text = _selected.Translation;
         LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
+        UpdateExactMatchesPanel();
         UpdateValidationPanel();
 
         _suppressEditor = false;
@@ -388,6 +389,9 @@ public partial class MainWindow : Window
         TranslationBox.Text = string.Empty;
         TranslationBox.IsEnabled = false;
         LengthLabel.Text = "0 символов";
+        ExactMatchesCountText.Text = "0";
+        ExactMatchesInfoText.Text = "Выберите строку";
+        ApplyExactMatchesButton.IsEnabled = false;
         ValidationStatusText.Text = "Выберите строку";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
         _suppressEditor = false;
@@ -403,10 +407,103 @@ public partial class MainWindow : Window
         _currentDocument.RefreshComputedProperties();
 
         LengthLabel.Text = $"{TranslationBox.Text.Length:N0} символов";
+        UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateCounters();
         _view?.Refresh();
         StatusText.Text = $"Есть несохранённые изменения: {_currentDocument.FileName}";
+    }
+
+    private void UpdateExactMatchesPanel()
+    {
+        if (_selected is null || _currentDocument is null || string.IsNullOrEmpty(_selected.Source))
+        {
+            ExactMatchesCountText.Text = "0";
+            ExactMatchesInfoText.Text = "Точные совпадения не найдены";
+            ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            ApplyExactMatchesButton.IsEnabled = false;
+            return;
+        }
+
+        var matches = GetExactSourceMatches(_selected).ToList();
+        var otherMatches = Math.Max(0, matches.Count - 1);
+
+        ExactMatchesCountText.Text = matches.Count.ToString("N0");
+
+        if (otherMatches == 0)
+        {
+            ExactMatchesInfoText.Text = "Других строк с полностью идентичным оригиналом нет.";
+            ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            ApplyExactMatchesButton.IsEnabled = false;
+            return;
+        }
+
+        var distinctTranslations = matches
+            .Select(e => e.Translation)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (distinctTranslations.Count > 1)
+        {
+            ExactMatchesInfoText.Text =
+                $"⚠ Найдено разных вариантов перевода: {distinctTranslations.Count}. Совпадение оригинала — 100%.";
+            ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0xB3, 0x3A, 0x2B));
+        }
+        else
+        {
+            ExactMatchesInfoText.Text =
+                $"Найдено ещё {otherMatches:N0} строк с полностью идентичным оригиналом.";
+            ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x75, 0x40));
+        }
+
+        ApplyExactMatchesButton.IsEnabled = !string.IsNullOrWhiteSpace(_selected.Translation);
+    }
+
+    private IEnumerable<LocalizationEntry> GetExactSourceMatches(LocalizationEntry entry)
+    {
+        if (_currentDocument is null)
+            return Enumerable.Empty<LocalizationEntry>();
+
+        return _currentDocument.Entries.Where(candidate =>
+            string.Equals(candidate.Source, entry.Source, StringComparison.Ordinal));
+    }
+
+    private void ApplyExactMatchesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || _currentDocument is null || string.IsNullOrWhiteSpace(_selected.Translation))
+            return;
+
+        var translation = _selected.Translation;
+        var matches = GetExactSourceMatches(_selected).ToList();
+        var changed = 0;
+
+        foreach (var match in matches)
+        {
+            if (string.Equals(match.Translation, translation, StringComparison.Ordinal))
+                continue;
+
+            match.Translation = translation;
+            ValidationService.Validate(match);
+            changed++;
+        }
+
+        if (changed == 0)
+        {
+            StatusText.Text = "Все точные совпадения уже имеют этот перевод";
+            UpdateExactMatchesPanel();
+            return;
+        }
+
+        _currentDocument.IsDirty = true;
+        _currentDocument.RefreshComputedProperties();
+        EntriesGrid.Items.Refresh();
+        _view?.Refresh();
+        UpdateCounters();
+        UpdateExactMatchesPanel();
+
+        StatusText.Text =
+            $"Перевод применён к {changed:N0} строкам с 100% совпадением оригинала";
     }
 
     private void UpdateValidationPanel()
