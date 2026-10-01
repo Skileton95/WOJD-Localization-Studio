@@ -2,6 +2,9 @@
 setlocal
 cd /d "%~dp0"
 
+set "FROM_APP=0"
+if /I "%~1"=="--from-app" set "FROM_APP=1"
+
 echo ==============================================
 echo   WOJD Localization Studio - Update
 echo ==============================================
@@ -62,9 +65,18 @@ if errorlevel 1 pause & exit /b 1
 dotnet build WOJD.LocalizationStudio.sln -c Release --no-restore
 if errorlevel 1 pause & exit /b 1
 
+set "APP_EXE=%CD%\src\WOJD.LocalizationStudio\bin\Release\net8.0-windows\WOJD.LocalizationStudio.exe"
+
 echo.
 echo ==============================================
 echo Update complete.
-echo EXE: src\WOJD.LocalizationStudio\bin\Release\net8.0-windows\WOJD.LocalizationStudio.exe
+echo EXE: %APP_EXE%
 echo ==============================================
+
+if "%FROM_APP%"=="1" (
+    timeout /t 1 /nobreak >nul
+    start "" "%APP_EXE%"
+    exit /b 0
+)
+
 pause
