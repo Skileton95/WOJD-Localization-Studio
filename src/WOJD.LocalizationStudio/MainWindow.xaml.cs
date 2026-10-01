@@ -23,8 +23,9 @@ public partial class MainWindow : Window
     private LocalizationEntry? _selected;
     private bool _suppressEditor;
     private bool _isCheckingForUpdates;
+    private bool _isUpdating;
     private bool _allowCloseWithoutPrompt;
-    private string? _lastNotifiedUpdateVersion;
+    private UpdateInfo? _availableUpdate;
 
     public MainWindow()
     {
@@ -42,44 +43,70 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateStatusText.Text = $"v{_updateService.CurrentVersion} • проверка…";
         _updateTimer.Start();
-        await Task.Delay(1200);
+        await Task.Delay(900);
         await CheckForUpdatesAsync();
     }
 
     private async void UpdateTimer_Tick(object? sender, EventArgs e) => await CheckForUpdatesAsync();
 
-    private async Task CheckForUpdatesAsync()
+    private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_isCheckingForUpdates) return;
+        if (_isUpdating) return;
+
+        if (_availableUpdate is null)
+            await CheckForUpdatesAsync(manual: true);
+        else
+            await BeginInAppUpdateAsync();
+    }
+
+    private async Task CheckForUpdatesAsync(bool manual = false)
+    {
+        if (_isCheckingForUpdates || _isUpdating) return;
 
         _isCheckingForUpdates = true;
+
+        if (manual)
+        {
+            UpdateStatusText.Text = "Проверка обновлений…";
+            UpdateButton.IsEnabled = false;
+            UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0x7E, 0x94, 0xA7));
+        }
+
         try
         {
             var update = await _updateService.CheckAsync();
-            if (update is null || update.Version == _lastNotifiedUpdateVersion)
+            _availableUpdate = update;
+
+            if (update is null)
+            {
+                UpdateStatusText.Text = $"v{_updateService.CurrentVersion} • актуальная";
+                UpdateStatusText.ToolTip = null;
+                UpdateButton.Content = "Проверить";
+                UpdateButton.IsEnabled = true;
+                UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0x37, 0x9A, 0x58));
+                if (manual) StatusText.Text = "Установлена актуальная версия";
                 return;
+            }
 
-            _lastNotifiedUpdateVersion = update.Version;
-
-            var notes = string.IsNullOrWhiteSpace(update.Notes)
-                ? string.Empty
-                : $"\n\nЧто нового:\n{update.Notes}";
-
-            var result = MessageBox.Show(
-                this,
-                $"Доступна новая версия WOJD Localization Studio v{update.Version}.\n" +
-                $"Текущая версия: v{_updateService.CurrentVersion}.{notes}\n\nОбновить сейчас?",
-                "Доступно обновление",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-
-            if (result == MessageBoxResult.Yes)
-                await BeginInAppUpdateAsync();
+            UpdateStatusText.Text = $"Доступна v{update.Version}";
+            UpdateStatusText.ToolTip = string.IsNullOrWhiteSpace(update.Notes) ? null : update.Notes;
+            UpdateButton.Content = "Обновить";
+            UpdateButton.IsEnabled = true;
+            UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0xE5, 0x99, 0x21));
         }
-        catch
+        catch (Exception ex)
         {
-            // Отсутствие интернета или временная ошибка GitHub не мешает работе редактора.
+            if (manual)
+            {
+                UpdateStatusText.Text = "Ошибка проверки";
+                UpdateStatusText.ToolTip = ex.Message;
+                UpdateButton.Content = "Повторить";
+                UpdateButton.IsEnabled = true;
+                UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0xB3, 0x3A, 0x2B));
+                StatusText.Text = "Не удалось проверить обновления";
+            }
         }
         finally
         {
@@ -89,6 +116,8 @@ public partial class MainWindow : Window
 
     private async Task BeginInAppUpdateAsync()
     {
+        if (_availableUpdate is null || _isUpdating) return;
+
         if (_documents.Any(d => d.IsDirty))
         {
             var saveResult = MessageBox.Show(
@@ -109,20 +138,46 @@ public partial class MainWindow : Window
             }
         }
 
-        if (!_updateService.TryLaunchUpdater(out var error))
-        {
-            MessageBox.Show(
-                this,
-                error ?? "Не удалось запустить обновление.",
-                "Ошибка обновления",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return;
-        }
-
-        _allowCloseWithoutPrompt = true;
+        _isUpdating = true;
         _updateTimer.Stop();
-        Application.Current.Shutdown();
+        UpdateButton.IsEnabled = false;
+        UpdateButton.Content = "Обновление";
+        UpdateProgressBar.Visibility = Visibility.Visible;
+        UpdatePercentText.Visibility = Visibility.Visible;
+        UpdateProgressBar.Value = 0;
+        UpdatePercentText.Text = "0%";
+        UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0x2F, 0x7B, 0xEA));
+
+        var progress = new Progress<UpdateProgress>(value =>
+        {
+            UpdateProgressBar.Value = value.Percent;
+            UpdatePercentText.Text = $"{value.Percent}%";
+            UpdateStatusText.Text = value.Message;
+            StatusText.Text = $"Обновление: {value.Message} — {value.Percent}%";
+        });
+
+        try
+        {
+            await _updateService.PrepareUpdateAsync(progress);
+            await Task.Delay(350);
+
+            _allowCloseWithoutPrompt = true;
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _isUpdating = false;
+            _updateTimer.Start();
+
+            UpdateProgressBar.Visibility = Visibility.Collapsed;
+            UpdatePercentText.Visibility = Visibility.Collapsed;
+            UpdateStatusText.Text = "Ошибка обновления";
+            UpdateStatusText.ToolTip = ex.Message;
+            UpdateButton.Content = "Повторить";
+            UpdateButton.IsEnabled = true;
+            UpdateDot.Fill = new SolidColorBrush(Color.FromRgb(0xB3, 0x3A, 0x2B));
+            StatusText.Text = "Обновление не установлено. Наведите курсор на статус обновления для подробностей.";
+        }
     }
 
     private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
@@ -451,6 +506,14 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_allowCloseWithoutPrompt) return;
+
+        if (_isUpdating)
+        {
+            e.Cancel = true;
+            StatusText.Text = "Дождитесь завершения обновления";
+            return;
+        }
+
         if (!_documents.Any(d => d.IsDirty)) return;
 
         var result = MessageBox.Show(this,
