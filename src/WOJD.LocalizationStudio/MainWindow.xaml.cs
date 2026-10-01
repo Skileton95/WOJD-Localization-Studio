@@ -781,6 +781,451 @@ public partial class MainWindow : Window
         StatusText.Text = $"Есть несохранённые изменения: {_currentDocument.FileName}";
     }
 
+    private void UpdateTranslationProtection(LocalizationEntry? entry)
+    {
+        if (entry is null || !ValidationService.HasIssueKind(entry, ValidationIssueKind.Technical))
+        {
+            TranslationBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xB9, 0xC7, 0xD3));
+            TranslationBox.BorderThickness = new Thickness(1);
+            TranslationBox.ToolTip = null;
+            return;
+        }
+
+        TranslationBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xC9, 0x3D, 0x32));
+        TranslationBox.BorderThickness = new Thickness(2);
+        TranslationBox.ToolTip =
+            "Нарушены технические элементы оригинала. Проверьте плейсхолдеры, теги и переносы строк.";
+    }
+
+    private void UpdateContextPanel()
+    {
+        if (_selected is null || _currentDocument is null)
+        {
+            ContextInfoText.Text = "Выберите строку";
+            ContextList.ItemsSource = null;
+            return;
+        }
+
+        var namespaceEntries = _currentDocument.Entries
+            .Where(entry => string.Equals(
+                entry.Namespace,
+                _selected.Namespace,
+                StringComparison.Ordinal))
+            .ToList();
+
+        var index = namespaceEntries.IndexOf(_selected);
+        if (index < 0)
+        {
+            ContextInfoText.Text = "Контекст недоступен";
+            ContextList.ItemsSource = null;
+            return;
+        }
+
+        var context = new List<ContextEntryView>();
+
+        for (var offset = -2; offset <= 2; offset++)
+        {
+            if (offset == 0)
+                continue;
+
+            var targetIndex = index + offset;
+            if (targetIndex < 0 || targetIndex >= namespaceEntries.Count)
+                continue;
+
+            context.Add(new ContextEntryView(
+                offset,
+                namespaceEntries[targetIndex]));
+        }
+
+        ContextInfoText.Text = context.Count == 0
+            ? "Соседних строк в этом Namespace нет"
+            : $"Соседние строки Namespace: {_selected.Namespace}";
+        ContextList.ItemsSource = context;
+    }
+
+    private async void SimilarityButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_selected.Source))
+            return;
+
+        var entry = _selected;
+        var documents = _documents.ToList();
+
+        SimilarityButton.IsEnabled = false;
+        SimilarityButton.Content = "Поиск похожих строк…";
+        StatusText.Text = "Поиск по памяти переводов…";
+
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                var sourceMatches = SimilarityService.FindSourceMatches(entry, documents);
+                var translationMatches = SimilarityService.FindTranslationMatches(entry, documents);
+                return (sourceMatches, translationMatches);
+            });
+
+            if (!ReferenceEquals(_selected, entry))
+                return;
+
+            var window = new SimilarityWindow(
+                entry,
+                result.sourceMatches,
+                result.translationMatches)
+            {
+                Owner = this
+            };
+
+            if (window.ShowDialog() == true &&
+                !string.IsNullOrWhiteSpace(window.SelectedTranslation))
+            {
+                ApplyCorrectedTranslation(
+                    window.SelectedTranslation,
+                    "Перевод из памяти переводов");
+
+                StatusText.Text = "Перевод из памяти переводов применён";
+            }
+            else
+            {
+                StatusText.Text =
+                    $"Похожие оригиналы: {result.sourceMatches.Count:N0} • похожие переводы: {result.translationMatches.Count:N0}";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось выполнить поиск похожих строк.\n\n{ex.Message}",
+                "Память переводов",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            SimilarityButton.Content = "Похожие строки / память переводов";
+            SimilarityButton.IsEnabled =
+                _selected is not null &&
+                !string.IsNullOrWhiteSpace(_selected.Source);
+        }
+    }
+
+    private IReadOnlyList<GlossaryEntry> GetGlossaryMismatches(LocalizationEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Translation))
+            return Array.Empty<GlossaryEntry>();
+
+        return _glossaryService
+            .FindMatches(entry.Source)
+            .Where(term =>
+                term.IsLocked &&
+                !string.IsNullOrWhiteSpace(term.Translation) &&
+                !entry.Translation.Contains(
+                    term.Translation,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private bool TranslationHasGlossaryMismatch(string source, string translation)
+    {
+        if (string.IsNullOrWhiteSpace(translation))
+            return false;
+
+        return _glossaryService
+            .FindMatches(source)
+            .Any(term =>
+                term.IsLocked &&
+                !string.IsNullOrWhiteSpace(term.Translation) &&
+                !translation.Contains(
+                    term.Translation,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool HasGlossaryMismatch(LocalizationEntry entry) =>
+        _glossaryMismatchEntries.Contains(entry);
+
+    private void RefreshGlossaryMismatchState(LocalizationEntry entry)
+    {
+        if (GetGlossaryMismatches(entry).Count > 0)
+            _glossaryMismatchEntries.Add(entry);
+        else
+            _glossaryMismatchEntries.Remove(entry);
+    }
+
+    private void RebuildGlossaryMismatchCache()
+    {
+        _glossaryMismatchEntries.Clear();
+
+        if (_currentDocument is null || _glossaryService.Entries.Count == 0)
+            return;
+
+        foreach (var entry in _currentDocument.Entries)
+            RefreshGlossaryMismatchState(entry);
+    }
+
+    private void GlossaryCheckButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null)
+            return;
+
+        RebuildGlossaryMismatchCache();
+        UpdateCounters();
+
+        _statusFilter = "Glossary";
+        _namespaceFilter = null;
+        _validationTypeFilter = ValidationIssueKind.None;
+
+        if (ValidationTypeFilterBox.SelectedIndex != 0)
+            ValidationTypeFilterBox.SelectedIndex = 0;
+
+        UpdateFilterVisuals();
+        ApplyViewFilter();
+
+        if (_glossaryMismatchEntries.Count == 0)
+        {
+            StatusText.Text = "Проверка глоссария завершена: нарушений нет";
+            MessageBox.Show(
+                this,
+                "Все закреплённые термины глоссария соблюдены в переведённых строках активного файла.",
+                "Проверка глоссария",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var first = _currentDocument.Entries
+            .FirstOrDefault(entry => _glossaryMismatchEntries.Contains(entry));
+
+        if (first is not null)
+        {
+            EntriesGrid.SelectedItem = first;
+            EntriesGrid.ScrollIntoView(first);
+        }
+
+        StatusText.Text =
+            $"Нарушений закреплённого глоссария: {_glossaryMismatchEntries.Count:N0}";
+
+        MessageBox.Show(
+            this,
+            $"Найдено строк с нарушением закреплённой терминологии: {_glossaryMismatchEntries.Count:N0}.\n\n" +
+            "Включён фильтр «Глоссарий».",
+            "Проверка глоссария",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    private void GlossaryConsistencyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null)
+            return;
+
+        var rows = BuildGlossaryConsistencyRows();
+        if (rows.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "В активном файле не найдены закреплённые термины из глоссария.",
+                "Единообразие терминологии",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var window = new GlossaryConsistencyWindow(rows)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
+    private IReadOnlyList<GlossaryConsistencyRow> BuildGlossaryConsistencyRows()
+    {
+        if (_currentDocument is null)
+            return Array.Empty<GlossaryConsistencyRow>();
+
+        var rows = new List<GlossaryConsistencyRow>();
+
+        foreach (var term in _glossaryService.Entries
+                     .Where(term => term.IsLocked)
+                     .OrderBy(term => term.Source, StringComparer.Ordinal))
+        {
+            var hits = _currentDocument.Entries
+                .Where(entry =>
+                    !string.IsNullOrWhiteSpace(entry.Translation) &&
+                    entry.Source.Contains(term.Source, StringComparison.Ordinal))
+                .ToList();
+
+            if (hits.Count == 0)
+                continue;
+
+            var correct = hits.Count(entry =>
+                entry.Translation.Contains(
+                    term.Translation,
+                    StringComparison.OrdinalIgnoreCase));
+
+            var mismatches = hits
+                .Where(entry =>
+                    !entry.Translation.Contains(
+                        term.Translation,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var samples = string.Join(
+                " | ",
+                mismatches
+                    .Take(3)
+                    .Select(entry => $"{entry.Key}: {entry.Translation}"));
+
+            rows.Add(new GlossaryConsistencyRow(
+                term.Source,
+                term.Translation,
+                hits.Count,
+                correct,
+                mismatches.Count,
+                samples));
+        }
+
+        return rows
+            .OrderByDescending(row => row.MismatchOccurrences)
+            .ThenByDescending(row => row.TotalOccurrences)
+            .ToList();
+    }
+
+    private async void GlossaryMassAiFixButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentDocument is null || _isMassFixing || _isAiFixing)
+            return;
+
+        RebuildGlossaryMismatchCache();
+
+        var document = _currentDocument;
+        var targets = document.Entries
+            .Where(entry =>
+                _glossaryMismatchEntries.Contains(entry) &&
+                !string.IsNullOrWhiteSpace(entry.Translation))
+            .ToList();
+
+        if (targets.Count == 0)
+        {
+            StatusText.Text = "Нарушений закреплённого глоссария нет";
+            UpdateCounters();
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            this,
+            $"ChatGPT исправит терминологию в {targets.Count:N0} строках файла «{document.FileName}».\n\n" +
+            "Для каждой строки выполняется отдельный запрос OpenAI API. " +
+            "Будут применены только ответы без ошибок проверки и без нарушений закреплённого глоссария.\n\nПродолжить?",
+            "Массовое исправление глоссария",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes || !EnsureOpenAiKey())
+            return;
+
+        _isMassFixing = true;
+        _isAiFixing = true;
+        GlossaryMassAiFixButton.IsEnabled = false;
+        GlossaryMassAiFixButton.Content = "ChatGPT исправляет…";
+
+        var edits = new List<TranslationEdit>();
+        var skipped = 0;
+        var failed = 0;
+        string? firstError = null;
+
+        try
+        {
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var entry = targets[i];
+                StatusText.Text =
+                    $"Глоссарий ChatGPT: {i + 1:N0}/{targets.Count:N0} — {entry.Key}";
+                GlossaryMassAiFixButton.Content =
+                    $"ChatGPT {i + 1:N0}/{targets.Count:N0}";
+
+                try
+                {
+                    var corrected = await _openAiCorrectionService.CorrectAsync(
+                        entry,
+                        BuildGlossaryContext(entry));
+
+                    if (string.Equals(
+                            corrected,
+                            entry.Translation,
+                            StringComparison.Ordinal))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    if (ValidationService.GetIssues(entry.Source, corrected).Count > 0 ||
+                        TranslationHasGlossaryMismatch(entry.Source, corrected))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    edits.Add(new TranslationEdit(
+                        document,
+                        entry,
+                        entry.Translation,
+                        corrected));
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    firstError ??= ex.Message;
+                }
+            }
+
+            if (edits.Count > 0)
+            {
+                var batch = new EditBatch(
+                    edits,
+                    "Массовое исправление глоссария ChatGPT");
+
+                RecordEditBatch(batch);
+                ApplyEditBatch(batch, useAfter: true);
+            }
+
+            RebuildGlossaryMismatchCache();
+            UpdateCounters();
+            RefreshFilteredViewPreservingSelection();
+
+            var remaining = _glossaryMismatchEntries.Count;
+            var summary =
+                $"Запрошено строк: {targets.Count:N0}\n" +
+                $"Исправлено: {edits.Count:N0}\n" +
+                $"Пропущено: {skipped:N0}\n" +
+                $"Ошибок API: {failed:N0}\n" +
+                $"Нарушений глоссария осталось: {remaining:N0}";
+
+            if (!string.IsNullOrWhiteSpace(firstError))
+                summary += $"\n\nПервая ошибка API:\n{firstError}";
+
+            MessageBox.Show(
+                this,
+                summary,
+                "Массовое исправление глоссария",
+                MessageBoxButton.OK,
+                remaining == 0 && failed == 0
+                    ? MessageBoxImage.Information
+                    : MessageBoxImage.Warning);
+
+            StatusText.Text =
+                $"Глоссарий: исправлено {edits.Count:N0}, осталось {remaining:N0}";
+        }
+        finally
+        {
+            _isAiFixing = false;
+            _isMassFixing = false;
+            GlossaryMassAiFixButton.Content = "Исправить нарушения с ChatGPT";
+            UpdateCounters();
+            UpdateButtons();
+            UpdateValidationPanel();
+        }
+    }
+
     private void GlossaryButton_Click(object sender, RoutedEventArgs e)
     {
         var window = new GlossaryWindow(_glossaryService)
