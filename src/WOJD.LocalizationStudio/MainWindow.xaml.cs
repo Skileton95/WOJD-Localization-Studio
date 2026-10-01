@@ -942,4 +942,12 @@ public partial class MainWindow : Window
         if (result != MessageBoxResult.Yes)
             e.Cancel = true;
     }
+
+    private sealed record EntryLocation(LocalizationDocument Document, LocalizationEntry Entry);
+    private sealed record TranslationEdit(
+        LocalizationDocument Document,
+        LocalizationEntry Entry,
+        string Before,
+        string After);
+    private sealed record EditBatch(List<TranslationEdit> Edits, string Description);
 }
