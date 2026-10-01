@@ -1035,6 +1035,11 @@ public partial class MainWindow : Window
 
         FixValidationButton.IsEnabled = canFix;
         AiFixValidationButton.IsEnabled = canFix;
+        ExplainValidationButton.IsEnabled = canFix;
+        TranslationVariantsButton.IsEnabled =
+            !_isAiFixing &&
+            _selected is not null &&
+            !string.IsNullOrWhiteSpace(_selected.Source);
 
         if (_selected is null)
         {
@@ -1045,7 +1050,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(_selected.Translation))
         {
-            ValidationStatusText.Text = "— Строка не переведена. Проверка служебных элементов будет выполнена после ввода перевода.";
+            ValidationStatusText.Text = "— Строка не переведена. Проверка будет выполнена после ввода перевода.";
             ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
             return;
         }
@@ -1057,10 +1062,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var tokens = ValidationService.ExtractTokens(_selected.Source);
-        ValidationStatusText.Text = tokens.Count == 0
-            ? "✓ Служебные элементы не найдены."
-            : $"✓ Все служебные элементы сохранены: {string.Join(", ", tokens)}";
+        ValidationStatusText.Text = "✓ Строка прошла все проверки.";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x75, 0x40));
     }
 
@@ -1069,21 +1071,47 @@ public partial class MainWindow : Window
         if (_selected is null || _currentDocument is null || !_selected.HasValidationIssues)
             return;
 
-        var corrected = ValidationService.AutoFixTechnicalTokens(
+        var corrected = ValidationService.AutoFixDeterministic(
             _selected.Source,
             _selected.Translation);
 
         if (string.Equals(corrected, _selected.Translation, StringComparison.Ordinal))
         {
-            StatusText.Text = "Автоматическое исправление для этой ошибки не найдено";
+            StatusText.Text = "Эту проблему нельзя безопасно исправить автоматически";
             return;
         }
 
         ApplyCorrectedTranslation(corrected, "Автоисправление проверки");
 
         StatusText.Text = _selected.HasValidationIssues
-            ? "Исправление применено, но строку нужно проверить вручную"
-            : "Ошибка строки исправлена";
+            ? "Автоисправление применено; оставшиеся проблемы требуют проверки"
+            : "Ошибки строки исправлены";
+    }
+
+    private bool EnsureOpenAiKey()
+    {
+        if (_openAiCorrectionService.HasApiKey)
+            return true;
+
+        var keyWindow = new OpenAiKeyWindow { Owner = this };
+        if (keyWindow.ShowDialog() != true)
+            return false;
+
+        try
+        {
+            _openAiCorrectionService.SetApiKey(keyWindow.ApiKey, keyWindow.Remember);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "ChatGPT",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
     }
 
     private async void AiFixValidationButton_Click(object sender, RoutedEventArgs e)
@@ -1091,27 +1119,8 @@ public partial class MainWindow : Window
         if (_selected is null || _currentDocument is null || !_selected.HasValidationIssues || _isAiFixing)
             return;
 
-        if (!_openAiCorrectionService.HasApiKey)
-        {
-            var keyWindow = new OpenAiKeyWindow { Owner = this };
-            if (keyWindow.ShowDialog() != true)
-                return;
-
-            try
-            {
-                _openAiCorrectionService.SetApiKey(keyWindow.ApiKey, keyWindow.Remember);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    "ChatGPT",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-                return;
-            }
-        }
+        if (!EnsureOpenAiKey())
+            return;
 
         var entry = _selected;
         _isAiFixing = true;
@@ -1129,21 +1138,38 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var remainingError = ValidationService.BuildSummary(entry.Source, corrected);
-            if (!string.IsNullOrWhiteSpace(remainingError))
+            var issues = ValidationService.GetIssues(entry.Source, corrected);
+            var critical = issues.Where(issue => issue.IsCritical).ToList();
+            if (critical.Count > 0)
             {
                 MessageBox.Show(
                     this,
-                    $"ChatGPT вернул перевод, который всё ещё не проходит проверку:\n\n{remainingError}",
+                    "ChatGPT вернул вариант с критическими техническими ошибками:\n\n" +
+                    string.Join(Environment.NewLine, critical.Select(issue => issue.Message)),
                     "Умное исправление",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
-                StatusText.Text = "Ответ ChatGPT не применён: проверка не пройдена";
+                StatusText.Text = "Ответ ChatGPT не применён: остались критические ошибки";
+                return;
+            }
+
+            var preview = new AiCorrectionPreviewWindow(
+                entry.Source,
+                entry.Translation,
+                corrected,
+                string.Join(Environment.NewLine, issues.Select(issue => issue.Message)))
+            {
+                Owner = this
+            };
+
+            if (preview.ShowDialog() != true)
+            {
+                StatusText.Text = "Исправление ChatGPT отменено";
                 return;
             }
 
             ApplyCorrectedTranslation(corrected, "Умное исправление ChatGPT");
-            StatusText.Text = "ChatGPT исправил строку";
+            StatusText.Text = "Исправление ChatGPT применено";
         }
         catch (Exception ex)
         {
@@ -1160,6 +1186,153 @@ public partial class MainWindow : Window
             _isAiFixing = false;
             AiFixValidationButton.Content = "Умное исправление с ChatGPT";
             UpdateValidationPanel();
+        }
+    }
+
+    private async void ExplainValidationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || !_selected.HasValidationIssues || _isAiFixing)
+            return;
+
+        if (!EnsureOpenAiKey())
+            return;
+
+        var entry = _selected;
+        _isAiFixing = true;
+        ExplainValidationButton.Content = "ChatGPT анализирует…";
+        UpdateValidationPanel();
+        StatusText.Text = "ChatGPT анализирует ошибку…";
+
+        try
+        {
+            var explanation = await _openAiCorrectionService.ExplainAsync(entry);
+
+            if (!ReferenceEquals(_selected, entry))
+                return;
+
+            MessageBox.Show(
+                this,
+                explanation,
+                "Объяснение ChatGPT",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            StatusText.Text = "Объяснение получено";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Ошибка ChatGPT",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            StatusText.Text = "Не удалось получить объяснение";
+        }
+        finally
+        {
+            _isAiFixing = false;
+            ExplainValidationButton.Content = "Объяснить с ChatGPT";
+            UpdateValidationPanel();
+        }
+    }
+
+    private async void TranslationVariantsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || _currentDocument is null || _isAiFixing)
+            return;
+
+        if (!EnsureOpenAiKey())
+            return;
+
+        var entry = _selected;
+        _isAiFixing = true;
+        TranslationVariantsButton.Content = "ChatGPT переводит…";
+        UpdateValidationPanel();
+        StatusText.Text = "ChatGPT готовит варианты перевода…";
+
+        try
+        {
+            var variants = await _openAiCorrectionService.SuggestVariantsAsync(entry, 3);
+
+            if (!ReferenceEquals(_selected, entry))
+                return;
+
+            var safeVariants = variants
+                .Where(variant => !ValidationService.GetIssues(entry.Source, variant).Any(issue => issue.IsCritical))
+                .ToList();
+
+            if (safeVariants.Count == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "ChatGPT вернул варианты с ошибками технических элементов. Они не будут предложены.",
+                    "Варианты перевода",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var window = new TranslationVariantsWindow(entry.Source, safeVariants)
+            {
+                Owner = this
+            };
+
+            if (window.ShowDialog() == true &&
+                !string.IsNullOrWhiteSpace(window.SelectedTranslation))
+            {
+                ApplyCorrectedTranslation(window.SelectedTranslation, "Вариант перевода ChatGPT");
+                StatusText.Text = "Выбранный вариант перевода применён";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                ex.Message,
+                "Ошибка ChatGPT",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            StatusText.Text = "Не удалось получить варианты перевода";
+        }
+        finally
+        {
+            _isAiFixing = false;
+            TranslationVariantsButton.Content = "Варианты ChatGPT";
+            UpdateValidationPanel();
+        }
+    }
+
+    private async void TranslationHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null || _currentDocument is null)
+            return;
+
+        try
+        {
+            var records = await _translationHistoryService.LoadForEntryAsync(
+                _currentDocument,
+                _selected);
+
+            var window = new TranslationHistoryWindow(
+                _currentDocument.FileName,
+                _selected.Namespace,
+                _selected.Key,
+                records)
+            {
+                Owner = this
+            };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось открыть историю изменений.\n\n{ex.Message}",
+                "История изменений",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 
