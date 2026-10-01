@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WOJD Localization Studio" Width="1480" Height="880" MinWidth="1180" MinHeight="700"
         WindowStartupLocation="CenterScreen" Background="#EEF4FA"
-        Closing="Window_Closing">
+        Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
         <LinearGradientBrush x:Key="HeaderGradient" StartPoint="0,0" EndPoint="1,0">
             <GradientStop Color="#17354E" Offset="0"/>
@@ -177,7 +177,7 @@
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Separator Background="#31526A"/>
                         <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.8" Foreground="#88A5B9" FontSize="11"/>
+                        <TextBlock Text="v0.2.9" Foreground="#88A5B9" FontSize="11"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -207,7 +207,7 @@
                         </ComboBox>
                     </Grid>
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
+                    <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
                         <Button x:Name="AllFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="All"
                                 Background="#E8F1FF" Foreground="#225AA7" Click="FilterBadge_Click">
                             <TextBlock x:Name="TotalBadge" Style="{StaticResource BadgeText}" Text="Все  0"/>
@@ -224,11 +224,15 @@
                                 Background="#FFF2F0" Foreground="#B33A2B" Click="FilterBadge_Click">
                             <TextBlock x:Name="ErrorBadge" Style="{StaticResource BadgeText}" Text="Ошибки  0"/>
                         </Button>
+                        <Button x:Name="ConflictFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Conflicts"
+                                Background="#FFF0F3" Foreground="#A53551" Click="FilterBadge_Click">
+                            <TextBlock x:Name="ConflictBadge" Style="{StaticResource BadgeText}" Text="Конфликты  0"/>
+                        </Button>
                         <Button x:Name="ModifiedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Modified"
                                 Background="#FFF8E8" Foreground="#9A6814" Click="FilterBadge_Click" Margin="0">
                             <TextBlock x:Name="ModifiedBadge" Style="{StaticResource BadgeText}" Text="Изменённые  0"/>
                         </Button>
-                    </StackPanel>
+                    </WrapPanel>
 
                     <DataGrid x:Name="EntriesGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                               SelectionChanged="EntriesGrid_SelectionChanged" BorderThickness="0" GridLinesVisibility="Horizontal"
@@ -287,6 +291,7 @@
                                            TextWrapping="Wrap"/>
                                 <Button x:Name="ApplyExactMatchesButton"
                                         Content="Применить ко всем точным совпадениям"
+                                        ToolTip="Применить во всех открытых файлах только при 100% идентичном source"
                                         HorizontalAlignment="Stretch"
                                         Margin="0"
                                         Click="ApplyExactMatchesButton_Click"
@@ -304,7 +309,7 @@
 
                         <Separator Margin="0,20,0,15"/>
                         <TextBlock Text="Горячие клавиши" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="Ctrl+O — открыть файл&#10;Ctrl+S — сохранить текущий файл" Foreground="#667789" Margin="0,8,0,0" LineHeight="22"/>
+                        <TextBlock Text="Ctrl+O — открыть файл&#10;Ctrl+S — сохранить текущий файл&#10;Ctrl+Z — отменить изменение&#10;Ctrl+Y — повторить изменение" Foreground="#667789" Margin="0,8,0,0" LineHeight="22"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
