@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 
@@ -14,21 +15,114 @@ namespace WOJD.LocalizationStudio;
 public partial class MainWindow : Window
 {
     private readonly NdjsonService _service = new();
+    private readonly UpdateService _updateService = new();
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromMinutes(5) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
     private LocalizationDocument? _currentDocument;
     private LocalizationEntry? _selected;
     private bool _suppressEditor;
+    private bool _isCheckingForUpdates;
+    private bool _allowCloseWithoutPrompt;
+    private string? _lastNotifiedUpdateVersion;
 
     public MainWindow()
     {
         InitializeComponent();
         FilesList.ItemsSource = _documents;
 
+        Loaded += MainWindow_Loaded;
+        _updateTimer.Tick += UpdateTimer_Tick;
+
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, async (_, _) => await OpenFilesAsync()));
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, async (_, _) => await SaveCurrentAsync()));
         InputBindings.Add(new KeyBinding(ApplicationCommands.Open, Key.O, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(ApplicationCommands.Save, Key.S, ModifierKeys.Control));
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        _updateTimer.Start();
+        await Task.Delay(1200);
+        await CheckForUpdatesAsync();
+    }
+
+    private async void UpdateTimer_Tick(object? sender, EventArgs e) => await CheckForUpdatesAsync();
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (_isCheckingForUpdates) return;
+
+        _isCheckingForUpdates = true;
+        try
+        {
+            var update = await _updateService.CheckAsync();
+            if (update is null || update.Version == _lastNotifiedUpdateVersion)
+                return;
+
+            _lastNotifiedUpdateVersion = update.Version;
+
+            var notes = string.IsNullOrWhiteSpace(update.Notes)
+                ? string.Empty
+                : $"\n\nЧто нового:\n{update.Notes}";
+
+            var result = MessageBox.Show(
+                this,
+                $"Доступна новая версия WOJD Localization Studio v{update.Version}.\n" +
+                $"Текущая версия: v{_updateService.CurrentVersion}.{notes}\n\nОбновить сейчас?",
+                "Доступно обновление",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (result == MessageBoxResult.Yes)
+                await BeginInAppUpdateAsync();
+        }
+        catch
+        {
+            // Отсутствие интернета или временная ошибка GitHub не мешает работе редактора.
+        }
+        finally
+        {
+            _isCheckingForUpdates = false;
+        }
+    }
+
+    private async Task BeginInAppUpdateAsync()
+    {
+        if (_documents.Any(d => d.IsDirty))
+        {
+            var saveResult = MessageBox.Show(
+                this,
+                "Есть несохранённые изменения. Сохранить их перед обновлением?",
+                "Обновление",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (saveResult == MessageBoxResult.Cancel)
+                return;
+
+            if (saveResult == MessageBoxResult.Yes)
+            {
+                await SaveAllAsync();
+                if (_documents.Any(d => d.IsDirty))
+                    return;
+            }
+        }
+
+        if (!_updateService.TryLaunchUpdater(out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Не удалось запустить обновление.",
+                "Ошибка обновления",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        _allowCloseWithoutPrompt = true;
+        _updateTimer.Stop();
+        Application.Current.Shutdown();
     }
 
     private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
@@ -356,6 +450,7 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        if (_allowCloseWithoutPrompt) return;
         if (!_documents.Any(d => d.IsDirty)) return;
 
         var result = MessageBox.Show(this,
