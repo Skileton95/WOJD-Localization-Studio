@@ -424,9 +424,9 @@
                                                     <TextBlock Foreground="#667789"
                                                                FontSize="10"
                                                                FontWeight="SemiBold">
-                                                        <Run Text="{Binding PositionText}"/>
+                                                        <Run Text="{Binding PositionText, Mode=OneWay}"/>
                                                         <Run Text="  •  "/>
-                                                        <Run Text="{Binding Entry.Key}"/>
+                                                        <Run Text="{Binding Entry.Key, Mode=OneWay}"/>
                                                     </TextBlock>
                                                     <TextBlock Text="{Binding Entry.Source}"
                                                                Foreground="#26394A"
