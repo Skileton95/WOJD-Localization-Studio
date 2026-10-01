@@ -221,6 +221,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="165"/>
+                            <ColumnDefinition Width="185"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="SearchBox" Height="38" VerticalContentAlignment="Center"
                                  TextChanged="SearchBox_TextChanged"
@@ -231,6 +232,20 @@
                             <ComboBoxItem Content="Namespace"/>
                             <ComboBoxItem Content="Китайский"/>
                             <ComboBoxItem Content="Русский"/>
+                        </ComboBox>
+                        <ComboBox x:Name="ValidationTypeFilterBox"
+                                  Grid.Column="2"
+                                  Margin="8,0,0,0"
+                                  Height="38"
+                                  SelectionChanged="ValidationTypeFilterBox_SelectionChanged"
+                                  ToolTip="Фильтр ошибок по типу">
+                            <ComboBoxItem Content="Все типы ошибок" Tag="All" IsSelected="True"/>
+                            <ComboBoxItem Content="Технические" Tag="Technical"/>
+                            <ComboBoxItem Content="Китайский текст" Tag="ChineseText"/>
+                            <ComboBoxItem Content="Скобки" Tag="Brackets"/>
+                            <ComboBoxItem Content="Пробелы" Tag="Whitespace"/>
+                            <ComboBoxItem Content="Пунктуация" Tag="Punctuation"/>
+                            <ComboBoxItem Content="Копия оригинала" Tag="SourceCopy"/>
                         </ComboBox>
                     </Grid>
 
@@ -317,6 +332,28 @@
                         <TextBox x:Name="TranslationBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"/>
                         <TextBlock x:Name="LengthLabel" Text="0 символов" Foreground="#718094" HorizontalAlignment="Right" Margin="0,5,0,0"/>
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button x:Name="TranslationVariantsButton"
+                                    Grid.Column="0"
+                                    Content="Варианты ChatGPT"
+                                    Click="TranslationVariantsButton_Click"
+                                    IsEnabled="False"
+                                    Margin="0"/>
+
+                            <Button x:Name="TranslationHistoryButton"
+                                    Grid.Column="2"
+                                    Content="История изменений"
+                                    Click="TranslationHistoryButton_Click"
+                                    IsEnabled="False"
+                                    Margin="0"/>
+                        </Grid>
 
                         <Border x:Name="ExactMatchesPanel" Background="#F2F6FA" BorderBrush="#D9E3EC" BorderThickness="1"
                                 CornerRadius="7" Padding="11" Margin="0,16,0,0">
@@ -452,9 +489,16 @@
                             </Button>
                         </Grid>
 
+                        <Button x:Name="ExplainValidationButton"
+                                Content="Объяснить с ChatGPT"
+                                Click="ExplainValidationButton_Click"
+                                IsEnabled="False"
+                                Margin="0,8,0,0"/>
+
                         <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
-                        <TextBlock Text="{}{0}, {1}  •  %s, %d  •  
-  •  &lt;tag&gt;...&lt;/tag&gt;" Foreground="#667789" TextWrapping="Wrap"/>
+                        <TextBlock Text="Плейсхолдеры и теги • китайский текст • скобки • пробелы • пунктуация • копия оригинала"
+                                   Foreground="#667789"
+                                   TextWrapping="Wrap"/>
 
                     </StackPanel>
                 </ScrollViewer>
