@@ -11,14 +11,25 @@ namespace WOJD.LocalizationStudio;
 public partial class GlossaryWindow : Window
 {
     private readonly GlossaryService _service;
+    private readonly IReadOnlyList<LocalizationDocument> _documents;
+    private readonly LocalizationDocument? _activeDocument;
+    private readonly Action<LocalizationDocument, LocalizationEntry>? _navigate;
     private readonly ICollectionView _view;
     private GlossaryEntry? _selected;
 
-    public GlossaryWindow(GlossaryService service)
+    public GlossaryWindow(
+        GlossaryService service,
+        IReadOnlyList<LocalizationDocument> documents,
+        LocalizationDocument? activeDocument,
+        Action<LocalizationDocument, LocalizationEntry>? navigate)
     {
         InitializeComponent();
 
         _service = service;
+        _documents = documents;
+        _activeDocument = activeDocument;
+        _navigate = navigate;
+
         GlossaryGrid.ItemsSource = _service.Entries;
 
         _view = CollectionViewSource.GetDefaultView(_service.Entries);
@@ -38,13 +49,16 @@ public partial class GlossaryWindow : Window
 
         return Contains(entry.Source, query)
                || Contains(entry.Translation, query)
+               || Contains(entry.AllowedText, query)
+               || Contains(entry.ScopeText, query)
                || Contains(entry.Note, query);
     }
 
     private static bool Contains(string value, string query) =>
         (value ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => _view.Refresh();
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        _view.Refresh();
 
     private void GlossaryGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -59,9 +73,18 @@ public partial class GlossaryWindow : Window
         EditorTitle.Text = "Редактирование термина";
         SourceBox.Text = _selected.Source;
         TranslationBox.Text = _selected.Translation;
+        AllowedTranslationsBox.Text = string.Join(
+            Environment.NewLine,
+            _selected.AllowedTranslations);
+        NamespaceScopesBox.Text = string.Join(
+            Environment.NewLine,
+            _selected.NamespaceScopes);
+        PriorityBox.Text = _selected.Priority.ToString();
         NoteBox.Text = _selected.Note;
         LockedCheckBox.IsChecked = _selected.IsLocked;
+
         DeleteButton.IsEnabled = true;
+        WhereUsedButton.IsEnabled = true;
     }
 
     private void NewButton_Click(object sender, RoutedEventArgs e)
@@ -76,26 +99,43 @@ public partial class GlossaryWindow : Window
         var source = SourceBox.Text.Trim();
         var translation = TranslationBox.Text.Trim();
 
-        if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(translation))
+        if (string.IsNullOrWhiteSpace(source) ||
+            string.IsNullOrWhiteSpace(translation))
         {
             MessageBox.Show(
                 this,
-                "Заполните китайский термин и русский перевод.",
+                "Заполните китайский термин и основной русский перевод.",
                 "Глоссарий",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
+        if (!int.TryParse(PriorityBox.Text.Trim(), out var priority))
+        {
+            MessageBox.Show(
+                this,
+                "Приоритет должен быть целым числом.",
+                "Глоссарий",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            PriorityBox.Focus();
+            return;
+        }
+
+        var allowed = ParseList(AllowedTranslationsBox.Text);
+        var scopes = ParseList(NamespaceScopesBox.Text);
+
         var duplicate = _service.Entries.FirstOrDefault(entry =>
             !ReferenceEquals(entry, _selected) &&
-            string.Equals(entry.Source, source, StringComparison.Ordinal));
+            string.Equals(entry.Source, source, StringComparison.Ordinal) &&
+            ScopesEqual(entry.NamespaceScopes, scopes));
 
         if (duplicate is not null)
         {
             MessageBox.Show(
                 this,
-                $"Термин «{source}» уже существует в глоссарии.",
+                "Такой китайский термин уже существует с той же областью Namespace.",
                 "Глоссарий",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -110,6 +150,9 @@ public partial class GlossaryWindow : Window
 
         _selected.Source = source;
         _selected.Translation = translation;
+        _selected.AllowedTranslations = allowed;
+        _selected.NamespaceScopes = scopes;
+        _selected.Priority = priority;
         _selected.Note = NoteBox.Text.Trim();
         _selected.IsLocked = LockedCheckBox.IsChecked == true;
 
@@ -120,7 +163,11 @@ public partial class GlossaryWindow : Window
         GlossaryGrid.ScrollIntoView(_selected);
 
         RefreshSummary();
-        StatusText.Text = $"Сохранено: {source}";
+
+        var conflicts = _service.GetConflicts();
+        StatusText.Text = conflicts.Count == 0
+            ? $"Сохранено: {source}"
+            : $"Сохранено: {source} • конфликтов глоссария: {conflicts.Count:N0}";
     }
 
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
@@ -147,6 +194,85 @@ public partial class GlossaryWindow : Window
         ClearEditor();
         RefreshSummary();
         StatusText.Text = $"Удалено: {source}";
+    }
+
+    private void WhereUsedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null)
+            return;
+
+        var rows = _documents
+            .SelectMany(document => document.Entries
+                .Where(entry =>
+                    _selected.AppliesToNamespace(entry.Namespace) &&
+                    entry.Source.Contains(_selected.Source, StringComparison.Ordinal))
+                .Select(entry => new GlossaryUsageRow(
+                    document,
+                    entry,
+                    string.IsNullOrWhiteSpace(entry.Translation) ||
+                    _selected.IsTranslationAccepted(entry.Translation))))
+            .ToList();
+
+        var window = new GlossaryUsageWindow(
+            _selected,
+            rows,
+            _navigate)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
+    private void ConflictsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var conflicts = _service.GetConflicts();
+
+        var window = new GlossaryConflictWindow(conflicts)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
+    private void CandidatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeDocument is null)
+        {
+            MessageBox.Show(
+                this,
+                "Сначала откройте файл локализации и сделайте его активным.",
+                "Кандидаты в глоссарий",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var candidates = GlossaryAnalysisService.FindCandidates(
+            _activeDocument,
+            _service.Entries);
+
+        var window = new GlossaryCandidateWindow(candidates)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() != true ||
+            window.SelectedCandidate is null)
+            return;
+
+        GlossaryGrid.SelectedItem = null;
+        ClearEditor();
+
+        SourceBox.Text = window.SelectedCandidate.Source;
+        TranslationBox.Text = window.SelectedCandidate.SuggestedTranslation;
+        EditorTitle.Text = "Новый термин из кандидата";
+        SourceBox.Focus();
+
+        StatusText.Text =
+            $"Кандидат: {window.SelectedCandidate.Source} • " +
+            $"вхождений: {window.SelectedCandidate.Occurrences:N0}";
     }
 
     private async void ImportButton_Click(object sender, RoutedEventArgs e)
@@ -185,7 +311,8 @@ public partial class GlossaryWindow : Window
             RefreshSummary();
             ClearEditor();
 
-            StatusText.Text = $"Импортировано/обновлено терминов: {changed:N0}";
+            StatusText.Text =
+                $"Импортировано/обновлено терминов: {changed:N0}";
         }
         catch (Exception ex)
         {
@@ -215,7 +342,8 @@ public partial class GlossaryWindow : Window
         try
         {
             await _service.ExportAsync(dialog.FileName);
-            StatusText.Text = $"Экспортировано терминов: {_service.Entries.Count:N0}";
+            StatusText.Text =
+                $"Экспортировано терминов: {_service.Entries.Count:N0}";
         }
         catch (Exception ex)
         {
@@ -233,15 +361,46 @@ public partial class GlossaryWindow : Window
         EditorTitle.Text = "Новый термин";
         SourceBox.Clear();
         TranslationBox.Clear();
+        AllowedTranslationsBox.Clear();
+        NamespaceScopesBox.Clear();
+        PriorityBox.Text = "0";
         NoteBox.Clear();
         LockedCheckBox.IsChecked = true;
         DeleteButton.IsEnabled = false;
+        WhereUsedButton.IsEnabled = false;
     }
 
     private void RefreshSummary()
     {
         var locked = _service.Entries.Count(entry => entry.IsLocked);
+        var scoped = _service.Entries.Count(entry => entry.NamespaceScopes.Count > 0);
+        var conflicts = _service.GetConflicts().Count;
+
         GlossarySummaryText.Text =
-            $"Терминов: {_service.Entries.Count:N0} • закреплено: {locked:N0}";
+            $"Терминов: {_service.Entries.Count:N0} • закреплено: {locked:N0} • " +
+            $"ограничено Namespace: {scoped:N0} • конфликтов: {conflicts:N0}";
+    }
+
+    private static List<string> ParseList(string value) =>
+        (value ?? string.Empty)
+            .Split(
+                ['\r', '\n', ',', ';'],
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static bool ScopesEqual(
+        IReadOnlyCollection<string> left,
+        IReadOnlyCollection<string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .SequenceEqual(
+                right.OrderBy(value => value, StringComparer.Ordinal),
+                StringComparer.Ordinal);
     }
 }
