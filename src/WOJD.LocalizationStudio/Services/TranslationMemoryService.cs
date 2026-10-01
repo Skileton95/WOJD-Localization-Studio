@@ -51,13 +51,23 @@ public sealed class TranslationMemoryService
         var now = DateTimeOffset.UtcNow;
         var changed = false;
 
+        var index = _entries
+            .GroupBy(
+                item => BuildKey(item.Source, item.Namespace),
+                StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(item => item.UpdatedUtc)
+                    .First(),
+                StringComparer.Ordinal);
+
         foreach (var entry in document.Entries.Where(entry =>
                      !string.IsNullOrWhiteSpace(entry.Source) &&
                      !string.IsNullOrWhiteSpace(entry.Translation)))
         {
-            var memory = _entries.FirstOrDefault(item =>
-                string.Equals(item.Source, entry.Source, StringComparison.Ordinal) &&
-                string.Equals(item.Namespace, entry.Namespace, StringComparison.Ordinal));
+            var key = BuildKey(entry.Source, entry.Namespace);
+            index.TryGetValue(key, out var memory);
 
             if (memory is null)
             {
@@ -83,6 +93,7 @@ public sealed class TranslationMemoryService
                 };
 
                 _entries.Add(memory);
+                index[key] = memory;
                 changed = true;
                 continue;
             }
@@ -122,6 +133,9 @@ public sealed class TranslationMemoryService
         if (changed)
             await SaveAsync(cancellationToken);
     }
+
+    private static string BuildKey(string source, string entryNamespace) =>
+        $"{entryNamespace}\u001f{source}";
 
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
