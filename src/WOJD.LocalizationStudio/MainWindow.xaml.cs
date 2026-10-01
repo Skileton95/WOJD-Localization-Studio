@@ -1127,6 +1127,7 @@ public partial class MainWindow : Window
                         entry.Source,
                         term.Source,
                         StringComparison.Ordinal) ||
+                    !term.AppliesToNamespace(entry.Namespace) ||
                     string.IsNullOrWhiteSpace(entry.Translation) ||
                     term.IsTranslationAccepted(entry.Translation))
                     continue;
@@ -1141,6 +1142,7 @@ public partial class MainWindow : Window
                     memory.Source,
                     term.Source,
                     StringComparison.Ordinal) ||
+                !term.AppliesToNamespace(memory.Namespace) ||
                 string.IsNullOrWhiteSpace(memory.Translation) ||
                 term.IsTranslationAccepted(memory.Translation))
                 continue;
