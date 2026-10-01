@@ -6,29 +6,25 @@ namespace WOJD.LocalizationStudio;
 
 public partial class GlossaryUsageWindow : Window
 {
-    private readonly Action<LocalizationDocument, LocalizationEntry>? _navigate;
-
     public GlossaryUsageWindow(
         GlossaryEntry term,
-        IReadOnlyList<GlossaryUsageRow> rows,
-        Action<LocalizationDocument, LocalizationEntry>? navigate)
+        IReadOnlyList<GlossaryUsageRow> rows)
     {
         InitializeComponent();
 
-        _navigate = navigate;
         TitleText.Text = $"Где используется: {term.Source} → {term.Translation}";
         SummaryText.Text =
             $"Вхождений: {rows.Count:N0} • нарушений: {rows.Count(row => !row.IsAccepted):N0}";
         UsageGrid.ItemsSource = rows;
     }
 
+    public GlossaryUsageRow? SelectedUsage =>
+        UsageGrid.SelectedItem as GlossaryUsageRow;
+
     private void UsageGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (UsageGrid.SelectedItem is not GlossaryUsageRow row)
-            return;
-
-        _navigate?.Invoke(row.Document, row.Entry);
-        Close();
+        if (SelectedUsage is not null)
+            DialogResult = true;
     }
 }
 
