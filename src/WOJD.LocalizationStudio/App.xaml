@@ -1,0 +1,28 @@
+<Application x:Class="WOJD.LocalizationStudio.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="InkBrush" Color="#1C2A3B" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#6D7C8D" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#2F7BEA" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#F8FBFF" />
+        <SolidColorBrush x:Key="BorderBrushSoft" Color="#D8E2EC" />
+
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="Background" Value="#EEF4FA" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="#D6E1EC" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="BorderBrush" Value="#D4DEE9" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+    </Application.Resources>
+</Application>
