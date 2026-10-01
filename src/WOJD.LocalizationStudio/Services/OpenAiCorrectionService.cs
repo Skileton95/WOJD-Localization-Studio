@@ -12,7 +12,7 @@ public sealed class OpenAiCorrectionService
 
     private static readonly HttpClient HttpClient = new()
     {
-        Timeout = TimeSpan.FromSeconds(45)
+        Timeout = TimeSpan.FromSeconds(60)
     };
 
     private string? _sessionApiKey;
@@ -32,21 +32,18 @@ public sealed class OpenAiCorrectionService
             Environment.SetEnvironmentVariable("OPENAI_API_KEY", trimmed, EnvironmentVariableTarget.User);
     }
 
-    public async Task<string> CorrectAsync(
+    public Task<string> CorrectAsync(
         LocalizationEntry entry,
         CancellationToken cancellationToken = default)
     {
-        var apiKey = GetApiKey();
-        if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("Не указан OPENAI_API_KEY.");
-
-        var instructions =
+        const string instructions =
             """
             Ты исправляешь русскую локализацию MMORPG Zhu Xian World.
-            Твоя задача — исправить ТОЛЬКО текущий русский перевод так, чтобы он сохранял смысл китайского оригинала
-            и содержал все технические элементы оригинала в правильном количестве и логичном месте:
-            плейсхолдеры вида {0}, {1}, %s, %d, переносы строк и XML/HTML-подобные теги.
-            Никогда не переводи, не переименовывай и не изменяй технические теги и плейсхолдеры.
+            Исправь текущий русский перевод, сохранив смысл китайского оригинала.
+            Все технические элементы оригинала должны присутствовать в правильном количестве и логичном месте:
+            {0}, {1}, %s, %d, переносы строк и XML/HTML-подобные теги.
+            Никогда не переводи, не переименовывай и не меняй технические теги и плейсхолдеры.
+            Исправляй также оставшийся китайский текст, очевидные ошибки скобок, пробелов и пунктуации.
             Не добавляй пояснений, кавычек, Markdown или комментариев.
             Верни только готовую исправленную русскую строку.
             """;
@@ -62,9 +59,97 @@ public sealed class OpenAiCorrectionService
             Текущий русский перевод:
             {entry.Translation}
 
-            Ошибка проверки:
+            Ошибки проверки:
             {entry.ValidationSummary}
             """;
+
+        return SendTextAsync(instructions, input, 2048, cancellationToken);
+    }
+
+    public Task<string> ExplainAsync(
+        LocalizationEntry entry,
+        CancellationToken cancellationToken = default)
+    {
+        const string instructions =
+            """
+            Ты проверяешь русскую локализацию MMORPG Zhu Xian World.
+            Коротко и конкретно объясни, что не так в текущем переводе и как это исправить.
+            Укажи назначение потерянных/лишних плейсхолдеров и тегов, если это можно понять из строки.
+            Не переписывай весь перевод без необходимости.
+            Ответ дай на русском языке, без Markdown-заголовков.
+            """;
+
+        var input =
+            $"""
+            Namespace: {entry.Namespace}
+            Key: {entry.Key}
+
+            Китайский оригинал:
+            {entry.Source}
+
+            Русский перевод:
+            {entry.Translation}
+
+            Найденные программой проблемы:
+            {entry.ValidationSummary}
+            """;
+
+        return SendTextAsync(instructions, input, 1800, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> SuggestVariantsAsync(
+        LocalizationEntry entry,
+        int count = 3,
+        CancellationToken cancellationToken = default)
+    {
+        count = Math.Clamp(count, 2, 5);
+
+        const string instructions =
+            """
+            Ты профессионально локализуешь MMORPG Zhu Xian World с китайского на русский.
+            Предлагай естественные игровые формулировки на русском.
+            Технические элементы {0}, {1}, %s, %d, переносы строк и XML/HTML-подобные теги
+            должны быть сохранены без изменений и в логичных местах.
+            Не транслитерируй без необходимости и не добавляй информацию, которой нет в оригинале.
+            Верни только JSON-массив строк, без Markdown и пояснений.
+            """;
+
+        var input =
+            $"""
+            Namespace: {entry.Namespace}
+            Key: {entry.Key}
+
+            Китайский оригинал:
+            {entry.Source}
+
+            Текущий перевод, если он уже есть:
+            {entry.Translation}
+
+            Предложи {count} разных качественных варианта русского перевода.
+            """;
+
+        var raw = await SendTextAsync(instructions, input, 2600, cancellationToken);
+        var variants = ParseStringArray(raw)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Take(count)
+            .ToList();
+
+        if (variants.Count == 0)
+            throw new InvalidOperationException("ChatGPT не вернул варианты перевода.");
+
+        return variants;
+    }
+
+    private async Task<string> SendTextAsync(
+        string instructions,
+        string input,
+        int maxOutputTokens,
+        CancellationToken cancellationToken)
+    {
+        var apiKey = GetApiKey();
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("Не указан OPENAI_API_KEY.");
 
         var payload = JsonSerializer.Serialize(new
         {
@@ -72,7 +157,7 @@ public sealed class OpenAiCorrectionService
             store = false,
             instructions,
             input,
-            max_output_tokens = 2048
+            max_output_tokens = maxOutputTokens
         });
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
@@ -87,10 +172,22 @@ public sealed class OpenAiCorrectionService
             throw new InvalidOperationException(
                 $"OpenAI API вернул ошибку {(int)response.StatusCode}: {ExtractApiError(responseText)}");
 
+        var text = ExtractOutputText(responseText);
+        if (string.IsNullOrWhiteSpace(text))
+            throw new InvalidOperationException("ChatGPT не вернул текстовый ответ.");
+
+        return text.Trim('\r', '\n');
+    }
+
+    private static string ExtractOutputText(string responseText)
+    {
         using var json = JsonDocument.Parse(responseText);
+
         if (!json.RootElement.TryGetProperty("output", out var output) ||
             output.ValueKind != JsonValueKind.Array)
-            throw new InvalidOperationException("OpenAI API не вернул текстовый ответ.");
+            return string.Empty;
+
+        var builder = new StringBuilder();
 
         foreach (var item in output.EnumerateArray())
         {
@@ -105,13 +202,45 @@ public sealed class OpenAiCorrectionService
                     !part.TryGetProperty("text", out var text))
                     continue;
 
-                var value = text.GetString();
-                if (!string.IsNullOrWhiteSpace(value))
-                    return value.Trim('\r', '\n');
+                if (builder.Length > 0)
+                    builder.AppendLine();
+
+                builder.Append(text.GetString());
             }
         }
 
-        throw new InvalidOperationException("ChatGPT не вернул исправленный перевод.");
+        return builder.ToString();
+    }
+
+    private static IReadOnlyList<string> ParseStringArray(string raw)
+    {
+        var trimmed = raw.Trim();
+
+        if (trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstNewLine = trimmed.IndexOf('\n');
+            var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+            if (firstNewLine >= 0 && lastFence > firstNewLine)
+                trimmed = trimmed[(firstNewLine + 1)..lastFence].Trim();
+        }
+
+        var start = trimmed.IndexOf('[');
+        var end = trimmed.LastIndexOf(']');
+        if (start >= 0 && end > start)
+            trimmed = trimmed[start..(end + 1)];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(trimmed) ?? [];
+        }
+        catch (JsonException)
+        {
+            return raw
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line => line.TrimStart('-', '•', '1', '2', '3', '4', '5', '.', ')', ' '))
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList();
+        }
     }
 
     private string? GetApiKey() =>
