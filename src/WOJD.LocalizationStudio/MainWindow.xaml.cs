@@ -932,8 +932,7 @@ public partial class MainWindow : Window
             UpdateValidationPanel();
         }
 
-        EntriesGrid.Items.Refresh();
-        _view?.Refresh();
+        RefreshFilteredViewPreservingSelection();
         UpdateCounters();
     }
 
