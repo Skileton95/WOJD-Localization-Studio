@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 {
     private readonly NdjsonService _service = new();
     private readonly UpdateService _updateService = new();
+    private readonly UpdateSessionService _updateSessionService = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
@@ -47,6 +48,9 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateStatusText.Text = $"v{_updateService.CurrentVersion} • проверка…";
+
+        await RestoreUpdateSessionAsync();
+
         _updateTimer.Start();
         await Task.Delay(900);
         await CheckForUpdatesAsync();
@@ -141,6 +145,10 @@ public partial class MainWindow : Window
             }
         }
 
+        await _updateSessionService.SaveAsync(
+            _documents.Select(d => d.FilePath),
+            _currentDocument?.FilePath);
+
         _isUpdating = true;
         _updateTimer.Stop();
         UpdateButton.IsEnabled = false;
@@ -169,6 +177,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _updateSessionService.Clear();
             _isUpdating = false;
             _updateTimer.Start();
 
@@ -183,26 +192,44 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
-
-    private async Task OpenFilesAsync()
+    private async Task RestoreUpdateSessionAsync()
     {
-        var dialog = new OpenFileDialog
+        UpdateSession? session;
+
+        try
         {
-            Filter = "WOJD NDJSON (*.ndjson)|*.ndjson|All files (*.*)|*.*",
-            CheckFileExists = true,
-            Multiselect = true,
-            Title = "Открыть файлы русификатора"
-        };
+            session = await _updateSessionService.LoadAndConsumeAsync();
+        }
+        catch
+        {
+            return;
+        }
 
-        if (dialog.ShowDialog(this) != true) return;
+        if (session is null || session.FilePaths.Length == 0)
+            return;
 
+        var existingPaths = session.FilePaths
+            .Where(System.IO.File.Exists)
+            .ToArray();
+
+        if (existingPaths.Length == 0)
+            return;
+
+        StatusText.Text = "Восстановление открытых файлов после обновления…";
+        await OpenFilesFromPathsAsync(existingPaths, session.ActiveFilePath);
+
+        StatusText.Text = $"Сессия восстановлена: {_documents.Count:N0} файлов";
+    }
+
+    private async Task OpenFilesFromPathsAsync(IEnumerable<string> paths, string? preferredActivePath = null)
+    {
         LocalizationDocument? lastOpened = null;
 
-        foreach (var path in dialog.FileNames)
+        foreach (var path in paths)
         {
             var existing = _documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, path, StringComparison.OrdinalIgnoreCase));
+
             if (existing is not null)
             {
                 lastOpened = existing;
@@ -233,10 +260,38 @@ public partial class MainWindow : Window
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(preferredActivePath))
+        {
+            var preferred = _documents.FirstOrDefault(d =>
+                string.Equals(d.FilePath, preferredActivePath, StringComparison.OrdinalIgnoreCase));
+
+            if (preferred is not null)
+                lastOpened = preferred;
+        }
+
         if (lastOpened is not null)
             FilesList.SelectedItem = lastOpened;
 
         UpdateButtons();
+        UpdateCounters();
+    }
+
+    private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
+
+    private async Task OpenFilesAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "WOJD NDJSON (*.ndjson)|*.ndjson|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = true,
+            Title = "Открыть файлы русификатора"
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        await OpenFilesFromPathsAsync(dialog.FileNames);
+
         StatusText.Text = _documents.Count == 0
             ? "Файлы не открыты"
             : $"Открыто файлов: {_documents.Count}";
