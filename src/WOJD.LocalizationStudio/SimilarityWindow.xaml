@@ -41,9 +41,10 @@
                               MouseDoubleClick="SourceMatchesGrid_MouseDoubleClick">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Совпадение" Binding="{Binding PercentText}" Width="90"/>
-                            <DataGridTextColumn Header="Файл" Binding="{Binding Document.FileName}" Width="150"/>
-                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Entry.Source}" Width="1.2*"/>
-                            <DataGridTextColumn Header="Перевод" Binding="{Binding Entry.Translation}" Width="1.3*"/>
+                            <DataGridTextColumn Header="Источник" Binding="{Binding OriginText}" Width="90"/>
+                            <DataGridTextColumn Header="Файл" Binding="{Binding FileName}" Width="140"/>
+                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Source}" Width="1.2*"/>
+                            <DataGridTextColumn Header="Перевод" Binding="{Binding Translation}" Width="1.3*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <Button Grid.Row="1"
@@ -67,8 +68,8 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Совпадение" Binding="{Binding PercentText}" Width="90"/>
                             <DataGridTextColumn Header="Файл" Binding="{Binding Document.FileName}" Width="150"/>
-                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Entry.Source}" Width="1.2*"/>
-                            <DataGridTextColumn Header="Перевод" Binding="{Binding Entry.Translation}" Width="1.3*"/>
+                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Source}" Width="1.2*"/>
+                            <DataGridTextColumn Header="Перевод" Binding="{Binding Translation}" Width="1.3*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
