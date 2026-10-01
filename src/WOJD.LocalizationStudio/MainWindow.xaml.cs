@@ -1303,6 +1303,9 @@ public partial class MainWindow : Window
 
         _isMassFixing = true;
         _isAiFixing = true;
+        FilesList.IsEnabled = false;
+        EntriesGrid.IsEnabled = false;
+        TranslationBox.IsEnabled = false;
         GlossaryMassLocalFixButton.IsEnabled = false;
         GlossaryMassAiFixButton.IsEnabled = false;
         GlossaryMassAiFixButton.Content = "ChatGPT исправляет…";
@@ -1409,6 +1412,9 @@ public partial class MainWindow : Window
         {
             _isAiFixing = false;
             _isMassFixing = false;
+            FilesList.IsEnabled = true;
+            EntriesGrid.IsEnabled = true;
+            TranslationBox.IsEnabled = _selected is not null;
             GlossaryMassAiFixButton.Content = "Исправить с ChatGPT";
             UpdateCounters();
             UpdateButtons();
