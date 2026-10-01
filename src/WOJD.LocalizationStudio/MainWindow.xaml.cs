@@ -712,7 +712,9 @@ public partial class MainWindow : Window
         {
             ExactMatchesInfoText.Text = "Других строк с полностью идентичным оригиналом нет.";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
-            ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0  •  вариантов перевода: 1";
+            var variantCount = string.IsNullOrWhiteSpace(_selected.Translation) ? 0 : 1;
+            ExactMatchesConflictCountText.Text =
+                $"Конфликтующих строк: 0  •  вариантов перевода: {variantCount:N0}";
             ExactMatchesConflictCountText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
             ApplyExactMatchesButton.IsEnabled = false;
             return;
@@ -794,43 +796,30 @@ public partial class MainWindow : Window
 
     private void NavigateVisibleRow(int delta)
     {
-        if (_view is null || _selected is null)
-            return;
-
-        var visibleEntries = _view.Cast<object>()
-            .OfType<LocalizationEntry>()
-            .ToList();
-
-        var currentIndex = visibleEntries.IndexOf(_selected);
+        var currentIndex = EntriesGrid.SelectedIndex;
         if (currentIndex < 0)
             return;
 
         var targetIndex = currentIndex + delta;
-        if (targetIndex < 0 || targetIndex >= visibleEntries.Count)
+        if (targetIndex < 0 || targetIndex >= EntriesGrid.Items.Count)
             return;
 
-        var target = visibleEntries[targetIndex];
-        EntriesGrid.SelectedItem = target;
-        EntriesGrid.ScrollIntoView(target);
-        EntriesGrid.Focus();
+        EntriesGrid.SelectedIndex = targetIndex;
+
+        if (EntriesGrid.SelectedItem is LocalizationEntry target)
+        {
+            EntriesGrid.ScrollIntoView(target);
+            EntriesGrid.Focus();
+        }
     }
 
     private void UpdateRowNavigationButtons()
     {
-        if (_view is null || _selected is null)
-        {
-            PreviousRowButton.IsEnabled = false;
-            NextRowButton.IsEnabled = false;
-            return;
-        }
+        var currentIndex = EntriesGrid.SelectedIndex;
+        var count = EntriesGrid.Items.Count;
 
-        var visibleEntries = _view.Cast<object>()
-            .OfType<LocalizationEntry>()
-            .ToList();
-
-        var currentIndex = visibleEntries.IndexOf(_selected);
         PreviousRowButton.IsEnabled = currentIndex > 0;
-        NextRowButton.IsEnabled = currentIndex >= 0 && currentIndex < visibleEntries.Count - 1;
+        NextRowButton.IsEnabled = currentIndex >= 0 && currentIndex < count - 1;
     }
 
     private void ApplyExactMatchesButton_Click(object sender, RoutedEventArgs e)
