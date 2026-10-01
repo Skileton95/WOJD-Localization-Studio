@@ -582,6 +582,9 @@ public partial class MainWindow : Window
 
     private void ValidationTypeFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!IsInitialized)
+            return;
+
         var tag = (ValidationTypeFilterBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "All";
 
         _validationTypeFilter = Enum.TryParse<ValidationIssueKind>(tag, out var kind)
