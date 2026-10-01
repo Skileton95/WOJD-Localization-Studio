@@ -1535,6 +1535,49 @@ public partial class MainWindow : Window
             $"Перевод применён к {edits.Count:N0} строкам с 100% совпадением в {affectedFiles:N0} файлах";
     }
 
+    private int ApplyProposedChangesWithPreview(
+        string title,
+        IReadOnlyList<ProposedTranslationChange> changes,
+        string historyDescription)
+    {
+        if (changes.Count == 0)
+            return 0;
+
+        var window = new MassChangePreviewWindow(title, changes)
+        {
+            Owner = this
+        };
+
+        if (window.ShowDialog() != true)
+            return 0;
+
+        var selected = window.SelectedChanges;
+        if (selected.Count == 0)
+            return 0;
+
+        var edits = selected
+            .Where(change =>
+                !string.Equals(
+                    change.Before,
+                    change.After,
+                    StringComparison.Ordinal))
+            .Select(change => new TranslationEdit(
+                change.Document,
+                change.Entry,
+                change.Before,
+                change.After))
+            .ToList();
+
+        if (edits.Count == 0)
+            return 0;
+
+        var batch = new EditBatch(edits, historyDescription);
+        RecordEditBatch(batch);
+        ApplyEditBatch(batch, useAfter: true);
+
+        return edits.Count;
+    }
+
     private void RecordEditBatch(EditBatch batch)
     {
         if (batch.Edits.Count == 0)
