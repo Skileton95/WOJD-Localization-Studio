@@ -280,6 +280,7 @@ public static class ValidationService
         ICollection<ValidationIssue> issues)
     {
         if (string.IsNullOrWhiteSpace(source) ||
+            !ChineseRegex.IsMatch(source) ||
             !string.Equals(source.Trim(), translation.Trim(), StringComparison.Ordinal))
             return;
 
