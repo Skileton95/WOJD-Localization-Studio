@@ -927,29 +927,26 @@ public partial class MainWindow : Window
             return Array.Empty<GlossaryEntry>();
 
         return _glossaryService
-            .FindMatches(entry.Source)
+            .FindMatches(entry.Source, entry.Namespace)
             .Where(term =>
                 term.IsLocked &&
-                !string.IsNullOrWhiteSpace(term.Translation) &&
-                !entry.Translation.Contains(
-                    term.Translation,
-                    StringComparison.OrdinalIgnoreCase))
+                !term.IsTranslationAccepted(entry.Translation))
             .ToList();
     }
 
-    private bool TranslationHasGlossaryMismatch(string source, string translation)
+    private bool TranslationHasGlossaryMismatch(
+        string source,
+        string entryNamespace,
+        string translation)
     {
         if (string.IsNullOrWhiteSpace(translation))
             return false;
 
         return _glossaryService
-            .FindMatches(source)
+            .FindMatches(source, entryNamespace)
             .Any(term =>
                 term.IsLocked &&
-                !string.IsNullOrWhiteSpace(term.Translation) &&
-                !translation.Contains(
-                    term.Translation,
-                    StringComparison.OrdinalIgnoreCase));
+                !term.IsTranslationAccepted(translation));
     }
 
     private bool HasGlossaryMismatch(LocalizationEntry entry) =>
@@ -1172,7 +1169,7 @@ public partial class MainWindow : Window
                     }
 
                     if (ValidationService.GetIssues(entry.Source, corrected).Count > 0 ||
-                        TranslationHasGlossaryMismatch(entry.Source, corrected))
+                        TranslationHasGlossaryMismatch(entry.Source, entry.Namespace, corrected))
                     {
                         skipped++;
                         continue;
@@ -1241,7 +1238,11 @@ public partial class MainWindow : Window
 
     private void GlossaryButton_Click(object sender, RoutedEventArgs e)
     {
-        var window = new GlossaryWindow(_glossaryService)
+        var window = new GlossaryWindow(
+            _glossaryService,
+            _documents.ToList(),
+            _currentDocument,
+            NavigateToEntryFromGlossary)
         {
             Owner = this
         };
@@ -1255,6 +1256,32 @@ public partial class MainWindow : Window
         StatusText.Text = $"Глоссарий: {_glossaryService.Entries.Count:N0} терминов";
     }
 
+    private void NavigateToEntryFromGlossary(
+        LocalizationDocument document,
+        LocalizationEntry entry)
+    {
+        if (!ReferenceEquals(_currentDocument, document))
+            FilesList.SelectedItem = document;
+
+        _statusFilter = "All";
+        _namespaceFilter = null;
+        _validationTypeFilter = ValidationIssueKind.None;
+
+        if (ValidationTypeFilterBox.SelectedIndex != 0)
+            ValidationTypeFilterBox.SelectedIndex = 0;
+
+        SearchBox.Clear();
+        UpdateFilterVisuals();
+        ApplyViewFilter();
+
+        EntriesGrid.SelectedItem = entry;
+        EntriesGrid.ScrollIntoView(entry);
+        EntriesGrid.Focus();
+
+        StatusText.Text =
+            $"Открыто использование термина: {document.FileName} • {entry.Namespace} • {entry.Key}";
+    }
+
     private void UpdateGlossaryPanel()
     {
         if (_selected is null)
@@ -1266,7 +1293,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var matches = _glossaryService.FindMatches(_selected.Source);
+        var matches = _glossaryService.FindMatches(_selected.Source, _selected.Namespace);
         GlossaryMatchCountText.Text = matches.Count.ToString("N0");
         GlossaryMatchesList.ItemsSource = matches;
 
@@ -1288,8 +1315,7 @@ public partial class MainWindow : Window
         var mismatches = matches
             .Where(term =>
                 term.IsLocked &&
-                !string.IsNullOrWhiteSpace(term.Translation) &&
-                !_selected.Translation.Contains(term.Translation, StringComparison.OrdinalIgnoreCase))
+                !term.IsTranslationAccepted(_selected.Translation))
             .ToList();
 
         if (mismatches.Count == 0)
@@ -1316,7 +1342,7 @@ public partial class MainWindow : Window
 
     private string BuildGlossaryContext(LocalizationEntry entry)
     {
-        var matches = _glossaryService.FindMatches(entry.Source);
+        var matches = _glossaryService.FindMatches(entry.Source, entry.Namespace);
         if (matches.Count == 0)
             return string.Empty;
 
@@ -1325,6 +1351,9 @@ public partial class MainWindow : Window
             matches.Select(term =>
                 $"{(term.IsLocked ? "[ОБЯЗАТЕЛЬНО]" : "[ПОДСКАЗКА]")} " +
                 $"{term.Source} => {term.Translation}" +
+                (term.AllowedTranslations.Count == 0
+                    ? string.Empty
+                    : $" | допустимо: {string.Join(", ", term.AllowedTranslations)}") +
                 (string.IsNullOrWhiteSpace(term.Note) ? string.Empty : $" ({term.Note})")));
     }
 
