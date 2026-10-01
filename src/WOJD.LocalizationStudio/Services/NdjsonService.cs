@@ -27,7 +27,7 @@ public sealed class NdjsonService
         string? line;
         var lineNo = 0;
 
-        while ((line = await reader.ReadLineAsync()) is not null)
+        while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) is not null)
         {
             lineNo++;
             if (string.IsNullOrWhiteSpace(line)) continue;
@@ -80,7 +80,7 @@ public sealed class NdjsonService
                 {
                     var obj = (JsonObject)entry.Raw.DeepClone();
                     obj[entry.TranslationPropertyName] = entry.Translation;
-                    await writer.WriteLineAsync(obj.ToJsonString(WriteOptions));
+                    await writer.WriteLineAsync(obj.ToJsonString(WriteOptions)).ConfigureAwait(false);
                 }
             }
 
