@@ -650,6 +650,9 @@ public partial class MainWindow : Window
 
         _namespaceFilter = entry.Namespace;
         _statusFilter = "All";
+        _validationTypeFilter = ValidationIssueKind.None;
+        if (ValidationTypeFilterBox.SelectedIndex != 0)
+            ValidationTypeFilterBox.SelectedIndex = 0;
         SearchBox.Clear();
 
         UpdateFilterVisuals();
