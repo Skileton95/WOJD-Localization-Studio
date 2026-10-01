@@ -39,7 +39,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         FilesList.ItemsSource = _documents;
         UpdateFilterVisuals();
-        UpdateBottomSummary();
 
         Loaded += MainWindow_Loaded;
         _updateTimer.Tick += UpdateTimer_Tick;
@@ -561,7 +560,6 @@ public partial class MainWindow : Window
             _namespaceFilter = null;
 
         UpdateFilterVisuals();
-        UpdateBottomSummary();
         ApplyViewFilter();
 
         if (EntriesGrid.SelectedItem is LocalizationEntry selected && _view is not null && !_view.Contains(selected))
@@ -601,7 +599,6 @@ public partial class MainWindow : Window
         SearchBox.Clear();
 
         UpdateFilterVisuals();
-        UpdateBottomSummary();
         ApplyViewFilter();
 
         StatusText.Text = $"Показаны все строки Namespace: {entry.Namespace}";
@@ -1002,7 +999,6 @@ public partial class MainWindow : Window
             ErrorBadge.Text = "Ошибки  0";
             ConflictBadge.Text = "Конфликты  0";
             ModifiedBadge.Text = "Изменённые  0";
-            FileSummaryText.Text = "Файлы не открыты";
             return;
         }
 
@@ -1032,37 +1028,6 @@ public partial class MainWindow : Window
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
         ConflictBadge.Text = $"Конфликты  {conflicts:N0}";
         ModifiedBadge.Text = $"Изменённые  {modified:N0}";
-        UpdateBottomSummary(total, translated);
-    }
-
-    private void UpdateBottomSummary()
-    {
-        if (_currentDocument is null)
-        {
-            FileSummaryText.Text = "Файлы не открыты";
-            return;
-        }
-
-        var total = _currentDocument.Entries.Count;
-        var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
-        UpdateBottomSummary(total, translated);
-    }
-
-    private void UpdateBottomSummary(int total, int translated)
-    {
-        if (_currentDocument is null)
-        {
-            FileSummaryText.Text = "Файлы не открыты";
-            return;
-        }
-
-        var untranslated = total - translated;
-        var namespaceSuffix = _namespaceFilter is null
-            ? string.Empty
-            : $"  •  Namespace: {_namespaceFilter}";
-
-        FileSummaryText.Text =
-            $"{_currentDocument.FileName}  •  {total:N0} строк  •  {translated:N0} переведено  •  {untranslated:N0} пустых{namespaceSuffix}";
     }
 
     private void ValidationButton_Click(object sender, RoutedEventArgs e)
