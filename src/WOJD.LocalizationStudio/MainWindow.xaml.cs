@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private string _statusFilter = "All";
     private string? _namespaceFilter;
     private readonly Dictionary<string, List<EntryLocation>> _sourceIndex = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _conflictingSources = new(StringComparer.Ordinal);
     private readonly Stack<EditBatch> _undoStack = new();
     private readonly Stack<EditBatch> _redoStack = new();
 
@@ -243,13 +244,15 @@ public partial class MainWindow : Window
             try
             {
                 StatusText.Text = $"Загрузка: {System.IO.Path.GetFileName(path)}…";
-                var loaded = await _service.LoadAsync(path);
-                ValidationService.ValidateAll(loaded);
 
-                var document = new LocalizationDocument { FilePath = path };
-                foreach (var item in loaded)
-                    document.Entries.Add(item);
+                var loaded = await Task.Run(async () =>
+                {
+                    var entries = await _service.LoadAsync(path).ConfigureAwait(false);
+                    ValidationService.ValidateAll(entries);
+                    return entries;
+                });
 
+                var document = new LocalizationDocument(path, loaded);
                 document.RefreshComputedProperties();
                 _documents.Add(document);
                 lastOpened = document;
@@ -285,6 +288,7 @@ public partial class MainWindow : Window
     private void RebuildSourceIndex()
     {
         _sourceIndex.Clear();
+        _conflictingSources.Clear();
 
         foreach (var document in _documents)
         {
@@ -302,6 +306,9 @@ public partial class MainWindow : Window
                 list.Add(new EntryLocation(document, entry));
             }
         }
+
+        foreach (var source in _sourceIndex.Keys)
+            RefreshConflictState(source);
     }
 
     private IReadOnlyList<EntryLocation> GetExactSourceMatches(LocalizationEntry entry)
@@ -314,17 +321,44 @@ public partial class MainWindow : Window
             : Array.Empty<EntryLocation>();
     }
 
-    private bool HasTranslationConflict(LocalizationEntry entry)
+    private void RefreshConflictState(string source)
     {
-        var translations = GetExactSourceMatches(entry)
-            .Select(item => item.Entry.Translation)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.Ordinal)
-            .Take(2)
-            .Count();
+        if (string.IsNullOrEmpty(source) || !_sourceIndex.TryGetValue(source, out var matches))
+        {
+            _conflictingSources.Remove(source);
+            return;
+        }
 
-        return translations > 1;
+        string? firstTranslation = null;
+        var hasConflict = false;
+
+        foreach (var item in matches)
+        {
+            var translation = item.Entry.Translation;
+            if (string.IsNullOrWhiteSpace(translation))
+                continue;
+
+            if (firstTranslation is null)
+            {
+                firstTranslation = translation;
+                continue;
+            }
+
+            if (!string.Equals(firstTranslation, translation, StringComparison.Ordinal))
+            {
+                hasConflict = true;
+                break;
+            }
+        }
+
+        if (hasConflict)
+            _conflictingSources.Add(source);
+        else
+            _conflictingSources.Remove(source);
     }
+
+    private bool HasTranslationConflict(LocalizationEntry entry) =>
+        !string.IsNullOrEmpty(entry.Source) && _conflictingSources.Contains(entry.Source);
 
     private async void CloseFileButton_Click(object sender, RoutedEventArgs e)
     {
@@ -449,8 +483,25 @@ public partial class MainWindow : Window
         }
 
         _view = CollectionViewSource.GetDefaultView(_currentDocument.Entries);
-        _view.Filter = FilterEntry;
-        _view.Refresh();
+        ApplyViewFilter();
+    }
+
+    private void ApplyViewFilter()
+    {
+        if (_view is null)
+            return;
+
+        var hasFilter =
+            _namespaceFilter is not null ||
+            !string.Equals(_statusFilter, "All", StringComparison.Ordinal) ||
+            !string.IsNullOrWhiteSpace(SearchBox.Text);
+
+        Predicate<object>? desiredFilter = hasFilter ? FilterEntry : null;
+
+        if (!Equals(_view.Filter, desiredFilter))
+            _view.Filter = desiredFilter;
+        else if (hasFilter)
+            _view.Refresh();
     }
 
     private bool FilterEntry(object obj)
@@ -494,8 +545,8 @@ public partial class MainWindow : Window
     private static bool Contains(string value, string query) =>
         (value ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => _view?.Refresh();
-    private void SearchScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => _view?.Refresh();
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyViewFilter();
+    private void SearchScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyViewFilter();
 
     private void FilterBadge_Click(object sender, RoutedEventArgs e)
     {
@@ -509,7 +560,7 @@ public partial class MainWindow : Window
 
         UpdateFilterVisuals();
         UpdateBottomSummary();
-        _view?.Refresh();
+        ApplyViewFilter();
 
         if (EntriesGrid.SelectedItem is LocalizationEntry selected && _view is not null && !_view.Contains(selected))
             EntriesGrid.SelectedItem = null;
@@ -549,7 +600,7 @@ public partial class MainWindow : Window
 
         UpdateFilterVisuals();
         UpdateBottomSummary();
-        _view?.Refresh();
+        ApplyViewFilter();
 
         StatusText.Text = $"Показаны все строки Namespace: {entry.Namespace}";
         e.Handled = true;
@@ -592,6 +643,7 @@ public partial class MainWindow : Window
         LengthLabel.Text = "0 символов";
         ExactMatchesCountText.Text = "0";
         ExactMatchesInfoText.Text = "Выберите строку";
+        ExactMatchesList.ItemsSource = null;
         ApplyExactMatchesButton.IsEnabled = false;
         ValidationStatusText.Text = "Выберите строку";
         ValidationStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0x68, 0x79, 0x8A));
@@ -617,6 +669,7 @@ public partial class MainWindow : Window
 
         _selected.Translation = after;
         ValidationService.Validate(_selected);
+        RefreshConflictState(_selected.Source);
         _currentDocument.IsDirty = true;
         _currentDocument.RefreshComputedProperties();
 
@@ -635,6 +688,7 @@ public partial class MainWindow : Window
             ExactMatchesCountText.Text = "0";
             ExactMatchesInfoText.Text = "Точные совпадения не найдены";
             ExactMatchesInfoText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            ExactMatchesList.ItemsSource = null;
             ApplyExactMatchesButton.IsEnabled = false;
             return;
         }
@@ -643,6 +697,7 @@ public partial class MainWindow : Window
         var otherMatches = Math.Max(0, matches.Count - 1);
 
         ExactMatchesCountText.Text = matches.Count.ToString("N0");
+        ExactMatchesList.ItemsSource = matches;
 
         if (otherMatches == 0)
         {
@@ -679,6 +734,31 @@ public partial class MainWindow : Window
         }
 
         ApplyExactMatchesButton.IsEnabled = !string.IsNullOrWhiteSpace(_selected.Translation);
+    }
+
+    private void ExactMatchItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not EntryLocation match)
+            return;
+
+        _statusFilter = "All";
+        _namespaceFilter = null;
+        SearchBox.Clear();
+        UpdateFilterVisuals();
+
+        if (!ReferenceEquals(_currentDocument, match.Document))
+            FilesList.SelectedItem = match.Document;
+        else
+            ApplyViewFilter();
+
+        EntriesGrid.SelectedItem = match.Entry;
+        EntriesGrid.ScrollIntoView(match.Entry);
+        EntriesGrid.Focus();
+
+        StatusText.Text =
+            $"Открыто точное совпадение: {match.Document.FileName} • {match.Entry.Namespace} • {match.Entry.Key}";
+
+        e.Handled = true;
     }
 
     private void ApplyExactMatchesButton_Click(object sender, RoutedEventArgs e)
@@ -734,6 +814,7 @@ public partial class MainWindow : Window
     private void ApplyEditBatch(EditBatch batch, bool useAfter)
     {
         var affectedDocuments = new HashSet<LocalizationDocument>();
+        var affectedSources = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var edit in batch.Edits)
         {
@@ -745,7 +826,13 @@ public partial class MainWindow : Window
             ValidationService.Validate(edit.Entry);
             edit.Document.IsDirty = true;
             affectedDocuments.Add(edit.Document);
+
+            if (!string.IsNullOrEmpty(edit.Entry.Source))
+                affectedSources.Add(edit.Entry.Source);
         }
+
+        foreach (var source in affectedSources)
+            RefreshConflictState(source);
 
         foreach (var document in affectedDocuments)
             document.RefreshComputedProperties();
@@ -854,16 +941,29 @@ public partial class MainWindow : Window
             ErrorBadge.Text = "Ошибки  0";
             ConflictBadge.Text = "Конфликты  0";
             ModifiedBadge.Text = "Изменённые  0";
-            UpdateBottomSummary();
+            FileSummaryText.Text = "Файлы не открыты";
             return;
         }
 
         var total = _currentDocument.Entries.Count;
-        var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
+        var translated = 0;
+        var errors = 0;
+        var conflicts = 0;
+        var modified = 0;
+
+        foreach (var entry in _currentDocument.Entries)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.Translation))
+                translated++;
+            if (entry.HasValidationIssues)
+                errors++;
+            if (HasTranslationConflict(entry))
+                conflicts++;
+            if (entry.IsModified)
+                modified++;
+        }
+
         var untranslated = total - translated;
-        var errors = _currentDocument.Entries.Count(e => e.HasValidationIssues);
-        var conflicts = _currentDocument.Entries.Count(HasTranslationConflict);
-        var modified = _currentDocument.Entries.Count(e => e.IsModified);
 
         TotalBadge.Text = $"Все  {total:N0}";
         TranslatedBadge.Text = $"Переведено  {translated:N0}";
@@ -871,7 +971,7 @@ public partial class MainWindow : Window
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
         ConflictBadge.Text = $"Конфликты  {conflicts:N0}";
         ModifiedBadge.Text = $"Изменённые  {modified:N0}";
-        UpdateBottomSummary();
+        UpdateBottomSummary(total, translated);
     }
 
     private void UpdateBottomSummary()
@@ -884,6 +984,17 @@ public partial class MainWindow : Window
 
         var total = _currentDocument.Entries.Count;
         var translated = _currentDocument.Entries.Count(e => !string.IsNullOrWhiteSpace(e.Translation));
+        UpdateBottomSummary(total, translated);
+    }
+
+    private void UpdateBottomSummary(int total, int translated)
+    {
+        if (_currentDocument is null)
+        {
+            FileSummaryText.Text = "Файлы не открыты";
+            return;
+        }
+
         var untranslated = total - translated;
         var namespaceSuffix = _namespaceFilter is null
             ? string.Empty
