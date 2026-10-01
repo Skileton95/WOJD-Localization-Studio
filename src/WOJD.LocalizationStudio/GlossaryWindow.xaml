@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Глоссарий"
-        Width="1120"
-        Height="720"
-        MinWidth="900"
-        MinHeight="560"
+        Width="1320"
+        Height="780"
+        MinWidth="1040"
+        MinHeight="620"
         WindowStartupLocation="CenterOwner"
         Background="#EEF4FA">
     <Grid Margin="16">
@@ -32,9 +32,20 @@
                            Margin="0,4,0,0"/>
             </StackPanel>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Импорт JSON" Click="ImportButton_Click"/>
-                <Button Content="Экспорт JSON" Click="ExportButton_Click"/>
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button Content="Кандидаты"
+                        Click="CandidatesButton_Click"/>
+                <Button Content="Конфликты"
+                        Margin="8,0,0,0"
+                        Click="ConflictsButton_Click"/>
+                <Button Content="Импорт JSON"
+                        Margin="8,0,0,0"
+                        Click="ImportButton_Click"/>
+                <Button Content="Экспорт JSON"
+                        Margin="8,0,0,0"
+                        Click="ExportButton_Click"/>
                 <Button Content="+ Новый термин"
                         Click="NewButton_Click"
                         Background="#2F7BEA"
@@ -48,7 +59,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="360"/>
+                <ColumnDefinition Width="390"/>
             </Grid.ColumnDefinitions>
 
             <Border Background="#F9FBFD"
@@ -65,7 +76,7 @@
                              Height="38"
                              VerticalContentAlignment="Center"
                              TextChanged="SearchBox_TextChanged"
-                             ToolTip="Поиск по китайскому термину, переводу или заметке"/>
+                             ToolTip="Поиск по термину, переводу, допустимым формам, Namespace или заметке"/>
 
                     <DataGrid x:Name="GlossaryGrid"
                               Grid.Row="1"
@@ -82,16 +93,22 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Китайский термин"
                                                 Binding="{Binding Source}"
-                                                Width="1.2*"/>
+                                                Width="1.0*"/>
                             <DataGridTextColumn Header="Русский перевод"
                                                 Binding="{Binding Translation}"
-                                                Width="1.3*"/>
+                                                Width="1.0*"/>
+                            <DataGridTextColumn Header="Допустимые формы"
+                                                Binding="{Binding AllowedText}"
+                                                Width="1.0*"/>
+                            <DataGridTextColumn Header="Namespace"
+                                                Binding="{Binding ScopeText}"
+                                                Width="1.0*"/>
+                            <DataGridTextColumn Header="Приоритет"
+                                                Binding="{Binding Priority}"
+                                                Width="75"/>
                             <DataGridTextColumn Header="Режим"
                                                 Binding="{Binding LockText}"
-                                                Width="95"/>
-                            <DataGridTextColumn Header="Заметка"
-                                                Binding="{Binding Note}"
-                                                Width="1.0*"/>
+                                                Width="90"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -112,43 +129,91 @@
 
                         <TextBlock Text="Китайский термин"
                                    FontWeight="SemiBold"
-                                   Margin="0,20,0,6"/>
+                                   Margin="0,18,0,6"/>
                         <TextBox x:Name="SourceBox"
-                                 Height="72"
+                                 Height="58"
                                  AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto"/>
+                                 TextWrapping="Wrap"/>
 
-                        <TextBlock Text="Русский перевод"
+                        <TextBlock Text="Основной русский перевод"
                                    FontWeight="SemiBold"
-                                   Margin="0,16,0,6"/>
+                                   Margin="0,14,0,6"/>
                         <TextBox x:Name="TranslationBox"
+                                 Height="58"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"/>
+
+                        <TextBlock Text="Допустимые формы"
+                                   FontWeight="SemiBold"
+                                   Margin="0,14,0,6"/>
+                        <TextBox x:Name="AllowedTranslationsBox"
                                  Height="72"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto"/>
+                                 VerticalScrollBarVisibility="Auto"
+                                 ToolTip="По одной допустимой форме на строку. Основной перевод добавлять не нужно."/>
+                        <TextBlock Text="Например: «духовной силы», «духовную силу». Эти формы не считаются нарушением."
+                                   Foreground="#6B7D8E"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0"/>
 
-                        <CheckBox x:Name="LockedCheckBox"
-                                  Content="Закреплённый перевод"
-                                  IsChecked="True"
-                                  Margin="0,14,0,0"
-                                  ToolTip="Для закреплённого термина редактор предупреждает, если в переводе используется другой вариант"/>
+                        <TextBlock Text="Область Namespace"
+                                   FontWeight="SemiBold"
+                                   Margin="0,14,0,6"/>
+                        <TextBox x:Name="NamespaceScopesBox"
+                                 Height="66"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 ToolTip="Пусто = термин действует везде. Иначе по одному Namespace на строку."/>
+                        <TextBlock Text="Пустое поле = Везде. Можно указать несколько Namespace."
+                                   Foreground="#6B7D8E"
+                                   FontSize="11"
+                                   Margin="0,4,0,0"/>
+
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="105"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox x:Name="LockedCheckBox"
+                                      Content="Закреплённый перевод"
+                                      IsChecked="True"
+                                      VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Приоритет"
+                                           FontWeight="SemiBold"
+                                           FontSize="11"/>
+                                <TextBox x:Name="PriorityBox"
+                                         Text="0"
+                                         Height="30"
+                                         VerticalContentAlignment="Center"
+                                         ToolTip="Больший приоритет выигрывает при пересечении терминов"/>
+                            </StackPanel>
+                        </Grid>
 
                         <TextBlock Text="Заметка"
                                    FontWeight="SemiBold"
-                                   Margin="0,16,0,6"/>
+                                   Margin="0,14,0,6"/>
                         <TextBox x:Name="NoteBox"
-                                 Height="100"
+                                 Height="74"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto"/>
+
+                        <Button x:Name="WhereUsedButton"
+                                Content="Где используется"
+                                Click="WhereUsedButton_Click"
+                                IsEnabled="False"
+                                Margin="0,16,0,0"/>
 
                         <Button Content="Сохранить термин"
                                 Click="SaveButton_Click"
                                 Background="#2F7BEA"
                                 Foreground="White"
                                 BorderBrush="#266ACB"
-                                Margin="0,18,0,0"/>
+                                Margin="0,8,0,0"/>
 
                         <Button x:Name="DeleteButton"
                                 Content="Удалить термин"
@@ -157,7 +222,7 @@
                                 Margin="0,8,0,0"
                                 IsEnabled="False"/>
 
-                        <TextBlock Text="Закреплённый термин используется редактором как обязательная терминология. Режим «Подсказка» показывает совпадение, но не считает другой перевод ошибкой."
+                        <TextBlock Text="При пересечении терминов сначала используется больший приоритет, затем более длинный китайский термин. Закреплённый термин допускает основной перевод и перечисленные формы."
                                    Foreground="#6B7D8E"
                                    FontSize="12"
                                    TextWrapping="Wrap"
