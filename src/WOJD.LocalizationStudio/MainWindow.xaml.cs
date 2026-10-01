@@ -349,6 +349,7 @@ public partial class MainWindow : Window
 
     private void FilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        _namespaceFilter = null;
         _currentDocument = FilesList.SelectedItem as LocalizationDocument;
         _selected = null;
 
