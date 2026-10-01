@@ -426,6 +426,30 @@
                         <TextBlock Text="Проверка строки" FontSize="16" FontWeight="SemiBold"/>
                         <TextBlock x:Name="ValidationStatusText" Text="Выберите строку" Foreground="#68798A" Margin="0,8,0,0" TextWrapping="Wrap"/>
 
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button x:Name="FixValidationButton"
+                                    Grid.Column="0"
+                                    Content="Исправить"
+                                    Click="FixValidationButton_Click"
+                                    IsEnabled="False"
+                                    Margin="0"/>
+
+                            <Button x:Name="AiFixValidationButton"
+                                    Grid.Column="2"
+                                    Content="Умное исправление с ChatGPT"
+                                    ToolTip="Использует OpenAI API"
+                                    Click="AiFixValidationButton_Click"
+                                    IsEnabled="False"
+                                    Margin="0"
+                                    TextBlock.TextWrapping="Wrap"/>
+                        </Grid>
+
                         <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
                         <TextBlock Text="{}{0}, {1}  •  %s, %d  •  
   •  &lt;tag&gt;...&lt;/tag&gt;" Foreground="#667789" TextWrapping="Wrap"/>
