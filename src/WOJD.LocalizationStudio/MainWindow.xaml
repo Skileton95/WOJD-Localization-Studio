@@ -206,11 +206,6 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
-                        <Separator Background="#31526A"/>
-                        <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.12" Foreground="#88A5B9" FontSize="11"/>
-                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -448,12 +443,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="FileSummaryText" Text="Файлы не открыты" Foreground="#334B60"
-                               FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="StatusText" Text="" Foreground="#7B8B9A"
-                               VerticalAlignment="Center" Margin="14,0,0,0" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
+                <TextBlock x:Name="StatusText" Text="" Foreground="#7B8B9A"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
 
                 <Border x:Name="UpdatePanel" Grid.Column="1" Background="#EEF4FA" BorderBrush="#D3DEE8"
                         BorderThickness="1" CornerRadius="7" Padding="9,4" Margin="8,0">
