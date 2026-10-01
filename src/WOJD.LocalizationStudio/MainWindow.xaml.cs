@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly UpdateSessionService _updateSessionService = new();
     private readonly OpenAiCorrectionService _openAiCorrectionService = new();
     private readonly TranslationHistoryService _translationHistoryService = new();
+    private readonly GlossaryService _glossaryService = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly ObservableCollection<LocalizationDocument> _documents = new();
     private ICollectionView? _view;
@@ -57,6 +58,15 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateStatusText.Text = $"v{_updateService.CurrentVersion} • проверка…";
+
+        try
+        {
+            await _glossaryService.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Не удалось загрузить глоссарий: {ex.Message}";
+        }
 
         await RestoreUpdateSessionAsync();
 
@@ -685,6 +695,7 @@ public partial class MainWindow : Window
         LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
         TranslationVariantsButton.IsEnabled = !_isAiFixing && !string.IsNullOrWhiteSpace(_selected.Source);
         TranslationHistoryButton.IsEnabled = true;
+        UpdateGlossaryPanel();
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateRowNavigationButtons();
@@ -703,6 +714,10 @@ public partial class MainWindow : Window
         LengthLabel.Text = "0 символов";
         TranslationVariantsButton.IsEnabled = false;
         TranslationHistoryButton.IsEnabled = false;
+        GlossaryMatchCountText.Text = "0";
+        GlossaryWarningText.Text = "Выберите строку";
+        GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+        GlossaryMatchesList.ItemsSource = null;
         ExactMatchesCountText.Text = "0";
         ExactMatchesInfoText.Text = "Выберите строку";
         ExactMatchesConflictCountText.Text = "Конфликтующих строк: 0";
@@ -743,11 +758,97 @@ public partial class MainWindow : Window
         _currentDocument.RefreshComputedProperties();
 
         LengthLabel.Text = $"{after.Length:N0} символов";
+        UpdateGlossaryPanel();
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
         UpdateCounters();
         RefreshFilteredViewPreservingSelection();
         StatusText.Text = $"Есть несохранённые изменения: {_currentDocument.FileName}";
+    }
+
+    private void GlossaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new GlossaryWindow(_glossaryService)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+        UpdateGlossaryPanel();
+        StatusText.Text = $"Глоссарий: {_glossaryService.Entries.Count:N0} терминов";
+    }
+
+    private void UpdateGlossaryPanel()
+    {
+        if (_selected is null)
+        {
+            GlossaryMatchCountText.Text = "0";
+            GlossaryWarningText.Text = "Выберите строку";
+            GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            GlossaryMatchesList.ItemsSource = null;
+            return;
+        }
+
+        var matches = _glossaryService.FindMatches(_selected.Source);
+        GlossaryMatchCountText.Text = matches.Count.ToString("N0");
+        GlossaryMatchesList.ItemsSource = matches;
+
+        if (matches.Count == 0)
+        {
+            GlossaryWarningText.Text = "Совпадений с глоссарием нет";
+            GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_selected.Translation))
+        {
+            GlossaryWarningText.Text =
+                $"Найдено терминов: {matches.Count:N0}. Они будут проверены после ввода перевода.";
+            GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x52, 0x65, 0x79));
+            return;
+        }
+
+        var mismatches = matches
+            .Where(term =>
+                term.IsLocked &&
+                !string.IsNullOrWhiteSpace(term.Translation) &&
+                !_selected.Translation.Contains(term.Translation, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (mismatches.Count == 0)
+        {
+            GlossaryWarningText.Text =
+                $"✓ Найдено терминов: {matches.Count:N0}. Закреплённая терминология соблюдена.";
+            GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x26, 0x75, 0x40));
+            return;
+        }
+
+        var preview = string.Join(
+            "; ",
+            mismatches
+                .Take(4)
+                .Select(term => $"{term.Source} → {term.Translation}"));
+
+        if (mismatches.Count > 4)
+            preview += $" и ещё {mismatches.Count - 4:N0}";
+
+        GlossaryWarningText.Text =
+            $"⚠ Не соблюдены закреплённые термины: {preview}";
+        GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0xB3, 0x3A, 0x2B));
+    }
+
+    private string BuildGlossaryContext(LocalizationEntry entry)
+    {
+        var matches = _glossaryService.FindMatches(entry.Source);
+        if (matches.Count == 0)
+            return string.Empty;
+
+        return string.Join(
+            Environment.NewLine,
+            matches.Select(term =>
+                $"{(term.IsLocked ? "[ОБЯЗАТЕЛЬНО]" : "[ПОДСКАЗКА]")} " +
+                $"{term.Source} => {term.Translation}" +
+                (string.IsNullOrWhiteSpace(term.Note) ? string.Empty : $" ({term.Note})")));
     }
 
     private void UpdateExactMatchesPanel()
@@ -970,6 +1071,7 @@ public partial class MainWindow : Window
             LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
             _suppressEditor = false;
 
+            UpdateGlossaryPanel();
             UpdateExactMatchesPanel();
             UpdateValidationPanel();
         }
@@ -1251,7 +1353,9 @@ public partial class MainWindow : Window
 
                 try
                 {
-                    var corrected = await _openAiCorrectionService.CorrectAsync(entry);
+                    var corrected = await _openAiCorrectionService.CorrectAsync(
+                        entry,
+                        BuildGlossaryContext(entry));
 
                     if (string.Equals(corrected, entry.Translation, StringComparison.Ordinal))
                     {
@@ -1374,7 +1478,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var corrected = await _openAiCorrectionService.CorrectAsync(entry);
+            var corrected = await _openAiCorrectionService.CorrectAsync(
+                        entry,
+                        BuildGlossaryContext(entry));
 
             if (!ReferenceEquals(_selected, entry))
             {
@@ -1449,7 +1555,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var explanation = await _openAiCorrectionService.ExplainAsync(entry);
+            var explanation = await _openAiCorrectionService.ExplainAsync(
+                entry,
+                BuildGlossaryContext(entry));
 
             if (!ReferenceEquals(_selected, entry))
                 return;
@@ -1497,7 +1605,10 @@ public partial class MainWindow : Window
 
         try
         {
-            var variants = await _openAiCorrectionService.SuggestVariantsAsync(entry, 3);
+            var variants = await _openAiCorrectionService.SuggestVariantsAsync(
+                entry,
+                BuildGlossaryContext(entry),
+                3);
 
             if (!ReferenceEquals(_selected, entry))
                 return;
