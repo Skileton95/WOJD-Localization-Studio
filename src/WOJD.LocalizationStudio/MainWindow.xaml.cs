@@ -725,6 +725,7 @@ public partial class MainWindow : Window
         TranslationBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xB9, 0xC7, 0xD3));
         TranslationBox.BorderThickness = new Thickness(1);
         TranslationBox.ToolTip = null;
+        TechnicalProtectionText.Visibility = Visibility.Collapsed;
         ContextInfoText.Text = "Выберите строку";
         ContextList.ItemsSource = null;
         GlossaryMatchCountText.Text = "0";
@@ -788,6 +789,7 @@ public partial class MainWindow : Window
             TranslationBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xB9, 0xC7, 0xD3));
             TranslationBox.BorderThickness = new Thickness(1);
             TranslationBox.ToolTip = null;
+            TechnicalProtectionText.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -795,6 +797,7 @@ public partial class MainWindow : Window
         TranslationBox.BorderThickness = new Thickness(2);
         TranslationBox.ToolTip =
             "Нарушены технические элементы оригинала. Проверьте плейсхолдеры, теги и переносы строк.";
+        TechnicalProtectionText.Visibility = Visibility.Visible;
     }
 
     private void UpdateContextPanel()
