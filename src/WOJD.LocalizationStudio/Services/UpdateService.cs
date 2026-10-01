@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 
 namespace WOJD.LocalizationStudio.Services;
@@ -36,50 +37,166 @@ public sealed class UpdateService
         return new UpdateInfo(manifest.Version, manifest.Notes ?? string.Empty);
     }
 
-    public bool TryLaunchUpdater(out string? error)
+    public async Task PrepareUpdateAsync(
+        IProgress<UpdateProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
-        error = null;
-        var updater = FindUpdater();
+        var root = FindRepositoryRoot()
+            ?? throw new InvalidOperationException(
+                "Не найдена папка Git-репозитория. Запустите программу из клонированной папки WOJD-Localization-Studio.");
 
-        if (updater is null)
-        {
-            error = "Не найден update.bat. Запустите программу из клонированной папки репозитория.";
-            return false;
-        }
+        var solution = Path.Combine(root, "WOJD.LocalizationStudio.sln");
+        var project = Path.Combine(root, "src", "WOJD.LocalizationStudio", "WOJD.LocalizationStudio.csproj");
+        var targetDirectory = Path.Combine(root, "src", "WOJD.LocalizationStudio", "bin", "Release", "net8.0-windows");
+        var stageDirectory = Path.Combine(root, ".update-stage");
 
-        try
-        {
-            var commandProcessor = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = commandProcessor,
-                Arguments = $"/d /c \"\"{updater}\" --from-app\"",
-                WorkingDirectory = Path.GetDirectoryName(updater)!,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-            return true;
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            return false;
-        }
+        progress?.Report(new UpdateProgress(5, "Подготовка обновления"));
+
+        var status = await RunProcessAsync(
+            "git",
+            "status --porcelain",
+            root,
+            captureOutput: true,
+            cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(status.Output))
+            throw new InvalidOperationException(
+                "В исходниках есть локальные изменения. Сначала сохраните их в Git или отмените, затем повторите обновление.");
+
+        progress?.Report(new UpdateProgress(15, "Загрузка обновления"));
+        await RunProcessAsync(
+            "git",
+            "pull --ff-only origin main",
+            root,
+            captureOutput: false,
+            cancellationToken);
+
+        progress?.Report(new UpdateProgress(35, "Восстановление зависимостей"));
+        await RunProcessAsync(
+            "dotnet",
+            $"restore \"{solution}\"",
+            root,
+            captureOutput: false,
+            cancellationToken);
+
+        if (Directory.Exists(stageDirectory))
+            Directory.Delete(stageDirectory, true);
+
+        Directory.CreateDirectory(stageDirectory);
+
+        progress?.Report(new UpdateProgress(55, "Сборка новой версии"));
+        await RunProcessAsync(
+            "dotnet",
+            $"build \"{project}\" -c Release --no-restore -o \"{stageDirectory}\"",
+            root,
+            captureOutput: false,
+            cancellationToken);
+
+        var stagedExe = Path.Combine(stageDirectory, "WOJD.LocalizationStudio.exe");
+        if (!File.Exists(stagedExe))
+            throw new InvalidOperationException("Сборка завершилась, но новый EXE не найден.");
+
+        progress?.Report(new UpdateProgress(88, "Подготовка установки"));
+        LaunchApplyHelper(root, stageDirectory, targetDirectory);
+
+        progress?.Report(new UpdateProgress(100, "Перезапуск"));
     }
 
-    private static string? FindUpdater()
+    private static void LaunchApplyHelper(string root, string stageDirectory, string targetDirectory)
+    {
+        var helperPath = Path.Combine(root, ".apply-update.cmd");
+        var appPath = Path.Combine(targetDirectory, "WOJD.LocalizationStudio.exe");
+
+        var script = $"""
+@echo off
+setlocal
+set "STAGE={stageDirectory}"
+set "TARGET={targetDirectory}"
+set "APP={appPath}"
+
+timeout /t 1 /nobreak >nul
+
+:wait_for_app
+tasklist /FI "IMAGENAME eq WOJD.LocalizationStudio.exe" 2>nul | find /I "WOJD.LocalizationStudio.exe" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_for_app
+)
+
+if not exist "%TARGET%" mkdir "%TARGET%"
+xcopy "%STAGE%\*" "%TARGET%\" /E /I /Y /Q >nul
+if errorlevel 2 exit /b 1
+
+rmdir /S /Q "%STAGE%" >nul 2>&1
+start "" "%APP%"
+del "%~f0" >nul 2>&1
+""";
+
+        File.WriteAllText(helperPath, script, new UTF8Encoding(false));
+
+        var commandProcessor = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = commandProcessor,
+            Arguments = $"/d /c \"\"{helperPath}\"\"",
+            WorkingDirectory = root,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+    }
+
+    private static string? FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-        for (var i = 0; i < 8 && directory is not null; i++, directory = directory.Parent)
+        for (var i = 0; i < 10 && directory is not null; i++, directory = directory.Parent)
         {
-            var candidate = Path.Combine(directory.FullName, "update.bat");
-            if (File.Exists(candidate))
-                return candidate;
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git")))
+                return directory.FullName;
         }
 
         return null;
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(
+        string fileName,
+        string arguments,
+        string workingDirectory,
+        bool captureOutput,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        if (!process.Start())
+            throw new InvalidOperationException($"Не удалось запустить {fileName}.");
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+        var output = await outputTask;
+        var error = await errorTask;
+
+        if (process.ExitCode != 0)
+        {
+            var details = string.IsNullOrWhiteSpace(error) ? output : error;
+            throw new InvalidOperationException(
+                $"{fileName} завершился с кодом {process.ExitCode}.\n{details.Trim()}");
+        }
+
+        return new ProcessResult(captureOutput ? output : string.Empty);
     }
 
     private static HttpClient CreateHttpClient()
@@ -97,6 +214,9 @@ public sealed class UpdateService
         public string Version { get; set; } = string.Empty;
         public string? Notes { get; set; }
     }
+
+    private sealed record ProcessResult(string Output);
 }
 
 public sealed record UpdateInfo(string Version, string Notes);
+public sealed record UpdateProgress(int Percent, string Message);
