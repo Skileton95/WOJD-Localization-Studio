@@ -209,7 +209,7 @@
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Separator Background="#31526A"/>
                         <TextBlock Text="Поддерживаются ru.ndjson и ru.fmtstring.ndjson" Foreground="#9CB6C8" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
-                        <TextBlock Text="v0.2.11" Foreground="#88A5B9" FontSize="11"/>
+                        <TextBlock Text="v0.2.12" Foreground="#88A5B9" FontSize="11"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -394,6 +394,28 @@
                                         Margin="0"
                                         Click="ApplyExactMatchesButton_Click"
                                         IsEnabled="False"/>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button x:Name="PreviousRowButton"
+                                            Grid.Column="0"
+                                            Content="← Предыдущая"
+                                            Click="PreviousRowButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+
+                                    <Button x:Name="NextRowButton"
+                                            Grid.Column="2"
+                                            Content="Следующая →"
+                                            Click="NextRowButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
