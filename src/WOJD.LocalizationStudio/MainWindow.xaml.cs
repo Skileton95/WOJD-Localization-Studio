@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private ValidationIssueKind _validationTypeFilter = ValidationIssueKind.None;
     private readonly Dictionary<string, List<EntryLocation>> _sourceIndex = new(StringComparer.Ordinal);
     private readonly HashSet<string> _conflictingSources = new(StringComparer.Ordinal);
+    private readonly HashSet<LocalizationEntry> _glossaryMismatchEntries = new();
     private readonly Stack<EditBatch> _undoStack = new();
     private readonly Stack<EditBatch> _redoStack = new();
 
@@ -479,6 +480,7 @@ public partial class MainWindow : Window
         }
 
         EntriesGrid.ItemsSource = _currentDocument.Entries;
+        RebuildGlossaryMismatchCache();
         SetupView();
         UpdateCounters();
         UpdateButtons();
@@ -557,6 +559,7 @@ public partial class MainWindow : Window
             "Untranslated" => string.IsNullOrWhiteSpace(entry.Translation),
             "Errors" => entry.HasValidationIssues,
             "Conflicts" => HasTranslationConflict(entry),
+            "Glossary" => HasGlossaryMismatch(entry),
             "Modified" => entry.IsModified,
             _ => true
         };
@@ -640,6 +643,7 @@ public partial class MainWindow : Window
             UntranslatedFilterButton,
             ErrorFilterButton,
             ConflictFilterButton,
+            GlossaryFilterButton,
             ModifiedFilterButton
         };
 
@@ -695,6 +699,9 @@ public partial class MainWindow : Window
         LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
         TranslationVariantsButton.IsEnabled = !_isAiFixing && !string.IsNullOrWhiteSpace(_selected.Source);
         TranslationHistoryButton.IsEnabled = true;
+        SimilarityButton.IsEnabled = !string.IsNullOrWhiteSpace(_selected.Source);
+        UpdateTranslationProtection(_selected);
+        UpdateContextPanel();
         UpdateGlossaryPanel();
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
@@ -714,6 +721,12 @@ public partial class MainWindow : Window
         LengthLabel.Text = "0 символов";
         TranslationVariantsButton.IsEnabled = false;
         TranslationHistoryButton.IsEnabled = false;
+        SimilarityButton.IsEnabled = false;
+        TranslationBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xB9, 0xC7, 0xD3));
+        TranslationBox.BorderThickness = new Thickness(1);
+        TranslationBox.ToolTip = null;
+        ContextInfoText.Text = "Выберите строку";
+        ContextList.ItemsSource = null;
         GlossaryMatchCountText.Text = "0";
         GlossaryWarningText.Text = "Выберите строку";
         GlossaryWarningText.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x7D, 0x8E));
@@ -753,11 +766,13 @@ public partial class MainWindow : Window
 
         _selected.Translation = after;
         ValidationService.Validate(_selected);
+        RefreshGlossaryMismatchState(_selected);
         RefreshConflictState(_selected.Source);
         _currentDocument.IsDirty = true;
         _currentDocument.RefreshComputedProperties();
 
         LengthLabel.Text = $"{after.Length:N0} символов";
+        UpdateTranslationProtection(_selected);
         UpdateGlossaryPanel();
         UpdateExactMatchesPanel();
         UpdateValidationPanel();
@@ -774,7 +789,10 @@ public partial class MainWindow : Window
         };
 
         window.ShowDialog();
+        RebuildGlossaryMismatchCache();
         UpdateGlossaryPanel();
+        UpdateCounters();
+        RefreshFilteredViewPreservingSelection();
         StatusText.Text = $"Глоссарий: {_glossaryService.Entries.Count:N0} терминов";
     }
 
@@ -1051,6 +1069,8 @@ public partial class MainWindow : Window
                 edit.Entry.Translation = value;
 
             ValidationService.Validate(edit.Entry);
+            if (ReferenceEquals(edit.Document, _currentDocument))
+                RefreshGlossaryMismatchState(edit.Entry);
             edit.Document.IsDirty = true;
             affectedDocuments.Add(edit.Document);
 
@@ -1071,6 +1091,8 @@ public partial class MainWindow : Window
             LengthLabel.Text = $"{_selected.Translation.Length:N0} символов";
             _suppressEditor = false;
 
+            UpdateTranslationProtection(_selected);
+            UpdateContextPanel();
             UpdateGlossaryPanel();
             UpdateExactMatchesPanel();
             UpdateValidationPanel();
@@ -1720,7 +1742,9 @@ public partial class MainWindow : Window
             UntranslatedBadge.Text = "Не переведено  0";
             ErrorBadge.Text = "Ошибки  0";
             ConflictBadge.Text = "Конфликты  0";
+            GlossaryBadge.Text = "Глоссарий  0";
             ModifiedBadge.Text = "Изменённые  0";
+            QualityStatsText.Text = "Файл не открыт";
             MassLocalFixButton.IsEnabled = false;
             MassAiFixButton.IsEnabled = false;
             MassFixStatusText.Text = "Исправляет все ошибки активного файла";
@@ -1751,8 +1775,16 @@ public partial class MainWindow : Window
         TranslatedBadge.Text = $"Переведено  {translated:N0}";
         UntranslatedBadge.Text = $"Не переведено  {untranslated:N0}";
         ErrorBadge.Text = $"Ошибки  {errors:N0}";
+        var glossaryMismatches = _glossaryMismatchEntries.Count;
         ConflictBadge.Text = $"Конфликты  {conflicts:N0}";
+        GlossaryBadge.Text = $"Глоссарий  {glossaryMismatches:N0}";
         ModifiedBadge.Text = $"Изменённые  {modified:N0}";
+
+        var translatedPercent = total == 0 ? 0 : translated * 100.0 / total;
+        QualityStatsText.Text =
+            $"Переведено: {translated:N0}/{total:N0} ({translatedPercent:0.0}%)  •  " +
+            $"Пустых: {untranslated:N0}  •  Ошибок: {errors:N0}  •  " +
+            $"Глоссарий: {glossaryMismatches:N0}  •  Конфликты: {conflicts:N0}";
 
         var canMassFix = errors > 0 && !_isAiFixing && !_isMassFixing;
         MassLocalFixButton.IsEnabled = canMassFix;
@@ -1921,6 +1953,13 @@ public partial class MainWindow : Window
         SaveCurrentButton.IsEnabled = hasCurrent;
         SaveAllButton.IsEnabled = hasDocuments;
         ValidationButton.IsEnabled = hasCurrent;
+        GlossaryCheckButton.IsEnabled = hasCurrent && _glossaryService.Entries.Count > 0;
+        GlossaryConsistencyButton.IsEnabled = hasCurrent && _glossaryService.Entries.Any(entry => entry.IsLocked);
+        GlossaryMassAiFixButton.IsEnabled =
+            hasCurrent &&
+            _glossaryMismatchEntries.Count > 0 &&
+            !_isAiFixing &&
+            !_isMassFixing;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
