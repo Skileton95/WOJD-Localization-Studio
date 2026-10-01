@@ -326,6 +326,73 @@ public partial class MainWindow : Window
         return translations > 1;
     }
 
+    private async void CloseFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+
+        if (_isUpdating ||
+            sender is not Button button ||
+            button.DataContext is not LocalizationDocument document)
+            return;
+
+        if (document.IsDirty)
+        {
+            var result = MessageBox.Show(
+                this,
+                $"В файле «{document.FileName}» есть несохранённые изменения.\n\nСохранить их перед закрытием?",
+                "Закрыть файл",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Cancel)
+                return;
+
+            if (result == MessageBoxResult.Yes &&
+                !await SaveDocumentAsync(document))
+                return;
+        }
+
+        var index = _documents.IndexOf(document);
+        var wasCurrent = ReferenceEquals(document, _currentDocument);
+
+        _documents.Remove(document);
+
+        // История может содержать массовые изменения сразу в нескольких файлах.
+        // После закрытия файла сбрасываем её, чтобы Undo/Redo не меняли уже закрытый документ.
+        _undoStack.Clear();
+        _redoStack.Clear();
+
+        RebuildSourceIndex();
+
+        if (_documents.Count == 0)
+        {
+            _currentDocument = null;
+            _selected = null;
+            _namespaceFilter = null;
+            EntriesGrid.ItemsSource = null;
+            _view = null;
+            ClearEditor();
+            UpdateCounters();
+            UpdateButtons();
+            StatusText.Text = $"Закрыт файл: {document.FileName}";
+            return;
+        }
+
+        if (wasCurrent)
+        {
+            FilesList.SelectedIndex = Math.Min(Math.Max(index, 0), _documents.Count - 1);
+        }
+        else
+        {
+            _view?.Refresh();
+            UpdateExactMatchesPanel();
+            UpdateCounters();
+            UpdateButtons();
+        }
+
+        StatusText.Text = $"Закрыт файл: {document.FileName}";
+    }
+
     private async void OpenFile_Click(object sender, RoutedEventArgs e) => await OpenFilesAsync();
 
     private async Task OpenFilesAsync()
