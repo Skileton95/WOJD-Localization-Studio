@@ -335,7 +335,15 @@
                                            Text="Выберите строку"
                                            Foreground="#6B7D8E"
                                            FontSize="12"
-                                           Margin="0,6,0,9"
+                                           Margin="0,6,0,4"
+                                           TextWrapping="Wrap"/>
+
+                                <TextBlock x:Name="ExactMatchesConflictCountText"
+                                           Text="Конфликтующих строк: 0"
+                                           Foreground="#6B7D8E"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,9"
                                            TextWrapping="Wrap"/>
 
                                 <ScrollViewer MaxHeight="190"
