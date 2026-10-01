@@ -2504,6 +2504,10 @@ public partial class MainWindow : Window
             QualityStatsText.Text = "Файл не открыт";
             MassLocalFixButton.IsEnabled = false;
             MassAiFixButton.IsEnabled = false;
+            GlossaryCheckButton.IsEnabled = false;
+            GlossaryConsistencyButton.IsEnabled = false;
+            GlossaryMassLocalFixButton.IsEnabled = false;
+            GlossaryMassAiFixButton.IsEnabled = false;
             MassFixStatusText.Text = "Исправляет все ошибки активного файла";
             return;
         }
