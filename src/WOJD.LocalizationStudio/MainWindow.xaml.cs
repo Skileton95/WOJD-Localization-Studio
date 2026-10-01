@@ -28,6 +28,10 @@ public partial class MainWindow : Window
     private bool _allowCloseWithoutPrompt;
     private UpdateInfo? _availableUpdate;
     private string _statusFilter = "All";
+    private string? _namespaceFilter;
+    private readonly Dictionary<string, List<EntryLocation>> _sourceIndex = new(StringComparer.Ordinal);
+    private readonly Stack<EditBatch> _undoStack = new();
+    private readonly Stack<EditBatch> _redoStack = new();
 
     public MainWindow()
     {
