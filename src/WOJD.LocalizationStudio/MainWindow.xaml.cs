@@ -1679,38 +1679,51 @@ public partial class MainWindow : Window
 
         var translation = _selected.Translation;
         var matches = GetExactSourceMatches(_selected);
-        var edits = new List<TranslationEdit>();
 
-        foreach (var item in matches)
+        var proposals = matches
+            .Where(item =>
+                !string.Equals(
+                    item.Entry.Translation,
+                    translation,
+                    StringComparison.Ordinal))
+            .Select(item => new ProposedTranslationChange
+            {
+                Document = item.Document,
+                Entry = item.Entry,
+                Before = item.Entry.Translation,
+                After = translation,
+                Reason = "100% идентичный китайский оригинал"
+            })
+            .ToList();
+
+        if (proposals.Count == 0)
         {
-            if (string.Equals(item.Entry.Translation, translation, StringComparison.Ordinal))
-                continue;
-
-            edits.Add(new TranslationEdit(
-                item.Document,
-                item.Entry,
-                item.Entry.Translation,
-                translation));
-        }
-
-        if (edits.Count == 0)
-        {
-            StatusText.Text = "Все точные совпадения уже имеют этот перевод";
+            StatusText.Text =
+                "Все точные совпадения уже имеют этот перевод";
             UpdateExactMatchesPanel();
             return;
         }
 
-        var batch = new EditBatch(edits, "Применение к точным совпадениям");
-        RecordEditBatch(batch);
-        ApplyEditBatch(batch, useAfter: true);
+        var applied = ApplyProposedChangesWithPreview(
+            "Применить к точным совпадениям",
+            proposals,
+            "Применение к точным совпадениям");
 
-        var affectedFiles = edits
-            .Select(edit => edit.Document.FilePath)
+        if (applied == 0)
+        {
+            StatusText.Text =
+                "Применение к точным совпадениям отменено";
+            return;
+        }
+
+        var affectedFiles = proposals
+            .Where(change => change.IsSelected)
+            .Select(change => change.Document.FilePath)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
 
         StatusText.Text =
-            $"Перевод применён к {edits.Count:N0} строкам с 100% совпадением в {affectedFiles:N0} файлах";
+            $"Перевод применён к {applied:N0} строкам с 100% совпадением в {affectedFiles:N0} файлах";
     }
 
     private int ApplyProposedChangesWithPreview(
