@@ -248,7 +248,23 @@
                             </Style>
                         </DataGrid.RowStyle>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="1.0*"/>
+                            <DataGridTemplateColumn Header="Namespace" Width="1.0*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding Namespace}"
+                                                Tag="{Binding}"
+                                                Click="NamespaceCell_Click"
+                                                ToolTip="Показать все строки этого Namespace"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="4,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Center"
+                                                Foreground="#245F9E"
+                                                Cursor="Hand"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="0.8*"/>
                             <DataGridTextColumn Header="Китайский оригинал" Binding="{Binding Source}" Width="1.25*"/>
                             <DataGridTextColumn Header="Русский перевод" Binding="{Binding Translation}" Width="1.55*"/>
