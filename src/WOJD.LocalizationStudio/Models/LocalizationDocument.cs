@@ -9,6 +9,16 @@ public sealed class LocalizationDocument : INotifyPropertyChanged
 {
     private bool _isDirty;
 
+    public LocalizationDocument()
+    {
+    }
+
+    public LocalizationDocument(string filePath, IEnumerable<LocalizationEntry> entries)
+    {
+        FilePath = filePath;
+        Entries = new ObservableCollection<LocalizationEntry>(entries);
+    }
+
     public string FilePath { get; init; } = string.Empty;
     public string FileName => Path.GetFileName(FilePath);
     public ObservableCollection<LocalizationEntry> Entries { get; } = new();
