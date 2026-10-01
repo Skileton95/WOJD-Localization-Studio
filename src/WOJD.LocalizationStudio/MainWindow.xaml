@@ -495,6 +495,49 @@
                                 IsEnabled="False"
                                 Margin="0,8,0,0"/>
 
+                        <Border Background="#F2F6FA"
+                                BorderBrush="#D9E3EC"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="10"
+                                Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Массовое исправление"
+                                           FontWeight="SemiBold"
+                                           Foreground="#25384A"/>
+
+                                <TextBlock x:Name="MassFixStatusText"
+                                           Text="Исправляет все ошибки активного файла"
+                                           Foreground="#6B7D8E"
+                                           FontSize="12"
+                                           Margin="0,4,0,8"
+                                           TextWrapping="Wrap"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button x:Name="MassLocalFixButton"
+                                            Grid.Column="0"
+                                            Content="Исправить все локально"
+                                            Click="MassLocalFixButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+
+                                    <Button x:Name="MassAiFixButton"
+                                            Grid.Column="2"
+                                            Content="Исправить все с ChatGPT"
+                                            ToolTip="Использует OpenAI API для каждой проблемной переведённой строки"
+                                            Click="MassAiFixButton_Click"
+                                            IsEnabled="False"
+                                            Margin="0"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
                         <TextBlock Text="Плейсхолдеры и теги • китайский текст • скобки • пробелы • пунктуация • копия оригинала"
                                    Foreground="#667789"
