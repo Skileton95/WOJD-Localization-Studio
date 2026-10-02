@@ -1,222 +1,179 @@
 using System.Diagnostics;
-using System.IO;
 using System.Net.Http;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace WOJD.LocalizationStudio.Services;
 
-public sealed class UpdateService
+public static class UpdateService
 {
-    private const string ManifestUrl =
-        "https://raw.githubusercontent.com/Skileton95/WOJD-Localization-Studio/main/update.json";
+    private const string LatestReleaseUrl = "https://api.github.com/repos/Skileton95/WOJD-Localization-Studio/releases/latest";
+    private const string PackageAssetName = "WOJD-Localization-Studio-win-x64.zip";
+    private static readonly HttpClient Http = CreateHttpClient();
+    private static readonly SemaphoreSlim CheckLock = new(1, 1);
+    private static DispatcherTimer? _timer;
+    private static string? _ignoredVersion;
 
-    private static readonly HttpClient HttpClient = CreateHttpClient();
-
-    public string CurrentVersion =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
-
-    public async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken = default)
+    public static async Task StartAsync(Window owner)
     {
-        var json = await HttpClient.GetStringAsync(ManifestUrl, cancellationToken);
-        var manifest = JsonSerializer.Deserialize<UpdateManifest>(
-            json,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        UpdateScheduler.TryRegister();
+        await CheckAndPromptAsync(owner, showErrors: false);
 
-        if (manifest is null || string.IsNullOrWhiteSpace(manifest.Version))
-            return null;
-
-        if (!Version.TryParse(CurrentVersion, out var currentVersion) ||
-            !Version.TryParse(manifest.Version, out var remoteVersion))
-            return null;
-
-        if (remoteVersion <= currentVersion)
-            return null;
-
-        return new UpdateInfo(manifest.Version, manifest.Notes ?? string.Empty);
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(15) };
+        _timer.Tick += async (_, _) => await CheckAndPromptAsync(owner, showErrors: false);
+        _timer.Start();
     }
 
-    public async Task PrepareUpdateAsync(
-        IProgress<UpdateProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+    public static async Task CheckAndPromptAsync(Window owner, bool showErrors)
     {
-        var root = FindRepositoryRoot()
-            ?? throw new InvalidOperationException(
-                "Не найдена папка Git-репозитория. Запустите программу из клонированной папки WOJD-Localization-Studio.");
-
-        var solution = Path.Combine(root, "WOJD.LocalizationStudio.sln");
-        var project = Path.Combine(root, "src", "WOJD.LocalizationStudio", "WOJD.LocalizationStudio.csproj");
-        var targetDirectory = Path.Combine(root, "src", "WOJD.LocalizationStudio", "bin", "Release", "net8.0-windows");
-        var stageDirectory = Path.Combine(root, ".update-stage");
-
-        progress?.Report(new UpdateProgress(5, "Подготовка обновления"));
-
-        var status = await RunProcessAsync(
-            "git",
-            "status --porcelain",
-            root,
-            captureOutput: true,
-            cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(status.Output))
-            throw new InvalidOperationException(
-                "В исходниках есть локальные изменения. Сначала сохраните их в Git или отмените, затем повторите обновление.");
-
-        progress?.Report(new UpdateProgress(15, "Загрузка обновления"));
-        await RunProcessAsync(
-            "git",
-            "pull --ff-only origin main",
-            root,
-            captureOutput: false,
-            cancellationToken);
-
-        progress?.Report(new UpdateProgress(35, "Восстановление зависимостей"));
-        await RunProcessAsync(
-            "dotnet",
-            $"restore \"{solution}\"",
-            root,
-            captureOutput: false,
-            cancellationToken);
-
-        if (Directory.Exists(stageDirectory))
-            Directory.Delete(stageDirectory, true);
-
-        Directory.CreateDirectory(stageDirectory);
-
-        progress?.Report(new UpdateProgress(55, "Сборка новой версии"));
-        await RunProcessAsync(
-            "dotnet",
-            $"build \"{project}\" -c Release --no-restore -o \"{stageDirectory}\"",
-            root,
-            captureOutput: false,
-            cancellationToken);
-
-        var stagedExe = Path.Combine(stageDirectory, "WOJD.LocalizationStudio.exe");
-        if (!File.Exists(stagedExe))
-            throw new InvalidOperationException("Сборка завершилась, но новый EXE не найден.");
-
-        progress?.Report(new UpdateProgress(88, "Подготовка установки"));
-        LaunchApplyHelper(root, stageDirectory, targetDirectory);
-
-        progress?.Report(new UpdateProgress(100, "Перезапуск"));
-    }
-
-    private static void LaunchApplyHelper(string root, string stageDirectory, string targetDirectory)
-    {
-        var helperPath = Path.Combine(root, ".apply-update.cmd");
-        var appPath = Path.Combine(targetDirectory, "WOJD.LocalizationStudio.exe");
-
-        var script = $"""
-@echo off
-setlocal
-set "STAGE={stageDirectory}"
-set "TARGET={targetDirectory}"
-set "APP={appPath}"
-
-timeout /t 1 /nobreak >nul
-
-:wait_for_app
-tasklist /FI "IMAGENAME eq WOJD.LocalizationStudio.exe" 2>nul | find /I "WOJD.LocalizationStudio.exe" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto wait_for_app
-)
-
-if not exist "%TARGET%" mkdir "%TARGET%"
-xcopy "%STAGE%\*" "%TARGET%\" /E /I /Y /Q >nul
-if errorlevel 2 exit /b 1
-
-rmdir /S /Q "%STAGE%" >nul 2>&1
-start "" "%APP%"
-del "%~f0" >nul 2>&1
-""";
-
-        File.WriteAllText(helperPath, script, new UTF8Encoding(false));
-
-        var commandProcessor = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
-        Process.Start(new ProcessStartInfo
+        if (!await CheckLock.WaitAsync(0)) return;
+        try
         {
-            FileName = commandProcessor,
-            Arguments = $"/d /c \"\"{helperPath}\"\"",
-            WorkingDirectory = root,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        });
+            var release = await GetLatestReleaseAsync();
+            if (release is null) return;
+
+            var current = GetCurrentVersion();
+            if (release.Version <= current || release.VersionText == _ignoredVersion) return;
+
+            var result = MessageBox.Show(
+                owner,
+                $"Доступна новая версия WOJD Localization Studio {release.VersionText}.\n\nУстановить обновление сейчас? Программа будет перезапущена автоматически.",
+                "Доступно обновление",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                _ignoredVersion = release.VersionText;
+                return;
+            }
+
+            if (!UpdaterLauncher.TryLaunch(release.DownloadUrl, release.VersionText, restart: true))
+            {
+                MessageBox.Show(owner, "Не найден компонент обновления. Установите текущую опубликованную сборку из GitHub Releases один раз, после чего обновления будут работать автоматически.", "Обновление", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            if (showErrors)
+                MessageBox.Show(owner, ex.Message, "Проверка обновлений", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            CheckLock.Release();
+        }
     }
 
-    private static string? FindRepositoryRoot()
+    private static async Task<ReleaseInfo?> GetLatestReleaseAsync()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        using var response = await Http.GetAsync(LatestReleaseUrl);
+        if (!response.IsSuccessStatusCode) return null;
 
-        for (var i = 0; i < 10 && directory is not null; i++, directory = directory.Parent)
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var json = await JsonDocument.ParseAsync(stream);
+        var root = json.RootElement;
+
+        var tag = root.GetProperty("tag_name").GetString() ?? string.Empty;
+        var versionText = tag.TrimStart('v', 'V');
+        if (!Version.TryParse(versionText, out var version)) return null;
+
+        foreach (var asset in root.GetProperty("assets").EnumerateArray())
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, ".git")))
-                return directory.FullName;
+            if (!string.Equals(asset.GetProperty("name").GetString(), PackageAssetName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var url = asset.GetProperty("browser_download_url").GetString();
+            if (!string.IsNullOrWhiteSpace(url))
+                return new ReleaseInfo(version, versionText, url);
         }
 
         return null;
     }
 
-    private static async Task<ProcessResult> RunProcessAsync(
-        string fileName,
-        string arguments,
-        string workingDirectory,
-        bool captureOutput,
-        CancellationToken cancellationToken)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        using var process = new Process { StartInfo = startInfo };
-        if (!process.Start())
-            throw new InvalidOperationException($"Не удалось запустить {fileName}.");
-
-        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        await process.WaitForExitAsync(cancellationToken);
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (process.ExitCode != 0)
-        {
-            var details = string.IsNullOrWhiteSpace(error) ? output : error;
-            throw new InvalidOperationException(
-                $"{fileName} завершился с кодом {process.ExitCode}.\n{details.Trim()}");
-        }
-
-        return new ProcessResult(captureOutput ? output : string.Empty);
-    }
+    private static Version GetCurrentVersion()
+        => Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
 
     private static HttpClient CreateHttpClient()
     {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(8)
-        };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("WOJD-Localization-Studio");
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("WOJD-Localization-Studio-Updater/1.0");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }
 
-    private sealed class UpdateManifest
-    {
-        public string Version { get; set; } = string.Empty;
-        public string? Notes { get; set; }
-    }
-
-    private sealed record ProcessResult(string Output);
+    private sealed record ReleaseInfo(Version Version, string VersionText, string DownloadUrl);
 }
 
-public sealed record UpdateInfo(string Version, string Notes);
-public sealed record UpdateProgress(int Percent, string Message);
+internal static class UpdaterLauncher
+{
+    public static bool TryLaunch(string packageUrl, string version, bool restart)
+    {
+        var updater = Path.Combine(AppContext.BaseDirectory, "Updater", "WOJD-Localization-Studio.Updater.exe");
+        if (!File.Exists(updater)) return false;
+
+        var appExe = Path.Combine(AppContext.BaseDirectory, "WOJD-Localization-Studio.exe");
+        var info = new ProcessStartInfo(updater) { UseShellExecute = false };
+        info.ArgumentList.Add("--apply");
+        info.ArgumentList.Add("--install-dir");
+        info.ArgumentList.Add(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        info.ArgumentList.Add("--package-url");
+        info.ArgumentList.Add(packageUrl);
+        info.ArgumentList.Add("--version");
+        info.ArgumentList.Add(version);
+        info.ArgumentList.Add("--wait-pid");
+        info.ArgumentList.Add(Environment.ProcessId.ToString());
+        if (restart)
+        {
+            info.ArgumentList.Add("--restart");
+            info.ArgumentList.Add(appExe);
+        }
+
+        Process.Start(info);
+        return true;
+    }
+}
+
+internal static class UpdateScheduler
+{
+    private const string TaskName = "WOJD Localization Studio Updater";
+
+    public static void TryRegister()
+    {
+        try
+        {
+            var updater = Path.Combine(AppContext.BaseDirectory, "Updater", "WOJD-Localization-Studio.Updater.exe");
+            if (!File.Exists(updater)) return;
+
+            var installDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            var taskCommand = $"\"{updater}\" --scheduled --install-dir \"{installDir}\"";
+            var info = new ProcessStartInfo("schtasks.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            info.ArgumentList.Add("/Create");
+            info.ArgumentList.Add("/TN");
+            info.ArgumentList.Add(TaskName);
+            info.ArgumentList.Add("/TR");
+            info.ArgumentList.Add(taskCommand);
+            info.ArgumentList.Add("/SC");
+            info.ArgumentList.Add("MINUTE");
+            info.ArgumentList.Add("/MO");
+            info.ArgumentList.Add("15");
+            info.ArgumentList.Add("/F");
+
+            using var process = Process.Start(info);
+            process?.WaitForExit(5000);
+        }
+        catch
+        {
+            // Автообновление при запущенной программе продолжает работать даже если Планировщик недоступен.
+        }
+    }
+}

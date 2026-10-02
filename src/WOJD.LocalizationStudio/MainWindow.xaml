@@ -1,787 +1,198 @@
 <Window x:Class="WOJD.LocalizationStudio.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WOJD Localization Studio" Width="1480" Height="880" MinWidth="1180" MinHeight="700"
-        WindowStartupLocation="CenterScreen" Background="#EEF4FA"
-        Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown">
-    <Window.Resources>
-        <LinearGradientBrush x:Key="HeaderGradient" StartPoint="0,0" EndPoint="1,0">
-            <GradientStop Color="#17354E" Offset="0"/>
-            <GradientStop Color="#EAF4FA" Offset="0.55"/>
-            <GradientStop Color="#DCEAF4" Offset="1"/>
-        </LinearGradientBrush>
+        xmlns:models="clr-namespace:WOJD.LocalizationStudio.Models"
+        Title="WOJD Localization Studio" Width="1540" Height="980" MinWidth="1100" MinHeight="720"
+        WindowStartupLocation="CenterScreen">
+    <Window.InputBindings>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenFileCommand}"/>
+        <KeyBinding Key="O" Modifiers="Control+Shift" Command="{Binding OpenFolderCommand}"/>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}"/>
+        <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding ApplyCommand}"/>
+    </Window.InputBindings>
 
-        <Style x:Key="NavButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#22374A"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Padding" Value="18,9"/>
-            <Setter Property="Margin" Value="2,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="NavBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="NavBorder" Property="Background" Value="#E5EFF7"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="NavBorder" Property="Background" Value="#D6E7F3"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#7C8E9D"/>
-                                <Setter Property="Cursor" Value="Arrow"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="FileListItemStyle" TargetType="ListBoxItem">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0,2"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="7" Padding="10,9">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#234762"/>
-                            </Trigger>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#2C6184"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="BadgeText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-
-        <Style x:Key="FilterBadgeButton" TargetType="Button">
-            <Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
-            <Setter Property="Background" Value="#F5F7FA"/>
-            <Setter Property="Foreground" Value="#526579"/>
-            <Setter Property="BorderBrush" Value="#D6E1EC"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="FilterBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="FilterBorder" Property="Opacity" Value="0.82"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="FilterBorder" Property="Opacity" Value="0.66"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
-    <Grid>
+    <Grid Background="{StaticResource BackgroundBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="110"/>
+            <RowDefinition Height="72"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="58"/>
+            <RowDefinition Height="40"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{StaticResource HeaderGradient}" BorderBrush="#CBD8E3" BorderThickness="0,0,0,1">
-            <Grid Margin="24,12">
+        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
+            <Grid Margin="24,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="WOJD" Foreground="White" FontFamily="Georgia" FontSize="34" FontWeight="Bold"/>
-                    <TextBlock Text="Localization Studio" Foreground="#EFF7FC" FontFamily="Georgia" FontSize="19"/>
-                    <TextBlock Text="ZHU XIAN WORLD" Foreground="#CBDCE9" FontSize="9" Margin="1,4,0,0"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="38" Height="38" CornerRadius="10" Background="{StaticResource AccentSoftBrush}" Margin="0,0,14,0">
+                        <TextBlock Text="译" FontSize="22" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="WOJD Localization Studio" FontSize="23" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding AppVersion, Mode=OneWay}" Margin="12,4,0,0" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left">
-                    <Button Style="{StaticResource NavButton}" Content="✎  Редактор" Background="#FFFFFF"/>
-                    <Button Style="{StaticResource NavButton}" Content="⇄  Сравнение" IsEnabled="False"/>
-                    <Button Style="{StaticResource NavButton}" Content="✦  AI-перевод" IsEnabled="False"/>
-                    <Button x:Name="GlossaryButton"
-                            Style="{StaticResource NavButton}"
-                            Content="☷  Глоссарий"
-                            Click="GlossaryButton_Click"/>
-                    <Button x:Name="ValidationButton" Style="{StaticResource NavButton}" Content="✓  Проверка" Click="ValidationButton_Click" IsEnabled="False"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Открыть файл" Command="{Binding OpenFileCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
+                    <Button Content="Открыть папку" Command="{Binding OpenFolderCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
+                    <Button Content="Сохранить" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="16,14,16,10">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="285"/>
-                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="1"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="8"/>
-                <ColumnDefinition Width="370"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="#173149" CornerRadius="10" BorderBrush="#2A4A63" BorderThickness="1">
-                <Grid Margin="16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <DockPanel Margin="0,0,0,12">
-                        <TextBlock Text="Файлы локализации" Foreground="White" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <Button DockPanel.Dock="Right" Width="38" Height="32" Margin="6,0,0,0" Content="+" Click="OpenFile_Click" Background="#274B67" Foreground="White" BorderBrush="#52728A" ToolTip="Открыть ru.ndjson / ru.fmtstring.ndjson"/>
-                    </DockPanel>
-
-                    <ListBox x:Name="FilesList" Grid.Row="1" Background="Transparent" BorderThickness="0"
-                             ItemContainerStyle="{StaticResource FileListItemStyle}"
-                             SelectionChanged="FilesList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid>
+            <Border Grid.Column="0" Background="White" Padding="18,16">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Файлы" FontSize="18" FontWeight="SemiBold" Margin="4,0,0,14"/>
+                    <TreeView ItemsSource="{Binding FileTree, Mode=OneWay}" BorderThickness="0" Background="Transparent" SelectedItemChanged="FileTree_SelectedItemChanged">
+                        <TreeView.Resources>
+                            <HierarchicalDataTemplate DataType="{x:Type models:FileNode}" ItemsSource="{Binding Children, Mode=OneWay}">
+                                <Grid Margin="2,5">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding DisplayName}"
-                                               Foreground="White"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               Margin="0,0,8,0"/>
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="0"
-                                               Text="{Binding CountText}"
-                                               Foreground="#BBD1E0"
-                                               FontSize="11"
-                                               Margin="0,4,8,0"/>
-
-                                    <Button Grid.Column="1"
-                                            Grid.RowSpan="2"
-                                            Width="24"
-                                            Height="24"
-                                            Padding="0"
-                                            Margin="4,0,0,0"
-                                            Content="×"
-                                            FontSize="17"
-                                            FontWeight="SemiBold"
-                                            Foreground="#D5E3ED"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Cursor="Hand"
-                                            VerticalAlignment="Center"
-                                            ToolTip="Закрыть файл"
-                                            Click="CloseFileButton_Click"/>
+                                    <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding EntryCount, Mode=OneWay}" Foreground="{StaticResource MutedTextBrush}" Margin="8,0,0,0"/>
                                 </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-
-                </Grid>
+                            </HierarchicalDataTemplate>
+                        </TreeView.Resources>
+                    </TreeView>
+                </DockPanel>
             </Border>
+            <Border Grid.Column="1" Background="{StaticResource BorderBrushApp}"/>
 
-            <Border Grid.Column="2" Background="#F9FBFD" BorderBrush="#D3DEE8" BorderThickness="1" CornerRadius="10">
-                <Grid Margin="14">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+            <Grid Grid.Column="2" Margin="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="48"/>
+                    <RowDefinition Height="46"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="280"/>
+                </Grid.RowDefinitions>
 
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Margin="0,0,10,0">
+                        <Grid>
+                            <TextBlock Text="⌕" FontSize="24" Foreground="{StaticResource MutedTextBrush}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Padding="42,12,10,10" VerticalContentAlignment="Center" ToolTip="Поиск по ключу, оригиналу и переводу"/>
+                        </Grid>
+                    </Border>
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding StatusFilters, Mode=OneWay}" SelectedItem="{Binding StatusFilter}" Padding="10,7" BorderBrush="{StaticResource BorderBrushApp}" Background="White"/>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
+                        <TextBlock><Run Text="Все  "/><Run Text="{Binding TotalCount, Mode=OneWay}" Foreground="{StaticResource AccentBrush}"/></TextBlock>
+                    </Border>
+                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
+                        <TextBlock><Run Text="Без перевода  "/><Run Text="{Binding UntranslatedCount, Mode=OneWay}" Foreground="{StaticResource MutedTextBrush}"/></TextBlock>
+                    </Border>
+                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
+                        <TextBlock><Run Text="Переведено  "/><Run Text="{Binding TranslatedCount, Mode=OneWay}" Foreground="#20B66B"/></TextBlock>
+                    </Border>
+                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7">
+                        <TextBlock><Run Text="Изменено  "/><Run Text="{Binding ModifiedCount, Mode=OneWay}" Foreground="#F3A51B"/></TextBlock>
+                    </Border>
+                </StackPanel>
+
+                <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                    <DataGrid x:Name="EntriesGrid"
+                              ItemsSource="{Binding EntriesView, Mode=OneWay}"
+                              SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              RowHeaderWidth="0"
+                              BorderThickness="0"
+                              Background="White"
+                              AlternatingRowBackground="#FBFCFE"
+                              HorizontalGridLinesBrush="#EDF0F5"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="55"/>
+                            <DataGridTextColumn Header="Ключ" Binding="{Binding Key, Mode=OneWay}" Width="220"/>
+                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Original, Mode=OneWay}" Width="*"/>
+                            <DataGridTextColumn Header="Перевод" Binding="{Binding Translation, Mode=OneWay}" Width="*"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding StatusText, Mode=OneWay}" Width="150"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+
+                <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" Margin="0,12,0,0" Padding="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="165"/>
-                            <ColumnDefinition Width="185"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="SearchBox" Height="38" VerticalContentAlignment="Center"
-                                 TextChanged="SearchBox_TextChanged"
-                                 ToolTip="Поиск по Key, Namespace, китайскому оригиналу или русскому переводу"/>
-                        <ComboBox x:Name="SearchScopeBox" Grid.Column="1" Margin="8,0,0,0" Height="38" SelectionChanged="SearchScopeBox_SelectionChanged">
-                            <ComboBoxItem Content="Все поля" IsSelected="True"/>
-                            <ComboBoxItem Content="Key"/>
-                            <ComboBoxItem Content="Namespace"/>
-                            <ComboBoxItem Content="Китайский"/>
-                            <ComboBoxItem Content="Русский"/>
-                        </ComboBox>
-                        <ComboBox x:Name="ValidationTypeFilterBox"
-                                  Grid.Column="2"
-                                  Margin="8,0,0,0"
-                                  Height="38"
-                                  SelectionChanged="ValidationTypeFilterBox_SelectionChanged"
-                                  ToolTip="Фильтр ошибок по типу">
-                            <ComboBoxItem Content="Все типы ошибок" Tag="All" IsSelected="True"/>
-                            <ComboBoxItem Content="Технические" Tag="Technical"/>
-                            <ComboBoxItem Content="Китайский текст" Tag="ChineseText"/>
-                            <ComboBoxItem Content="Скобки" Tag="Brackets"/>
-                            <ComboBoxItem Content="Пробелы" Tag="Whitespace"/>
-                            <ComboBoxItem Content="Пунктуация" Tag="Punctuation"/>
-                            <ComboBoxItem Content="Копия оригинала" Tag="SourceCopy"/>
-                        </ComboBox>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="42"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Оригинал" FontWeight="SemiBold" FontSize="16"/>
+                        <Border Grid.Row="1" Margin="0,10,14,0" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="14">
+                            <TextBox Text="{Binding SelectedEntry.Original, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                        </Border>
+
+                        <Border Grid.Column="1" Grid.RowSpan="3" Background="{StaticResource BorderBrushApp}"/>
+
+                        <TextBlock Grid.Column="2" Text="Перевод" FontWeight="SemiBold" FontSize="16" Margin="16,0,0,0"/>
+                        <Border Grid.Column="2" Grid.Row="1" Margin="16,10,0,0" Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="7" Padding="14">
+                            <TextBox x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                        </Border>
+                        <Grid Grid.Column="2" Grid.Row="2" Margin="16,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}">
+                                <Run Text="Символов: "/><Run Text="{Binding SelectedEntry.CharacterCount, Mode=OneWay}"/>
+                            </TextBlock>
+                            <Button Grid.Column="1" Content="Предыдущая" Command="{Binding PreviousCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                            <Button Grid.Column="2" Content="Следующая" Command="{Binding NextCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                            <Button Grid.Column="3" Content="Применить" Command="{Binding ApplyCommand}" Style="{StaticResource PrimaryButton}" Padding="18,8"/>
+                        </Grid>
                     </Grid>
-
-                    <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
-                        <Button x:Name="AllFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="All"
-                                Background="#E8F1FF" Foreground="#225AA7" Click="FilterBadge_Click">
-                            <TextBlock x:Name="TotalBadge" Style="{StaticResource BadgeText}" Text="Все  0"/>
-                        </Button>
-                        <Button x:Name="TranslatedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Translated"
-                                Background="#ECF8EF" Foreground="#267540" Click="FilterBadge_Click">
-                            <TextBlock x:Name="TranslatedBadge" Style="{StaticResource BadgeText}" Text="Переведено  0"/>
-                        </Button>
-                        <Button x:Name="UntranslatedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Untranslated"
-                                Background="#F5F7FA" Foreground="#647386" Click="FilterBadge_Click">
-                            <TextBlock x:Name="UntranslatedBadge" Style="{StaticResource BadgeText}" Text="Не переведено  0"/>
-                        </Button>
-                        <Button x:Name="ErrorFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Errors"
-                                Background="#FFF2F0" Foreground="#B33A2B" Click="FilterBadge_Click">
-                            <TextBlock x:Name="ErrorBadge" Style="{StaticResource BadgeText}" Text="Ошибки  0"/>
-                        </Button>
-                        <Button x:Name="ConflictFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Conflicts"
-                                Background="#FFF0F3" Foreground="#A53551" Click="FilterBadge_Click">
-                            <TextBlock x:Name="ConflictBadge" Style="{StaticResource BadgeText}" Text="Конфликты  0"/>
-                        </Button>
-                        <Button x:Name="GlossaryFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Glossary"
-                                Background="#F0F5FF" Foreground="#365A9C" Click="FilterBadge_Click">
-                            <TextBlock x:Name="GlossaryBadge" Style="{StaticResource BadgeText}" Text="Глоссарий  0"/>
-                        </Button>
-                        <Button x:Name="ModifiedFilterButton" Style="{StaticResource FilterBadgeButton}" Tag="Modified"
-                                Background="#FFF8E8" Foreground="#9A6814" Click="FilterBadge_Click" Margin="0">
-                            <TextBlock x:Name="ModifiedBadge" Style="{StaticResource BadgeText}" Text="Изменённые  0"/>
-                        </Button>
-                    </WrapPanel>
-
-                    <DataGrid x:Name="EntriesGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
-                              SelectionChanged="EntriesGrid_SelectionChanged" BorderThickness="0" GridLinesVisibility="Horizontal"
-                              HeadersVisibility="Column" RowHeaderWidth="0" Background="White" AlternatingRowBackground="#FAFCFE"
-                              EnableRowVirtualization="True" EnableColumnVirtualization="True">
-                        <DataGrid.RowStyle>
-                            <Style TargetType="DataGridRow">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasValidationIssues}" Value="True">
-                                        <Setter Property="Background" Value="#FFF2F0"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </DataGrid.RowStyle>
-                        <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="Namespace" Width="1.0*">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Button Content="{Binding Namespace}"
-                                                Tag="{Binding}"
-                                                Click="NamespaceCell_Click"
-                                                ToolTip="Показать все строки этого Namespace"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                Padding="4,0"
-                                                HorizontalAlignment="Left"
-                                                VerticalAlignment="Center"
-                                                Foreground="#245F9E"
-                                                Cursor="Hand"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="0.8*"/>
-                            <DataGridTextColumn Header="Китайский оригинал" Binding="{Binding Source}" Width="1.25*"/>
-                            <DataGridTextColumn Header="Русский перевод" Binding="{Binding Translation}" Width="1.55*"/>
-                            <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="105"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-            </Border>
-
-            <Border Grid.Column="4" Background="#F9FBFD" BorderBrush="#D3DEE8" BorderThickness="1" CornerRadius="10">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="18">
-                        <TextBlock x:Name="SelectedKey" Text="Строка не выбрана" FontSize="20" FontWeight="SemiBold" Foreground="#18283A" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="SelectedNamespace" Text="" Foreground="#748596" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
-
-                        <TextBlock Text="Китайский оригинал" FontWeight="SemiBold" Margin="0,22,0,7"/>
-                        <Border Background="#EFF3F7" CornerRadius="6" Padding="12">
-                            <TextBox x:Name="SourceText" Text="—" FontSize="16" TextWrapping="Wrap" IsReadOnly="True"
-                                     Background="Transparent" BorderThickness="0" Padding="0" IsReadOnlyCaretVisible="True"/>
-                        </Border>
-
-                        <TextBlock Text="Русский перевод" FontWeight="SemiBold" Margin="0,18,0,7"/>
-                        <TextBox x:Name="TranslationBox" Height="150" AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto" TextChanged="TranslationBox_TextChanged" IsEnabled="False"
-                                 BorderBrush="#B9C7D3" BorderThickness="1"/>
-                        <TextBlock x:Name="LengthLabel" Text="0 символов" Foreground="#718094" HorizontalAlignment="Right" Margin="0,5,0,0"/>
-                        <TextBlock x:Name="TechnicalProtectionText"
-                                   Text="⚠ Нарушены технические элементы оригинала"
-                                   Foreground="#B33A2B"
-                                   FontWeight="SemiBold"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
-                                   Visibility="Collapsed"
-                                   Margin="0,5,0,0"/>
-
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <Button x:Name="TranslationVariantsButton"
-                                    Grid.Column="0"
-                                    Content="Варианты ChatGPT"
-                                    Click="TranslationVariantsButton_Click"
-                                    IsEnabled="False"
-                                    Margin="0"/>
-
-                            <Button x:Name="TranslationHistoryButton"
-                                    Grid.Column="2"
-                                    Content="История изменений"
-                                    Click="TranslationHistoryButton_Click"
-                                    IsEnabled="False"
-                                    Margin="0"/>
-                        </Grid>
-
-                        <Button x:Name="SimilarityButton"
-                                Content="Похожие строки / память переводов"
-                                Click="SimilarityButton_Click"
-                                IsEnabled="False"
-                                Margin="0,8,0,0"/>
-
-                        <Border Background="#F2F6FA"
-                                BorderBrush="#D9E3EC"
-                                BorderThickness="1"
-                                CornerRadius="7"
-                                Padding="10"
-                                Margin="0,14,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Качество файла"
-                                           FontWeight="SemiBold"
-                                           Foreground="#25384A"/>
-                                <TextBlock x:Name="QualityStatsText"
-                                           Text="Файл не открыт"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           Margin="0,5,0,0"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="#F2F6FA"
-                                BorderBrush="#D9E3EC"
-                                BorderThickness="1"
-                                CornerRadius="7"
-                                Padding="10"
-                                Margin="0,14,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Контекст"
-                                           FontWeight="SemiBold"
-                                           Foreground="#25384A"/>
-                                <TextBlock x:Name="ContextInfoText"
-                                           Text="Выберите строку"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           Margin="0,5,0,6"/>
-                                <ItemsControl x:Name="ContextList">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="White"
-                                                    BorderBrush="#D6E1EA"
-                                                    BorderThickness="1"
-                                                    CornerRadius="5"
-                                                    Padding="7"
-                                                    Margin="0,0,0,5">
-                                                <StackPanel>
-                                                    <TextBlock Foreground="#667789"
-                                                               FontSize="10"
-                                                               FontWeight="SemiBold">
-                                                        <Run Text="{Binding PositionText, Mode=OneWay}"/>
-                                                        <Run Text="  •  "/>
-                                                        <Run Text="{Binding Entry.Key, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding Entry.Source}"
-                                                               Foreground="#26394A"
-                                                               FontSize="11"
-                                                               TextWrapping="Wrap"
-                                                               Margin="0,2,0,0"/>
-                                                    <TextBlock Text="{Binding Entry.Translation}"
-                                                               Foreground="#526579"
-                                                               FontSize="11"
-                                                               TextWrapping="Wrap"
-                                                               Margin="0,2,0,0"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-
-                        <Border x:Name="GlossaryMatchPanel"
-                                Background="#F2F6FA"
-                                BorderBrush="#D9E3EC"
-                                BorderThickness="1"
-                                CornerRadius="7"
-                                Padding="11"
-                                Margin="0,16,0,0">
-                            <StackPanel>
-                                <DockPanel>
-                                    <TextBlock Text="Глоссарий строки"
-                                               FontWeight="SemiBold"
-                                               Foreground="#25384A"/>
-                                    <TextBlock x:Name="GlossaryMatchCountText"
-                                               DockPanel.Dock="Right"
-                                               Text="0"
-                                               Foreground="#5E7183"
-                                               FontWeight="SemiBold"/>
-                                </DockPanel>
-
-                                <TextBlock x:Name="GlossaryWarningText"
-                                           Text="Совпадений нет"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           Margin="0,6,0,8"
-                                           TextWrapping="Wrap"/>
-
-                                <ItemsControl x:Name="GlossaryMatchesList">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="White"
-                                                    BorderBrush="#D6E1EA"
-                                                    BorderThickness="1"
-                                                    CornerRadius="5"
-                                                    Padding="7"
-                                                    Margin="0,0,0,5">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock FontWeight="SemiBold"
-                                                                   Foreground="#26394A"
-                                                                   TextWrapping="Wrap">
-                                                            <Run Text="{Binding Source}"/>
-                                                            <Run Text=" → "/>
-                                                            <Run Text="{Binding Translation}"/>
-                                                        </TextBlock>
-                                                        <TextBlock Text="{Binding Note}"
-                                                                   Foreground="#6B7D8E"
-                                                                   FontSize="11"
-                                                                   TextWrapping="Wrap"
-                                                                   Margin="0,2,0,0"/>
-                                                    </StackPanel>
-                                                    <TextBlock Grid.Column="1"
-                                                               Text="{Binding LockText}"
-                                                               Foreground="#526579"
-                                                               FontSize="10"
-                                                               Margin="8,0,0,0"
-                                                               VerticalAlignment="Top"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Button x:Name="GlossaryCheckButton"
-                                            Grid.Column="0"
-                                            Content="Проверить файл"
-                                            Click="GlossaryCheckButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-
-                                    <Button x:Name="GlossaryConsistencyButton"
-                                            Grid.Column="2"
-                                            Content="Единообразие"
-                                            Click="GlossaryConsistencyButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-                                </Grid>
-
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Button x:Name="GlossaryMassLocalFixButton"
-                                            Grid.Column="0"
-                                            Content="Исправить локально"
-                                            Click="GlossaryMassLocalFixButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-
-                                    <Button x:Name="GlossaryMassAiFixButton"
-                                            Grid.Column="2"
-                                            Content="Исправить с ChatGPT"
-                                            Click="GlossaryMassAiFixButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <Border x:Name="ExactMatchesPanel" Background="#F2F6FA" BorderBrush="#D9E3EC" BorderThickness="1"
-                                CornerRadius="7" Padding="11" Margin="0,16,0,0">
-                            <StackPanel>
-                                <DockPanel>
-                                    <TextBlock Text="Точные совпадения" FontWeight="SemiBold" Foreground="#25384A"/>
-                                    <TextBlock x:Name="ExactMatchesCountText" DockPanel.Dock="Right" Text="0"
-                                               Foreground="#5E7183" FontWeight="SemiBold"/>
-                                </DockPanel>
-                                <TextBlock x:Name="ExactMatchesInfoText"
-                                           Text="Выберите строку"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           Margin="0,6,0,4"
-                                           TextWrapping="Wrap"/>
-
-                                <TextBlock x:Name="ExactMatchesConflictCountText"
-                                           Text="Конфликтующих строк: 0"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           Margin="0,0,0,9"
-                                           TextWrapping="Wrap"/>
-
-                                <ScrollViewer MaxHeight="190"
-                                              VerticalScrollBarVisibility="Auto"
-                                              HorizontalScrollBarVisibility="Disabled"
-                                              Margin="0,0,0,9">
-                                    <ItemsControl x:Name="ExactMatchesList">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Click="ExactMatchItem_Click"
-                                                        HorizontalContentAlignment="Stretch"
-                                                        Padding="7,6"
-                                                        Margin="0,0,0,5"
-                                                        Background="#FFFFFF"
-                                                        BorderBrush="#D6E1EA"
-                                                        BorderThickness="1"
-                                                        Cursor="Hand">
-                                                    <Grid>
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                        </Grid.RowDefinitions>
-                                                        <TextBlock Text="{Binding Document.FileName}"
-                                                                   Foreground="#27445F"
-                                                                   FontWeight="SemiBold"
-                                                                   FontSize="11"
-                                                                   TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Row="1"
-                                                                   Foreground="#687A8B"
-                                                                   FontSize="11"
-                                                                   Margin="0,2,0,0"
-                                                                   TextTrimming="CharacterEllipsis">
-                                                            <Run Text="{Binding Entry.Namespace}"/>
-                                                            <Run Text="  •  "/>
-                                                            <Run Text="{Binding Entry.Key}"/>
-                                                        </TextBlock>
-                                                        <TextBlock Grid.Row="2"
-                                                                   Text="{Binding Entry.Translation}"
-                                                                   Foreground="#26394A"
-                                                                   FontSize="12"
-                                                                   Margin="0,4,0,0"
-                                                                   TextWrapping="Wrap"
-                                                                   MaxHeight="38"/>
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-
-                                <Button x:Name="ApplyExactMatchesButton"
-                                        Content="Применить ко всем точным совпадениям"
-                                        ToolTip="Применить во всех открытых файлах только при 100% идентичном source"
-                                        HorizontalAlignment="Stretch"
-                                        Margin="0"
-                                        Click="ApplyExactMatchesButton_Click"
-                                        IsEnabled="False"/>
-
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Button x:Name="PreviousRowButton"
-                                            Grid.Column="0"
-                                            Content="← Предыдущая"
-                                            Click="PreviousRowButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-
-                                    <Button x:Name="NextRowButton"
-                                            Grid.Column="2"
-                                            Content="Следующая →"
-                                            Click="NextRowButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <Separator Margin="0,20,0,15"/>
-                        <TextBlock Text="Проверка строки" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="ValidationStatusText" Text="Выберите строку" Foreground="#68798A" Margin="0,8,0,0" TextWrapping="Wrap"/>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <Button x:Name="FixValidationButton"
-                                    Grid.Column="0"
-                                    Content="Исправить"
-                                    Click="FixValidationButton_Click"
-                                    IsEnabled="False"
-                                    Margin="0"/>
-
-                            <Button x:Name="AiFixValidationButton"
-                                    Grid.Column="2"
-                                    ToolTip="Использует OpenAI API"
-                                    Click="AiFixValidationButton_Click"
-                                    IsEnabled="False"
-                                    Margin="0">
-                                <TextBlock Text="Умное исправление с ChatGPT"
-                                           TextAlignment="Center"
-                                           TextWrapping="Wrap"/>
-                            </Button>
-                        </Grid>
-
-                        <Button x:Name="ExplainValidationButton"
-                                Content="Объяснить с ChatGPT"
-                                Click="ExplainValidationButton_Click"
-                                IsEnabled="False"
-                                Margin="0,8,0,0"/>
-
-                        <Border Background="#F2F6FA"
-                                BorderBrush="#D9E3EC"
-                                BorderThickness="1"
-                                CornerRadius="7"
-                                Padding="10"
-                                Margin="0,14,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Массовое исправление"
-                                           FontWeight="SemiBold"
-                                           Foreground="#25384A"/>
-
-                                <TextBlock x:Name="MassFixStatusText"
-                                           Text="Исправляет все ошибки активного файла"
-                                           Foreground="#6B7D8E"
-                                           FontSize="12"
-                                           Margin="0,4,0,8"
-                                           TextWrapping="Wrap"/>
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Button x:Name="MassLocalFixButton"
-                                            Grid.Column="0"
-                                            Content="Исправить все локально"
-                                            Click="MassLocalFixButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-
-                                    <Button x:Name="MassAiFixButton"
-                                            Grid.Column="2"
-                                            Content="Исправить все с ChatGPT"
-                                            ToolTip="Использует OpenAI API для каждой проблемной переведённой строки"
-                                            Click="MassAiFixButton_Click"
-                                            IsEnabled="False"
-                                            Margin="0"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock Text="Проверяются" FontWeight="SemiBold" Margin="0,14,0,5"/>
-                        <TextBlock Text="Плейсхолдеры и теги • китайский текст • скобки • пробелы • пунктуация • копия оригинала"
-                                   Foreground="#667789"
-                                   TextWrapping="Wrap"/>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
+                </Border>
+            </Grid>
         </Grid>
 
-        <Border Grid.Row="2" Background="#F8FBFE" BorderBrush="#CFDAE4" BorderThickness="0,1,0,0">
-            <Grid Margin="16,7">
+        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,1,0,0">
+            <Grid Margin="24,0">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-
-                <TextBlock x:Name="StatusText" Text="" Foreground="#7B8B9A"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-
-                <Border x:Name="UpdatePanel" Grid.Column="1" Background="#EEF4FA" BorderBrush="#D3DEE8"
-                        BorderThickness="1" CornerRadius="7" Padding="9,4" Margin="8,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse x:Name="UpdateDot" Width="7" Height="7" Fill="#7E94A7" Margin="0,0,7,0"/>
-                        <TextBlock x:Name="UpdateStatusText" Text="Проверка обновлений…" Foreground="#526579"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ProgressBar x:Name="UpdateProgressBar" Width="110" Height="8" Minimum="0" Maximum="100"
-                                     Value="0" Visibility="Collapsed" Margin="0,0,7,0"/>
-                        <TextBlock x:Name="UpdatePercentText" Text="0%" Foreground="#526579" FontWeight="SemiBold"
-                                   VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,8,0"/>
-                        <Button x:Name="UpdateButton" Content="Проверить" Padding="10,4" Margin="0"
-                                Click="UpdateButton_Click"/>
-                    </StackPanel>
-                </Border>
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Content="Открыть файлы" Click="OpenFile_Click"/>
-                    <Button x:Name="SaveCurrentButton" Content="Сохранить текущий" Click="SaveCurrentButton_Click" IsEnabled="False"/>
-                    <Button x:Name="SaveAllButton" Content="Сохранить всё" Click="SaveAllButton_Click" Background="#2F7BEA" Foreground="White" BorderBrush="#266ACB" IsEnabled="False"/>
-                </StackPanel>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center"><Run Text="Всего: "/><Run Text="{Binding TotalCount, Mode=OneWay}"/></TextBlock>
+                <TextBlock Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Переведено: "/><Run Text="{Binding TranslatedCount, Mode=OneWay}"/></TextBlock>
+                <TextBlock Grid.Column="2" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Без перевода: "/><Run Text="{Binding UntranslatedCount, Mode=OneWay}"/></TextBlock>
+                <TextBlock Grid.Column="3" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Изменено: "/><Run Text="{Binding ModifiedCount, Mode=OneWay}"/></TextBlock>
+                <TextBlock Grid.Column="5" Text="{Binding CurrentFileName, Mode=OneWay}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,24,0"/>
+                <TextBlock Grid.Column="6" Text="{Binding SelectionPosition, Mode=OneWay}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/>
             </Grid>
         </Border>
     </Grid>

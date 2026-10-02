@@ -1,26 +1,18 @@
-# .NET / Visual Studio
+# Build output
+bin/
+obj/
 **/bin/
 **/obj/
+
+# Visual Studio
 .vs/
 *.user
 *.suo
-*.userosscache
-*.sln.docstates
 
-# Build output
+# Runtime files
+startup-error.log
+.localization-backups/
+
+# Published artifacts are created by GitHub Actions
 publish/
-artifacts/
-
-# OS / editor
-Thumbs.db
-.DS_Store
-.vscode/
-.idea/
-
-# Localization working files / backups
-*.bak
-*.tmp
-
-# In-app updater
-.update-stage/
-.apply-update.cmd
+dist/
