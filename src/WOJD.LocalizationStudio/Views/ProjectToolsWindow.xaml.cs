@@ -858,11 +858,11 @@ public partial class ProjectToolsWindow : Window
     }
 
     private static string Csv(string value)
-        => """ +
+        => "\"" +
            value.Replace(
-               """,
-               """") +
-           """;
+               "\"",
+               "\"\"") +
+           "\"";
 
     private static void SelectComboContent(
         ComboBox comboBox,
