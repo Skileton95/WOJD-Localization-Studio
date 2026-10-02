@@ -25,11 +25,6 @@
                 BorderBrush="{StaticResource BorderBrushApp}"
                 BorderThickness="0,0,0,1">
             <Grid Margin="24,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center">
                     <Border Width="38"
@@ -51,11 +46,14 @@
                                Margin="12,4,0,0"
                                Foreground="{StaticResource MutedTextBrush}"
                                VerticalAlignment="Center"/>
-                </StackPanel>
 
-                <Menu Grid.Column="1"
-                      Background="Transparent"
-                      VerticalAlignment="Center">
+                    <Border Width="1"
+                            Height="24"
+                            Background="{StaticResource BorderBrushApp}"
+                            Margin="22,0,14,0"/>
+
+                    <Menu Background="Transparent"
+                          VerticalAlignment="Center">
                     <Menu.Resources>
                         <Style TargetType="{x:Type MenuItem}">
                             <Setter Property="Padding" Value="14,8"/>
@@ -77,31 +75,6 @@
                     </MenuItem>
 
                     <MenuItem Header="Правка">
-                        <MenuItem StaysOpenOnClick="True">
-                            <MenuItem.Header>
-                                <StackPanel Orientation="Horizontal"
-                                            Margin="2">
-                                    <Button Command="{Binding UndoCommand}"
-                                            Content="↶"
-                                            Width="38"
-                                            Height="32"
-                                            Margin="0,0,6,0"
-                                            Padding="0"
-                                            FontSize="18"
-                                            Style="{StaticResource SecondaryButton}"
-                                            ToolTip="Отменить (Ctrl+Z)"/>
-                                    <Button Command="{Binding RedoCommand}"
-                                            Content="↷"
-                                            Width="38"
-                                            Height="32"
-                                            Padding="0"
-                                            FontSize="18"
-                                            Style="{StaticResource SecondaryButton}"
-                                            ToolTip="Повторить (Ctrl+Y)"/>
-                                </StackPanel>
-                            </MenuItem.Header>
-                        </MenuItem>
-                        <Separator/>
                         <MenuItem Header="Отменить"
                                   Command="{Binding UndoCommand}"
                                   InputGestureText="Ctrl+Z"/>
@@ -115,6 +88,7 @@
                                   Click="CheckUpdates_Click"/>
                     </MenuItem>
                 </Menu>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -122,7 +96,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="FilesColumn" Width="220"/>
                 <ColumnDefinition x:Name="FilesDividerColumn" Width="1"/>
-                <ColumnDefinition Width="34"/>
+                <ColumnDefinition Width="24"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -168,18 +142,38 @@
                     Background="{StaticResource BackgroundBrush}">
                 <Button x:Name="FilesPanelToggleButton"
                         Content="‹"
-                        Width="26"
-                        Height="42"
-                        Margin="4,12,4,0"
-                        VerticalAlignment="Top"
-                        Background="White"
-                        BorderBrush="{StaticResource BorderBrushApp}"
-                        BorderThickness="1"
+                        Width="20"
+                        Height="44"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0"
                         Foreground="{StaticResource MutedTextBrush}"
-                        FontSize="20"
+                        FontSize="18"
                         Cursor="Hand"
                         ToolTip="Скрыть панель файлов"
-                        Click="ToggleFilesPanel_Click"/>
+                        Click="ToggleFilesPanel_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ToggleBorder"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="5">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver"
+                                         Value="True">
+                                    <Setter TargetName="ToggleBorder"
+                                            Property="Background"
+                                            Value="{StaticResource AccentSoftBrush}"/>
+                                    <Setter Property="Foreground"
+                                            Value="{StaticResource AccentBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
             </Border>
 
             <Grid Grid.Column="3" Margin="14">
