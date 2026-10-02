@@ -589,6 +589,11 @@ public sealed class MainViewModel : ObservableObject
                     .Take(20));
         }
 
+        if (state.OpenFolders.Count > 0)
+            EnsureProjectContext(state.OpenFolders[0], createDefault: false);
+        else if (state.OpenFiles.Count > 0)
+            EnsureProjectContext(state.OpenFiles[0], createDefault: false);
+
         foreach (var draft in state.Drafts)
         {
             if (string.IsNullOrWhiteSpace(draft.FilePath))
@@ -645,6 +650,18 @@ public sealed class MainViewModel : ObservableObject
                     session.Document.Entries
                         .FirstOrDefault(x => x.Index == pair.Value)
                     ?? session.SelectedEntry;
+            }
+
+            if (state.PinnedFiles is not null)
+            {
+                foreach (var pinned in state.PinnedFiles)
+                {
+                    var node = FindNodeByPath(pinned);
+                    if (node is not null)
+                        node.IsPinned = true;
+                }
+
+                RefreshOpenTabs();
             }
 
             if (!string.IsNullOrWhiteSpace(state.ActiveFile))
@@ -741,7 +758,11 @@ public sealed class MainViewModel : ObservableObject
                         : Path.GetFullPath(_activeSession.Document.FilePath),
                     selectedRows,
                     drafts,
-                    _projectSearchHistory.ToList());
+                    _projectSearchHistory.ToList(),
+                    _sessions.Values
+                        .Where(x => x.Node.IsPinned)
+                        .Select(x => x.Document.FilePath)
+                        .ToList());
 
             WorkspaceStateService.Save(state);
         }
@@ -776,6 +797,10 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var fullPath = Path.GetFullPath(path);
+
+        EnsureProjectContext(
+            fullPath,
+            createDefault: false);
 
         if (_sessions.TryGetValue(fullPath, out var existing))
         {
@@ -875,6 +900,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             _sessions[fullPath] = session;
+            RefreshOpenTabs();
             ActivateSession(session);
             RaiseGlobalCommandStates();
             ScheduleWorkspaceSave();
@@ -947,7 +973,95 @@ public sealed class MainViewModel : ObservableObject
         NextUntranslatedCommand.RaiseCanExecuteChanged();
         PreviousUntranslatedCommand.RaiseCanExecuteChanged();
         ReplaceAllCommand.RaiseCanExecuteChanged();
+        RefreshOpenTabs();
+        RefreshNamespaceStats();
         ScheduleWorkspaceSave();
+    }
+
+    private void ActivateNode(FileNode node)
+    {
+        var path = Path.GetFullPath(node.FullPath);
+
+        if (_sessions.TryGetValue(path, out var session))
+            ActivateSession(session);
+        else
+            _ = LoadPathAsync(path);
+    }
+
+    private void RefreshOpenTabs()
+    {
+        OpenTabs.ReplaceAll(
+            _sessions.Values
+                .Select(x => x.Node)
+                .OrderByDescending(x => x.IsPinned)
+                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private void RefreshNamespaceStats()
+    {
+        NamespaceStats.ReplaceAll(
+            ProjectAnalysisService.BuildNamespaceStats(
+                _sessions.Values.Select(x => x.Document),
+                _projectMetadata.FavoriteNamespaces));
+    }
+
+    public IReadOnlyList<LocalizationDocument> GetOpenDocuments()
+        => _sessions.Values
+            .Select(x => x.Document)
+            .ToList();
+
+    public void SaveProjectMetadata()
+    {
+        if (_projectRoot is null)
+            return;
+
+        StudioProjectMetadataService.Save(
+            _projectRoot,
+            _projectMetadata);
+
+        RefreshNamespaceStats();
+    }
+
+    private void EnsureProjectContext(
+        string path,
+        bool createDefault)
+    {
+        string? root =
+            ProjectProfileService.FindProjectRoot(path);
+
+        if (root is null &&
+            createDefault)
+        {
+            root =
+                Directory.Exists(path)
+                    ? Path.GetFullPath(path)
+                    : Path.GetDirectoryName(
+                        Path.GetFullPath(path));
+        }
+
+        if (root is null)
+            return;
+
+        if (string.Equals(
+                _projectRoot,
+                root,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _projectRoot = root;
+        _projectProfile =
+            ProjectProfileService.Load(root)
+            ?? ProjectProfileService.CreateDefault(root);
+
+        _projectMetadata =
+            StudioProjectMetadataService.Load(root);
+
+        OnPropertyChanged(nameof(ProjectRoot));
+        OnPropertyChanged(nameof(ProjectProfile));
+        OnPropertyChanged(nameof(ProjectMetadata));
+        OnPropertyChanged(nameof(ProjectName));
     }
 
     private static void SetActiveNode(
@@ -991,6 +1105,10 @@ public sealed class MainViewModel : ObservableObject
         {
             var folderPath =
                 Path.GetFullPath(dialog.FolderName);
+
+            EnsureProjectContext(
+                folderPath,
+                createDefault: true);
 
             var existingRoot =
                 FileTree.FirstOrDefault(
@@ -1334,6 +1452,8 @@ public sealed class MainViewModel : ObservableObject
             node);
 
         RaiseGlobalCommandStates();
+        RefreshOpenTabs();
+        RefreshNamespaceStats();
         ScheduleWorkspaceSave();
 
         await Task.CompletedTask;
@@ -1600,6 +1720,14 @@ public sealed class MainViewModel : ObservableObject
         if (obj is not LocalizationEntry entry)
             return false;
 
+        if (_activeSmartFilter is not null &&
+            !ProjectAnalysisService.MatchesSmartFilter(
+                entry,
+                _activeSmartFilter))
+        {
+            return false;
+        }
+
         if (StatusFilter == "Ошибки")
         {
             if (!entry.HasValidationIssues)
@@ -1774,6 +1902,22 @@ public sealed class MainViewModel : ObservableObject
                     currentTranslation));
 
             session.RedoStack.Clear();
+
+            if (_projectRoot is not null)
+            {
+                ChangeHistoryService.Append(
+                    _projectRoot,
+                    new ChangeHistoryRecord(
+                        DateTime.UtcNow,
+                        session.Document.FilePath,
+                        entry.Index,
+                        entry.Namespace,
+                        entry.Key,
+                        previousTranslation,
+                        currentTranslation,
+                        _currentOperationId,
+                        _currentOperationName));
+            }
         }
 
         session.KnownTranslations[entry] =
@@ -1824,6 +1968,8 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RaiseGlobalCommandStates();
+        RefreshOpenTabs();
+        RefreshNamespaceStats();
         ScheduleWorkspaceSave();
     }
 
