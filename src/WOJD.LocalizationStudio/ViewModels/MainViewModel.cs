@@ -38,6 +38,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isNamespacePanelVisible = true;
     private string _currentOperationId = Guid.NewGuid().ToString("N");
     private string _currentOperationName = "Редактирование";
+    private CancellationTokenSource? _currentOperationCts;
 
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
@@ -244,6 +245,11 @@ public sealed class MainViewModel : ObservableObject
                     OnPropertyChanged(nameof(ActiveSmartFilterName));
                     EntriesView.Refresh();
                 });
+
+        CancelOperationCommand =
+            new RelayCommand(
+                () => _currentOperationCts?.Cancel(),
+                () => _currentOperationCts is not null);
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -290,6 +296,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ToggleNamespacePanelCommand { get; }
     public RelayCommand ApplySmartFilterCommand { get; }
     public RelayCommand ClearSmartFilterCommand { get; }
+    public RelayCommand CancelOperationCommand { get; }
 
     public string? ProjectRoot => _projectRoot;
     public ProjectProfile? ProjectProfile => _projectProfile;
