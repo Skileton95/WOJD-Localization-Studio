@@ -1,4 +1,3 @@
-using System.Text.Json.Nodes;
 using WOJD.LocalizationStudio.Infrastructure;
 
 namespace WOJD.LocalizationStudio.Models;
@@ -12,7 +11,10 @@ public sealed class LocalizationEntry : ObservableObject
     public string Key { get; init; } = string.Empty;
     public string Original { get; init; } = string.Empty;
     public string TranslationField { get; init; } = "translation";
-    public JsonObject RawObject { get; init; } = new();
+
+    // Исходная NDJSON-строка хранится как текст.
+    // Это значительно дешевле по памяти, чем держать JsonObject для каждой записи.
+    public string RawLine { get; set; } = string.Empty;
 
     public string Translation
     {
@@ -48,14 +50,18 @@ public sealed class LocalizationEntry : ObservableObject
     {
         _translation = value;
         _savedTranslation = value;
+
         OnPropertyChanged(nameof(Translation));
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(CharacterCount));
     }
 
-    public void MarkSaved()
+    public void MarkSaved(string? rawLine = null)
     {
+        if (rawLine is not null)
+            RawLine = rawLine;
+
         _savedTranslation = Translation;
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(StatusText));
