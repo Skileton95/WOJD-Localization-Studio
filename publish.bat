@@ -5,7 +5,7 @@ set OUT=%CD%\publish\app
 rmdir /s /q "%CD%\publish" 2>nul
 mkdir "%OUT%\Updater"
 
-dotnet publish src\WOJD.LocalizationStudio\WOJD.LocalizationStudio.csproj -c Release -r win-x64 --self-contained false -o "%OUT%"
+dotnet publish src\WOJD.LocalizationStudio\WOJD.LocalizationStudio.csproj -c Release -r win-x64 --self-contained true -o "%OUT%"
 if errorlevel 1 exit /b %errorlevel%
 
 dotnet publish src\WOJD.LocalizationStudio.Updater\WOJD.LocalizationStudio.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o "%CD%\publish\updater"
