@@ -15,12 +15,57 @@
 
     <Grid Background="{StaticResource BackgroundBrush}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
             <RowDefinition Height="72"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
+                Background="#FAFBFD"
+                BorderBrush="{StaticResource BorderBrushApp}"
+                BorderThickness="0,0,0,1">
+            <Menu Background="Transparent"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Stretch"
+                  Margin="10,0,0,0">
+                <Menu.Resources>
+                    <Style TargetType="{x:Type MenuItem}">
+                        <Setter Property="Padding" Value="12,5"/>
+                        <Setter Property="FontSize" Value="13"/>
+                    </Style>
+                </Menu.Resources>
+
+                <MenuItem Header="Файл">
+                    <MenuItem Header="Открыть файл"
+                              Command="{Binding OpenFileCommand}"
+                              InputGestureText="Ctrl+O"/>
+                    <MenuItem Header="Открыть папку"
+                              Command="{Binding OpenFolderCommand}"
+                              InputGestureText="Ctrl+Shift+O"/>
+                    <Separator/>
+                    <MenuItem Header="Сохранить"
+                              Command="{Binding SaveCommand}"
+                              InputGestureText="Ctrl+S"/>
+                </MenuItem>
+
+                <MenuItem Header="Правка">
+                    <MenuItem Header="Отменить"
+                              Command="{Binding UndoCommand}"
+                              InputGestureText="Ctrl+Z"/>
+                    <MenuItem Header="Повторить"
+                              Command="{Binding RedoCommand}"
+                              InputGestureText="Ctrl+Y"/>
+                </MenuItem>
+
+                <MenuItem Header="Справка">
+                    <MenuItem Header="Проверить обновления"
+                              Click="CheckUpdates_Click"/>
+                </MenuItem>
+            </Menu>
+        </Border>
+
+        <Border Grid.Row="1"
                 Background="White"
                 BorderBrush="{StaticResource BorderBrushApp}"
                 BorderThickness="0,0,0,1">
@@ -46,53 +91,11 @@
                                Margin="12,4,0,0"
                                Foreground="{StaticResource MutedTextBrush}"
                                VerticalAlignment="Center"/>
-
-                    <Border Width="1"
-                            Height="24"
-                            Background="{StaticResource BorderBrushApp}"
-                            Margin="22,0,14,0"/>
-
-                    <Menu Background="Transparent"
-                          VerticalAlignment="Center">
-                    <Menu.Resources>
-                        <Style TargetType="{x:Type MenuItem}">
-                            <Setter Property="Padding" Value="14,8"/>
-                            <Setter Property="FontSize" Value="14"/>
-                        </Style>
-                    </Menu.Resources>
-
-                    <MenuItem Header="Файл">
-                        <MenuItem Header="Открыть файл"
-                                  Command="{Binding OpenFileCommand}"
-                                  InputGestureText="Ctrl+O"/>
-                        <MenuItem Header="Открыть папку"
-                                  Command="{Binding OpenFolderCommand}"
-                                  InputGestureText="Ctrl+Shift+O"/>
-                        <Separator/>
-                        <MenuItem Header="Сохранить"
-                                  Command="{Binding SaveCommand}"
-                                  InputGestureText="Ctrl+S"/>
-                    </MenuItem>
-
-                    <MenuItem Header="Правка">
-                        <MenuItem Header="Отменить"
-                                  Command="{Binding UndoCommand}"
-                                  InputGestureText="Ctrl+Z"/>
-                        <MenuItem Header="Повторить"
-                                  Command="{Binding RedoCommand}"
-                                  InputGestureText="Ctrl+Y"/>
-                    </MenuItem>
-
-                    <MenuItem Header="Справка">
-                        <MenuItem Header="Проверить обновления"
-                                  Click="CheckUpdates_Click"/>
-                    </MenuItem>
-                </Menu>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="FilesColumn" Width="220"/>
                 <ColumnDefinition x:Name="FilesDividerColumn" Width="1"/>
@@ -178,13 +181,14 @@
 
             <Grid Grid.Column="3" Margin="14">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="48"/>
                     <RowDefinition Height="46"/>
+                    <RowDefinition Height="48"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="280"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0"
+                <Border Grid.Row="1"
                         Background="White"
                         BorderBrush="{StaticResource BorderBrushApp}"
                         BorderThickness="1"
@@ -205,7 +209,7 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Row="1"
+                <StackPanel Grid.Row="0"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
                     <Button Command="{Binding FilterAllCommand}"
@@ -251,6 +255,12 @@
                         </TextBlock>
                     </Button>
 
+                </StackPanel>
+
+                <StackPanel Grid.Row="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="0,4,0,6">
                     <Border Margin="0"
                             Padding="10,0,4,0"
                             Height="32"
@@ -306,7 +316,7 @@
                     </Border>
                 </StackPanel>
 
-                <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                     <DataGrid x:Name="EntriesGrid"
                               ItemsSource="{Binding EntriesView, Mode=OneWay}"
                               SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
@@ -363,7 +373,7 @@
                     </DataGrid>
                 </Border>
 
-                <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" Margin="0,12,0,0" Padding="16">
+                <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" Margin="0,12,0,0" Padding="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -378,7 +388,10 @@
 
                         <TextBlock Text="Оригинал" FontWeight="SemiBold" FontSize="16"/>
                         <Border Grid.Row="1" Margin="0,10,14,0" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="14">
-                            <TextBox Text="{Binding SelectedEntry.OriginalDisplay, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding SelectedEntry.OriginalDisplay, Mode=OneWay}"
+                                           TextWrapping="Wrap"/>
+                            </ScrollViewer>
                         </Border>
 
                         <Border Grid.Column="1" Grid.RowSpan="3" Background="{StaticResource BorderBrushApp}"/>
@@ -394,9 +407,6 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}">
-                                <Run Text="Символов: "/><Run Text="{Binding SelectedEntry.CharacterCount, Mode=OneWay}"/>
-                            </TextBlock>
                             <Button Grid.Column="1" Content="Предыдущая" Command="{Binding PreviousCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Grid.Column="2" Content="Следующая" Command="{Binding NextCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Grid.Column="3" Content="Применить" Command="{Binding ApplyCommand}" Style="{StaticResource PrimaryButton}" Padding="18,8"/>
@@ -406,7 +416,7 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 Panel.ZIndex="50"
                 Background="#CCFFFFFF">
             <Border.Style>
@@ -433,7 +443,7 @@
         </Border>
 
         <Border x:Name="UpdatePanel"
-                Grid.Row="2"
+                Grid.Row="3"
                 Visibility="Collapsed"
                 Background="White"
                 BorderBrush="{StaticResource BorderBrushApp}"
