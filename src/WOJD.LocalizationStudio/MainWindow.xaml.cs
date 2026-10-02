@@ -22,6 +22,8 @@ public partial class MainWindow : Window
         Closing += MainWindow_Closing;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         Loaded += MainWindow_Loaded;
+
+        ApplyWindowSettings();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -271,6 +273,129 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ProjectTools_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new ProjectToolsWindow(_viewModel)
+            {
+                Owner = this
+            };
+
+        dialog.ShowDialog();
+    }
+
+    private void ExpandedEditor_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_viewModel.SelectedEntry is null)
+            return;
+
+        var dialog =
+            new ExpandedEditorWindow(
+                _viewModel.SelectedEntry)
+            {
+                Owner = this
+            };
+
+        dialog.ShowDialog();
+    }
+
+    private void Settings_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new SettingsWindow
+            {
+                Owner = this
+            };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyWindowSettings();
+    }
+
+    private void NamespaceStat_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.DataContext is not NamespaceStat stat)
+        {
+            return;
+        }
+
+        _viewModel.FilterToNamespace(
+            stat.Namespace);
+    }
+
+    private void OpenTab_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.DataContext is not FileNode node)
+        {
+            return;
+        }
+
+        if (_viewModel.SwitchFileCommand.CanExecute(node))
+            _viewModel.SwitchFileCommand.Execute(node);
+    }
+
+    private void OpenTab_PreviewMouseDown(
+        object sender,
+        MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle ||
+            sender is not FrameworkElement element ||
+            element.DataContext is not FileNode node)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_viewModel.CloseFileCommand.CanExecute(node))
+            _viewModel.CloseFileCommand.Execute(node);
+    }
+
+    private void PinTab_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.DataContext is not FileNode node)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_viewModel.PinFileCommand.CanExecute(node))
+            _viewModel.PinFileCommand.Execute(node);
+    }
+
+    private void OpenTabClose_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.DataContext is not FileNode node)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_viewModel.CloseFileCommand.CanExecute(node))
+            _viewModel.CloseFileCommand.Execute(node);
+    }
+
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         await UpdateService.CheckNowAsync(
@@ -283,6 +408,7 @@ public partial class MainWindow : Window
     {
         if (UpdateService.IsApplyingUpdate)
         {
+            SaveWindowSettings();
             _viewModel.PersistWorkspaceState(includeDrafts: true);
             return;
         }
@@ -293,11 +419,60 @@ public partial class MainWindow : Window
             return;
         }
 
+        SaveWindowSettings();
         _viewModel.PersistWorkspaceState(includeDrafts: false);
     }
 
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void MainWindow_PreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
     {
+        if (MatchesConfiguredHotkey(
+                e,
+                "ProjectSearch",
+                "Ctrl+Shift+F"))
+        {
+            ShowProjectSearchWindow();
+            e.Handled = true;
+            return;
+        }
+
+        if (MatchesConfiguredHotkey(
+                e,
+                "NextUntranslated",
+                "F6"))
+        {
+            if (_viewModel.NextUntranslatedCommand.CanExecute(null))
+                _viewModel.NextUntranslatedCommand.Execute(null);
+
+            e.Handled = true;
+            return;
+        }
+
+        if (MatchesConfiguredHotkey(
+                e,
+                "PreviousUntranslated",
+                "Shift+F6"))
+        {
+            if (_viewModel.PreviousUntranslatedCommand.CanExecute(null))
+                _viewModel.PreviousUntranslatedCommand.Execute(null);
+
+            e.Handled = true;
+            return;
+        }
+
+        if (MatchesConfiguredHotkey(
+                e,
+                "SaveAll",
+                "Ctrl+Shift+S"))
+        {
+            if (_viewModel.SaveAllCommand.CanExecute(null))
+                _viewModel.SaveAllCommand.Execute(null);
+
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F &&
             Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -308,21 +483,92 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.F &&
-            Keyboard.Modifiers ==
-                (ModifierKeys.Control | ModifierKeys.Shift))
-        {
-            ShowProjectSearchWindow();
-            e.Handled = true;
-            return;
-        }
-
         if (e.Key == Key.G &&
             Keyboard.Modifiers == ModifierKeys.Control)
         {
             ShowGoToDialog();
             e.Handled = true;
         }
+    }
+
+    private static bool MatchesConfiguredHotkey(
+        KeyEventArgs e,
+        string action,
+        string fallback)
+    {
+        var text =
+            AppSettingsService.Current.Hotkeys
+                .TryGetValue(action, out var configured) &&
+            !string.IsNullOrWhiteSpace(configured)
+                ? configured
+                : fallback;
+
+        var parts =
+            text.Split(
+                '+',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries);
+
+        if (parts.Length == 0)
+            return false;
+
+        var modifiers =
+            ModifierKeys.None;
+
+        Key? key = null;
+
+        foreach (var part in parts)
+        {
+            if (part.Equals(
+                    "Ctrl",
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.Equals(
+                    "Control",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= ModifierKeys.Control;
+                continue;
+            }
+
+            if (part.Equals(
+                    "Shift",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= ModifierKeys.Shift;
+                continue;
+            }
+
+            if (part.Equals(
+                    "Alt",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= ModifierKeys.Alt;
+                continue;
+            }
+
+            if (part.Equals(
+                    "Win",
+                    StringComparison.OrdinalIgnoreCase) ||
+                part.Equals(
+                    "Windows",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= ModifierKeys.Windows;
+                continue;
+            }
+
+            if (Enum.TryParse<Key>(
+                    part,
+                    ignoreCase: true,
+                    out var parsedKey))
+            {
+                key = parsedKey;
+            }
+        }
+
+        return key.HasValue &&
+               e.Key == key.Value &&
+               Keyboard.Modifiers == modifiers;
     }
 
     private void ToggleFilesPanel_Click(object sender, RoutedEventArgs e)
@@ -348,6 +594,110 @@ public partial class MainWindow : Window
             _filesPanelVisible
                 ? "Скрыть панель файлов"
                 : "Показать панель файлов";
+    }
+
+    private void ApplyWindowSettings()
+    {
+        var settings =
+            AppSettingsService.Current;
+
+        FontSize =
+            settings.FontSize;
+
+        Width =
+            Math.Max(
+                MinWidth,
+                settings.WindowWidth);
+
+        Height =
+            Math.Max(
+                MinHeight,
+                settings.WindowHeight);
+
+        if (settings.WindowLeft.HasValue &&
+            settings.WindowTop.HasValue)
+        {
+            Left =
+                settings.WindowLeft.Value;
+
+            Top =
+                settings.WindowTop.Value;
+
+            WindowStartupLocation =
+                WindowStartupLocation.Manual;
+        }
+
+        FilesColumn.Width =
+            new GridLength(
+                Math.Clamp(
+                    settings.FilesPanelWidth,
+                    180,
+                    700));
+
+        _filesPanelVisible =
+            !settings.FilesPanelCollapsed;
+
+        FilesPanel.Visibility =
+            _filesPanelVisible
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        FilesDividerColumn.Width =
+            _filesPanelVisible
+                ? new GridLength(1)
+                : new GridLength(0);
+
+        if (!_filesPanelVisible)
+            FilesColumn.Width = new GridLength(0);
+
+        FilesPanelToggleButton.Content =
+            _filesPanelVisible ? "‹" : "›";
+
+        FilesPanelToggleButton.ToolTip =
+            _filesPanelVisible
+                ? "Скрыть панель файлов"
+                : "Показать панель файлов";
+
+        if (settings.WindowMaximized)
+            WindowState = WindowState.Maximized;
+    }
+
+    private void SaveWindowSettings()
+    {
+        var settings =
+            AppSettingsService.Current;
+
+        var bounds =
+            WindowState == WindowState.Normal
+                ? new Rect(Left, Top, Width, Height)
+                : RestoreBounds;
+
+        settings.WindowWidth =
+            bounds.Width;
+
+        settings.WindowHeight =
+            bounds.Height;
+
+        settings.WindowLeft =
+            bounds.Left;
+
+        settings.WindowTop =
+            bounds.Top;
+
+        settings.WindowMaximized =
+            WindowState == WindowState.Maximized;
+
+        if (_filesPanelVisible &&
+            FilesColumn.Width.Value > 0)
+        {
+            settings.FilesPanelWidth =
+                FilesColumn.Width.Value;
+        }
+
+        settings.FilesPanelCollapsed =
+            !_filesPanelVisible;
+
+        AppSettingsService.Save(settings);
     }
 
     private void SetUpdateProgress(UpdateProgressState state)
