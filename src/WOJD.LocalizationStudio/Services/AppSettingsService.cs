@@ -19,6 +19,9 @@ public sealed class AppSettings
 
     public int BackupLimit { get; set; } = 30;
 
+    public Dictionary<string, double> ColumnWidths { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, string> Hotkeys { get; set; } =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -113,11 +116,6 @@ public static class AppSettingsService
             "MutedTextColor",
             dark ? "#A7B1C2" : "#71809A");
 
-        Application.Current.Resources[
-            typeof(System.Windows.Controls.Control)] =
-            Application.Current.Resources[
-                typeof(System.Windows.Controls.Control)];
-
         foreach (Window window in
                  Application.Current.Windows)
         {
@@ -149,8 +147,17 @@ public static class AppSettingsService
 
         if (brushKey is not null)
         {
-            Application.Current.Resources[brushKey] =
-                new SolidColorBrush(color);
+            if (Application.Current.Resources[brushKey]
+                is SolidColorBrush existing &&
+                !existing.IsFrozen)
+            {
+                existing.Color = color;
+            }
+            else
+            {
+                Application.Current.Resources[brushKey] =
+                    new SolidColorBrush(color);
+            }
         }
     }
 
