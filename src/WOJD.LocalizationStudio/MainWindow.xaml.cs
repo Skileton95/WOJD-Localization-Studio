@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Win32;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
@@ -161,6 +162,64 @@ public partial class MainWindow : Window
         await _viewModel.ExportEntriesAsync(
             _viewModel.GetErrorEntries(),
             "qa-errors");
+    }
+
+    private async void CompareFile_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var current =
+            _viewModel.ActiveDocument;
+
+        if (current is null)
+        {
+            AppDialog.Show(
+                "Сначала откройте текущую версию файла.",
+                "Сравнение файлов",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                this);
+
+            return;
+        }
+
+        var dialog =
+            new OpenFileDialog
+            {
+                Title = "Выберите старую версию файла",
+                Filter =
+                    "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*"
+            };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var oldDocument =
+                await new NdjsonLocalizationAdapter()
+                    .LoadAsync(dialog.FileName);
+
+            var compareWindow =
+                new FileComparisonWindow(
+                    current,
+                    oldDocument,
+                    System.IO.Path.GetFileName(dialog.FileName))
+                {
+                    Owner = this
+                };
+
+            compareWindow.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                ex.Message,
+                "Ошибка сравнения",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error,
+                this);
+        }
     }
 
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
