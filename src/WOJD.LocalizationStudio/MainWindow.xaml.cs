@@ -56,6 +56,23 @@ public partial class MainWindow : Window
             _viewModel.CloseFileCommand.Execute(node);
     }
 
+    private void CloseFileTreeButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element ||
+            element.DataContext is not FileNode node ||
+            node.IsDirectory)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_viewModel.CloseFileCommand.CanExecute(node))
+            _viewModel.CloseFileCommand.Execute(node);
+    }
+
     private void GoTo_Click(object sender, RoutedEventArgs e)
     {
         ShowGoToDialog();
