@@ -33,6 +33,14 @@ public partial class MainWindow : Window
             await _viewModel.LoadPathAsync(node.FullPath);
     }
 
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        await UpdateService.CheckNowAsync(
+            this,
+            SetUpdateProgress,
+            _viewModel.ConfirmDiscardUnsaved);
+    }
+
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
         if (!UpdateService.IsApplyingUpdate && !_viewModel.ConfirmDiscardUnsaved())
