@@ -105,6 +105,7 @@ public sealed class MainViewModel : ObservableObject
                     if (string.IsNullOrWhiteSpace(ns))
                         return;
 
+                    StatusFilter = "Все";
                     NamespaceFilter = ns;
                 });
     }
