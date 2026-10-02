@@ -8,8 +8,13 @@ public sealed class LocalizationEntry : ObservableObject
     private string _savedTranslation = string.Empty;
 
     public int Index { get; init; }
+    public string Namespace { get; init; } = string.Empty;
     public string Key { get; init; } = string.Empty;
     public string Original { get; init; } = string.Empty;
+    public string OriginalDisplay
+        => string.IsNullOrEmpty(Original)
+            ? "— нет исходного текста —"
+            : Original;
     public string TranslationField { get; init; } = "translation";
 
     // Исходная NDJSON-строка хранится как текст.
