@@ -149,13 +149,34 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="FilesPanel" Grid.Column="0" Background="White" Padding="14,16">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Файлы" FontSize="18" FontWeight="SemiBold" Margin="4,0,0,14"/>
-                    <TreeView ItemsSource="{Binding FileTree, Mode=OneWay}" BorderThickness="0" Background="Transparent" SelectedItemChanged="FileTree_SelectedItemChanged">
+            <Border x:Name="FilesPanel"
+                    Grid.Column="0"
+                    Background="White"
+                    Padding="12,14">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="2*"/>
+                        <RowDefinition Height="1"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Файлы"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="4,0,0,10"/>
+
+                    <TreeView Grid.Row="1"
+                              ItemsSource="{Binding FileTree, Mode=OneWay}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              SelectedItemChanged="FileTree_SelectedItemChanged">
                         <TreeView.Resources>
-                            <HierarchicalDataTemplate DataType="{x:Type models:FileNode}" ItemsSource="{Binding Children, Mode=OneWay}">
-                                <Grid Margin="2,5">
+                            <HierarchicalDataTemplate DataType="{x:Type models:FileNode}"
+                                                      ItemsSource="{Binding Children, Mode=OneWay}">
+                                <Grid Margin="2,4">
                                     <Grid.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Закрыть файл"
@@ -168,8 +189,12 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="▸"
+                                               Margin="0,0,7,0"
+                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding DisplayName, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="2"
                                                Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
                                                Foreground="{StaticResource TextBrush}"
@@ -178,10 +203,13 @@
                                                VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Setter Property="Visibility"
+                                                        Value="Visible"/>
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsDirectory}" Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <DataTrigger Binding="{Binding IsDirectory}"
+                                                                 Value="True">
+                                                        <Setter Property="Visibility"
+                                                                Value="Collapsed"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -203,7 +231,8 @@
                                             Click="CloseFileTreeButton_Click">
                                         <Button.Style>
                                             <Style TargetType="Button">
-                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Setter Property="Visibility"
+                                                        Value="Visible"/>
                                                 <Setter Property="Template">
                                                     <Setter.Value>
                                                         <ControlTemplate TargetType="Button">
@@ -240,7 +269,92 @@
                             </HierarchicalDataTemplate>
                         </TreeView.Resources>
                     </TreeView>
-                </DockPanel>
+
+                    <Border Grid.Row="2"
+                            Background="{StaticResource BorderBrushApp}"
+                            Margin="0,8"/>
+
+                    <Grid Grid.Row="3"
+                          Margin="4,8,4,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Namespace"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Button Grid.Column="1"
+                                Content="⚙"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Foreground="{StaticResource MutedTextBrush}"
+                                Cursor="Hand"
+                                ToolTip="Инструменты проекта"
+                                Click="ProjectTools_Click"/>
+                    </Grid>
+
+                    <TextBox Grid.Row="4"
+                             Text="{Binding NamespaceSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="8,6"
+                             Margin="0,0,0,6"
+                             BorderBrush="{StaticResource BorderBrushApp}"
+                             BorderThickness="1"
+                             ToolTip="Поиск Namespace"/>
+
+                    <ListBox Grid.Row="5"
+                             ItemsSource="{Binding NamespaceStats}"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             SelectionMode="Single">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Button Click="NamespaceStat_Click"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="4,5"
+                                        HorizontalContentAlignment="Stretch"
+                                        Cursor="Hand"
+                                        ToolTip="Показать строки этого Namespace">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="★"
+                                                       Foreground="#F3A51B"
+                                                       Margin="0,0,5,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility"
+                                                                Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Favorite}"
+                                                                         Value="True">
+                                                                <Setter Property="Visibility"
+                                                                        Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Namespace}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding ProgressPercent, StringFormat={}{0:F0}%}"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   Margin="8,0,0,0"/>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
             </Border>
             <Border Grid.Column="1"
                     Background="{StaticResource BorderBrushApp}"/>
