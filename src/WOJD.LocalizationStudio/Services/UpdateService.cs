@@ -22,7 +22,7 @@ public static class UpdateService
         UpdateScheduler.TryRegister();
         await CheckAndPromptAsync(owner, showErrors: false);
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(15) };
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _timer.Tick += async (_, _) => await CheckAndPromptAsync(owner, showErrors: false);
         _timer.Start();
     }
@@ -166,7 +166,7 @@ internal static class UpdateScheduler
             info.ArgumentList.Add("/SC");
             info.ArgumentList.Add("MINUTE");
             info.ArgumentList.Add("/MO");
-            info.ArgumentList.Add("15");
+            info.ArgumentList.Add("1");
             info.ArgumentList.Add("/F");
 
             using var process = Process.Start(info);
