@@ -13,11 +13,34 @@ public sealed class LocalizationEntry : ObservableObject
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
     public string Key { get; init; } = string.Empty;
-    public string Original { get; init; } = string.Empty;
+    private string _original = string.Empty;
+
+    public string Original
+    {
+        get => _original;
+        init => _original = value;
+    }
+
     public string OriginalDisplay
         => string.IsNullOrEmpty(Original)
             ? "— нет исходного текста —"
             : Original;
+
+    public void SetOriginalContext(string value)
+    {
+        if (string.Equals(
+                _original,
+                value,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _original = value ?? string.Empty;
+        OnPropertyChanged(nameof(Original));
+        OnPropertyChanged(nameof(OriginalDisplay));
+        RefreshValidation();
+    }
     public string TranslationField { get; init; } = "translation";
     public object? AdapterMetadata { get; set; }
     public string Identity => $"{Namespace}:{Key}";
