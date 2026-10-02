@@ -111,6 +111,10 @@ public sealed class MainViewModel : ObservableObject
             new RelayCommand(
                 () => SetStatusFilter("Изменено"));
 
+        FilterErrorsCommand =
+            new RelayCommand(
+                () => SetStatusFilter("Ошибки"));
+
         FilterNamespaceCommand =
             new RelayCommand(
                 value =>
@@ -188,6 +192,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand FilterTranslatedCommand { get; }
     public RelayCommand FilterUntranslatedCommand { get; }
     public RelayCommand FilterModifiedCommand { get; }
+    public RelayCommand FilterErrorsCommand { get; }
     public RelayCommand FilterNamespaceCommand { get; }
     public RelayCommand ClearNamespaceFilterCommand { get; }
     public RelayCommand UndoCommand { get; }
@@ -288,6 +293,7 @@ public sealed class MainViewModel : ObservableObject
     public int TranslatedCount => _activeSession?.TranslatedCount ?? 0;
     public int UntranslatedCount => _activeSession?.UntranslatedCount ?? 0;
     public int ModifiedCount => _activeSession?.ModifiedCount ?? 0;
+    public int ErrorCount => _activeSession?.ValidationErrorCount ?? 0;
     public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
     public async Task LoadPathAsync(
@@ -349,9 +355,15 @@ public sealed class MainViewModel : ObservableObject
                 entry.PropertyChanged += Entry_PropertyChanged;
                 _entrySessions[entry] = session;
 
+                entry.RefreshValidation();
+
                 var status = entry.Status;
                 session.KnownStatuses[entry] = status;
                 session.KnownTranslations[entry] = entry.Translation;
+                session.KnownValidationStates[entry] = entry.HasValidationIssues;
+
+                if (entry.HasValidationIssues)
+                    session.ValidationErrorCount++;
 
                 ChangeStatusCounter(
                     session,
@@ -1070,8 +1082,13 @@ public sealed class MainViewModel : ObservableObject
         if (obj is not LocalizationEntry entry)
             return false;
 
-        if (StatusFilter != "Все" &&
-            entry.StatusText != StatusFilter)
+        if (StatusFilter == "Ошибки")
+        {
+            if (!entry.HasValidationIssues)
+                return false;
+        }
+        else if (StatusFilter != "Все" &&
+                 entry.StatusText != StatusFilter)
         {
             return false;
         }
@@ -1194,6 +1211,27 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        entry.RefreshValidation();
+
+        var currentValidation =
+            entry.HasValidationIssues;
+
+        if (!session.KnownValidationStates.TryGetValue(
+                entry,
+                out var previousValidation))
+        {
+            previousValidation = currentValidation;
+        }
+
+        if (previousValidation != currentValidation)
+        {
+            session.ValidationErrorCount +=
+                currentValidation ? 1 : -1;
+
+            session.KnownValidationStates[entry] =
+                currentValidation;
+        }
+
         var currentTranslation =
             entry.Translation;
 
@@ -1275,13 +1313,17 @@ public sealed class MainViewModel : ObservableObject
     {
         session.KnownStatuses.Clear();
         session.KnownTranslations.Clear();
+        session.KnownValidationStates.Clear();
         session.TranslatedCount = 0;
         session.UntranslatedCount = 0;
         session.ModifiedCount = 0;
+        session.ValidationErrorCount = 0;
 
         foreach (var entry in
                  session.Document.Entries)
         {
+            entry.RefreshValidation();
+
             var status =
                 entry.Status;
 
@@ -1290,6 +1332,12 @@ public sealed class MainViewModel : ObservableObject
 
             session.KnownTranslations[entry] =
                 entry.Translation;
+
+            session.KnownValidationStates[entry] =
+                entry.HasValidationIssues;
+
+            if (entry.HasValidationIssues)
+                session.ValidationErrorCount++;
 
             ChangeStatusCounter(
                 session,
@@ -1325,6 +1373,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(TranslatedCount));
         OnPropertyChanged(nameof(UntranslatedCount));
         OnPropertyChanged(nameof(ModifiedCount));
+        OnPropertyChanged(nameof(ErrorCount));
         OnPropertyChanged(nameof(HasUnsavedChanges));
     }
 
