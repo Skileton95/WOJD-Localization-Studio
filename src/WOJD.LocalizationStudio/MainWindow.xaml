@@ -135,6 +135,9 @@
                               HorizontalGridLinesBrush="#EDF0F5"
                               EnableRowVirtualization="True"
                               EnableColumnVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.CanContentScroll="True"
                               SelectionMode="Single"
                               SelectionUnit="FullRow">
                         <DataGrid.Columns>
@@ -189,6 +192,32 @@
                 </Border>
             </Grid>
         </Grid>
+
+        <Border Grid.Row="1"
+                Panel.ZIndex="50"
+                Background="#CCFFFFFF">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel Width="360"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <TextBlock Text="{Binding BusyText, Mode=OneWay}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,12"/>
+                <ProgressBar Height="6"
+                             IsIndeterminate="True"/>
+            </StackPanel>
+        </Border>
 
         <Border x:Name="UpdatePanel"
                 Grid.Row="2"
