@@ -8,6 +8,10 @@ namespace WOJD.LocalizationStudio.Services;
 
 public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 {
+    public string Id => "ndjson";
+    public string DisplayName => "NDJSON / JSONL";
+    public IReadOnlyCollection<string> Extensions { get; } = [".ndjson", ".jsonl"];
+
     private static readonly string[] NamespaceFields =
         ["namespace", "Namespace"];
 
@@ -44,9 +48,14 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         string path,
         CancellationToken cancellationToken)
     {
+        var info = new FileInfo(path);
+
         var document = new LocalizationDocument
         {
-            FilePath = path
+            FilePath = path,
+            AdapterId = Id,
+            LoadedLastWriteTimeUtc = info.LastWriteTimeUtc,
+            LoadedFileLength = info.Length
         };
 
         using var stream = new FileStream(
@@ -193,6 +202,10 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 
         foreach (var (entry, rawLine) in changedEntries)
             entry.MarkSaved(rawLine);
+
+        var info = new FileInfo(document.FilePath);
+        document.LoadedLastWriteTimeUtc = info.LastWriteTimeUtc;
+        document.LoadedFileLength = info.Length;
     }
 
     private static string? ReadString(
