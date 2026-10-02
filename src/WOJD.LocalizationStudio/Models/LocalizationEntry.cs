@@ -19,6 +19,8 @@ public sealed class LocalizationEntry : ObservableObject
             ? "— нет исходного текста —"
             : Original;
     public string TranslationField { get; init; } = "translation";
+    public object? AdapterMetadata { get; set; }
+    public string Identity => $"{Namespace}:{Key}";
 
     // Исходная NDJSON-строка хранится как текст.
     // Это значительно дешевле по памяти, чем держать JsonObject для каждой записи.
