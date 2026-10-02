@@ -38,7 +38,8 @@ public partial class MainWindow : Window
     {
         if (sender is not MenuItem menuItem ||
             menuItem.Parent is not ContextMenu contextMenu ||
-            contextMenu.PlacementTarget?.DataContext is not FileNode node ||
+            contextMenu.PlacementTarget is not FrameworkElement placementTarget ||
+            placementTarget.DataContext is not FileNode node ||
             node.IsDirectory)
         {
             return;
