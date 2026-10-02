@@ -348,8 +348,18 @@ public sealed class MainViewModel : ObservableObject
                 dialog.FileName,
                 StringComparison.OrdinalIgnoreCase))
         {
-            FileTree.ReplaceAll(
-                [
+            var alreadyOpen =
+                FileTree.Any(
+                    node =>
+                        !node.IsDirectory &&
+                        string.Equals(
+                            node.FullPath,
+                            dialog.FileName,
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (!alreadyOpen)
+            {
+                FileTree.Add(
                     new FileNode
                     {
                         Name =
@@ -357,8 +367,8 @@ public sealed class MainViewModel : ObservableObject
                         FullPath = dialog.FileName,
                         IsDirectory = false,
                         EntryCount = Entries.Count
-                    }
-                ]);
+                    });
+            }
         }
     }
 
