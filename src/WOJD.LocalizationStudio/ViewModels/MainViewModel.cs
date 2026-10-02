@@ -14,8 +14,8 @@ namespace WOJD.LocalizationStudio.ViewModels;
 
 public sealed class MainViewModel : ObservableObject
 {
-    private readonly ILocalizationFileAdapter _adapter =
-        new NdjsonLocalizationAdapter();
+    private readonly LocalizationAdapterRegistry _adapter =
+        new();
 
     private readonly Dictionary<string, DocumentSession> _sessions =
         new(StringComparer.OrdinalIgnoreCase);
@@ -689,7 +689,7 @@ public sealed class MainViewModel : ObservableObject
         if (!_adapter.CanOpen(path))
         {
             AppDialog.Show(
-                "Пока подключён базовый адаптер NDJSON/JSONL.",
+                $"Формат файла не поддерживается: {Path.GetExtension(path)}.",
                 "Формат файла",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -888,7 +888,7 @@ public sealed class MainViewModel : ObservableObject
         var dialog = new OpenFileDialog
         {
             Filter =
-                "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*",
+                "Поддерживаемые файлы (*.ndjson;*.jsonl;*.locres)|*.ndjson;*.jsonl;*.locres|NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Unreal LOCRES (*.locres)|*.locres|Все файлы (*.*)|*.*",
             Multiselect = true
         };
 
@@ -939,11 +939,7 @@ public sealed class MainViewModel : ObservableObject
                 ScheduleWorkspaceSave();
             }
 
-            var first =
-                FindFirstSupported(root);
-
-            if (first is not null)
-                await LoadPathAsync(first.FullPath);
+            // Файлы из папки загружаются лениво: только после выбора пользователем.
         }
         catch (Exception ex)
         {
