@@ -26,6 +26,7 @@ public sealed class MainViewModel : ObservableObject
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
     private string _statusFilter = "Все";
+    private string? _namespaceFilter;
     private bool _isBusy;
     private string _busyText = string.Empty;
 
@@ -79,6 +80,33 @@ public sealed class MainViewModel : ObservableObject
             new RelayCommand(
                 () => MoveSelection(1),
                 () => SelectedEntry is not null);
+
+        FilterAllCommand =
+            new RelayCommand(
+                () => SetStatusFilter("Все", clearNamespace: true));
+
+        FilterTranslatedCommand =
+            new RelayCommand(
+                () => SetStatusFilter("Переведено"));
+
+        FilterUntranslatedCommand =
+            new RelayCommand(
+                () => SetStatusFilter("Без перевода"));
+
+        FilterModifiedCommand =
+            new RelayCommand(
+                () => SetStatusFilter("Изменено"));
+
+        FilterNamespaceCommand =
+            new RelayCommand(
+                value =>
+                {
+                    var ns = value as string;
+                    if (string.IsNullOrWhiteSpace(ns))
+                        return;
+
+                    NamespaceFilter = ns;
+                });
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -101,6 +129,11 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ApplyCommand { get; }
     public RelayCommand PreviousCommand { get; }
     public RelayCommand NextCommand { get; }
+    public RelayCommand FilterAllCommand { get; }
+    public RelayCommand FilterTranslatedCommand { get; }
+    public RelayCommand FilterUntranslatedCommand { get; }
+    public RelayCommand FilterModifiedCommand { get; }
+    public RelayCommand FilterNamespaceCommand { get; }
 
     public LocalizationEntry? SelectedEntry
     {
@@ -138,6 +171,24 @@ public sealed class MainViewModel : ObservableObject
                 EntriesView.Refresh();
         }
     }
+
+    public string? NamespaceFilter
+    {
+        get => _namespaceFilter;
+        private set
+        {
+            if (SetProperty(ref _namespaceFilter, value))
+            {
+                OnPropertyChanged(nameof(NamespaceFilterLabel));
+                EntriesView.Refresh();
+            }
+        }
+    }
+
+    public string NamespaceFilterLabel
+        => string.IsNullOrWhiteSpace(NamespaceFilter)
+            ? string.Empty
+            : $"Namespace: {NamespaceFilter}";
 
     public bool IsBusy
     {
@@ -499,6 +550,15 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
+        if (!string.IsNullOrWhiteSpace(NamespaceFilter) &&
+            !string.Equals(
+                entry.Namespace,
+                NamespaceFilter,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(SearchText))
             return true;
 
@@ -516,6 +576,16 @@ public sealed class MainViewModel : ObservableObject
                || entry.Translation.Contains(
                    q,
                    StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SetStatusFilter(
+        string status,
+        bool clearNamespace = false)
+    {
+        if (clearNamespace)
+            NamespaceFilter = null;
+
+        StatusFilter = status;
     }
 
     private void Entry_PropertyChanged(
