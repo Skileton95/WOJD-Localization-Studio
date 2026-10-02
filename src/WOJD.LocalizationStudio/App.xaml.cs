@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using WOJD.LocalizationStudio.Services;
 
 namespace WOJD.LocalizationStudio;
 
@@ -47,7 +48,7 @@ public partial class App : Application
             // Ошибка записи лога не должна скрывать исходную ошибку запуска.
         }
 
-        MessageBox.Show(
+        AppDialog.Show(
             $"{exception.GetType().Name}: {exception.Message}\n\nПолные сведения записаны в startup-error.log рядом с программой.",
             title,
             MessageBoxButton.OK,
