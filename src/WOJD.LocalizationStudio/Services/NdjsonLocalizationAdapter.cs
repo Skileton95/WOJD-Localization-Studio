@@ -10,7 +10,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 {
     private static readonly string[] KeyFields = ["key", "Key", "id", "Id", "name", "Name"];
     private static readonly string[] OriginalFields = ["original", "Original", "source", "Source", "cn", "CN", "zh", "ZH", "text", "Text"];
-    private static readonly string[] TranslationFields = ["translation", "Translation", "target", "Target", "ru", "RU", "value", "Value"];
+    private static readonly string[] TranslationFields = ["translated", "Translated", "translation", "Translation", "target", "Target", "ru", "RU", "value", "Value"];
 
     public bool CanOpen(string path)
         => string.Equals(Path.GetExtension(path), ".ndjson", StringComparison.OrdinalIgnoreCase)
