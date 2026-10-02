@@ -81,12 +81,12 @@ public static class UpdateService
         {
             if (isManual)
             {
-                MessageBox.Show(
-                    owner,
+                AppDialog.Show(
                     "Обновление уже выполняется.",
                     "Проверка обновлений",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    MessageBoxImage.Information,
+                    owner);
             }
 
             return;
@@ -96,12 +96,12 @@ public static class UpdateService
         {
             if (isManual)
             {
-                MessageBox.Show(
-                    owner,
+                AppDialog.Show(
                     "Проверка обновлений уже выполняется.",
                     "Проверка обновлений",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    MessageBoxImage.Information,
+                    owner);
             }
 
             return;
@@ -125,12 +125,12 @@ public static class UpdateService
             {
                 if (isManual)
                 {
-                    MessageBox.Show(
-                        owner,
+                    AppDialog.Show(
                         $"Установлена последняя версия v{current.ToString(3)}.",
                         "Проверка обновлений",
                         MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                        MessageBoxImage.Information,
+                        owner);
                 }
 
                 return;
@@ -219,12 +219,12 @@ public static class UpdateService
 
             if (isManual || progressStarted)
             {
-                MessageBox.Show(
-                    owner,
+                AppDialog.Show(
                     $"{ex.Message}\n\nПодробности записаны в update.log.",
                     "Ошибка обновления",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                    MessageBoxImage.Warning,
+                    owner);
             }
         }
         finally
