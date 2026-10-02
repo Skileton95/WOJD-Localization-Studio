@@ -77,6 +77,31 @@
                     </MenuItem>
 
                     <MenuItem Header="Правка">
+                        <MenuItem StaysOpenOnClick="True">
+                            <MenuItem.Header>
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="2">
+                                    <Button Command="{Binding UndoCommand}"
+                                            Content="↶"
+                                            Width="38"
+                                            Height="32"
+                                            Margin="0,0,6,0"
+                                            Padding="0"
+                                            FontSize="18"
+                                            Style="{StaticResource SecondaryButton}"
+                                            ToolTip="Отменить (Ctrl+Z)"/>
+                                    <Button Command="{Binding RedoCommand}"
+                                            Content="↷"
+                                            Width="38"
+                                            Height="32"
+                                            Padding="0"
+                                            FontSize="18"
+                                            Style="{StaticResource SecondaryButton}"
+                                            ToolTip="Повторить (Ctrl+Y)"/>
+                                </StackPanel>
+                            </MenuItem.Header>
+                        </MenuItem>
+                        <Separator/>
                         <MenuItem Header="Отменить"
                                   Command="{Binding UndoCommand}"
                                   InputGestureText="Ctrl+Z"/>
