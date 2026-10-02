@@ -780,11 +780,19 @@
 
                         <TextBlock Grid.Column="2" Text="Перевод" FontWeight="SemiBold" FontSize="16" Margin="16,0,0,0"/>
                         <Border Grid.Column="2" Grid.Row="1" Margin="16,10,0,0" Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="7" Padding="14">
-                            <TextBox x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                            <TextBox x:Name="TranslationBox"
+                                     Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     AcceptsReturn="True"
+                                     ToolTip="{Binding SelectedEntry.CharacterCount, StringFormat=Символов: {0}}"/>
                         </Border>
                         <Grid Grid.Column="2" Grid.Row="2" Margin="16,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -797,7 +805,17 @@
                                        ToolTip="{Binding SelectedEntry.ValidationSummary, Mode=OneWay}"/>
                             <Button Grid.Column="1" Content="Предыдущая" Command="{Binding PreviousCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,8,0"/>
                             <Button Grid.Column="2" Content="Следующая" Command="{Binding NextCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
-                            <Button Grid.Column="3" Content="Применить" Command="{Binding ApplyCommand}" Style="{StaticResource PrimaryButton}" Padding="18,8"/>
+                            <Button Grid.Column="3"
+                                    Content="Развернуть"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Padding="14,8"
+                                    Margin="0,0,8,0"
+                                    Click="ExpandedEditor_Click"/>
+                            <Button Grid.Column="4"
+                                    Content="Применить"
+                                    Command="{Binding ApplyCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Padding="18,8"/>
                         </Grid>
                     </Grid>
                 </Border>
