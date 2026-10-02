@@ -1,26 +1,27 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace WOJD.LocalizationStudio.Updater;
 
 internal static class Program
 {
-    private const string LatestReleaseUrl =
-        "https://api.github.com/repos/Skileton95/WOJD-Localization-Studio/releases/latest";
-
-    private const string PackageAssetName =
-        "WOJD-Localization-Studio-win-x64.zip";
+    private const string LatestManifestUrl =
+        "https://github.com/Skileton95/WOJD-Localization-Studio/releases/latest/download/update.json";
 
     [STAThread]
     private static async Task Main(string[] args)
     {
+        var options = Options.Parse(args);
+
         try
         {
-            var options = Options.Parse(args);
-
             if (string.IsNullOrWhiteSpace(options.InstallDir))
                 return;
+
+            Log(options.InstallDir, "Updater started.");
 
             if (!options.TempRun)
             {
@@ -29,7 +30,10 @@ internal static class Program
             }
 
             if (options.Scheduled && IsMainAppRunning())
+            {
+                Log(options.InstallDir, "Scheduled check skipped because main app is running.");
                 return;
+            }
 
             if (!string.IsNullOrWhiteSpace(options.PackageFile) &&
                 !string.IsNullOrWhiteSpace(options.VersionText))
@@ -44,17 +48,21 @@ internal static class Program
                 }
 
                 if (options.WaitPid is int directPid)
-                    await WaitForProcessExitAsync(
-                        directPid,
-                        TimeSpan.FromMinutes(2));
+                    await WaitForProcessExitAsync(directPid, TimeSpan.FromMinutes(2));
                 else if (IsMainAppRunning())
                     return;
+
+                await VerifyPackageAsync(
+                    options.PackageFile,
+                    expectedSha256: null);
 
                 await ApplyLocalPackageAsync(
                     options.PackageFile,
                     options.InstallDir);
 
                 TryDelete(options.PackageFile);
+
+                Log(options.InstallDir, $"Applied local package {options.VersionText}.");
 
                 RestartIfNeeded(options);
                 return;
@@ -66,13 +74,17 @@ internal static class Program
                     ? new ReleaseInfo(
                         Version.Parse(options.VersionText),
                         options.VersionText,
-                        options.PackageUrl)
+                        options.PackageUrl,
+                        null)
                     : await GetLatestReleaseAsync();
 
-            if (release is null)
-                return;
+            var currentVersion =
+                ReadLocalVersion(options.InstallDir);
 
-            var currentVersion = ReadLocalVersion(options.InstallDir);
+            Log(
+                options.InstallDir,
+                $"Current={currentVersion}; Latest={release.VersionText}");
+
             if (release.Version <= currentVersion)
                 return;
 
@@ -84,15 +96,19 @@ internal static class Program
                 return;
 
             await DownloadAndApplyPackageAsync(
-                release.DownloadUrl,
+                release,
                 options.InstallDir);
+
+            Log(
+                options.InstallDir,
+                $"Applied scheduled update {release.VersionText}.");
 
             RestartIfNeeded(options);
         }
-        catch
+        catch (Exception ex)
         {
-            // Фоновое обновление не должно показывать окна
-            // или мешать запуску редактора.
+            if (!string.IsNullOrWhiteSpace(options.InstallDir))
+                Log(options.InstallDir, $"Updater failed: {ex}");
         }
     }
 
@@ -104,11 +120,12 @@ internal static class Program
             return;
         }
 
-        Process.Start(new ProcessStartInfo(options.RestartExe)
-        {
-            UseShellExecute = true,
-            WorkingDirectory = options.InstallDir
-        });
+        Process.Start(
+            new ProcessStartInfo(options.RestartExe)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = options.InstallDir
+            });
     }
 
     private static void RelaunchFromTemp(string[] originalArgs)
@@ -121,97 +138,111 @@ internal static class Program
             return;
         }
 
-        var tempDir = Path.Combine(
-            Path.GetTempPath(),
-            "WOJD-Localization-Studio",
-            "updater");
+        var tempDir =
+            Path.Combine(
+                Path.GetTempPath(),
+                "WOJD-Localization-Studio",
+                "updater");
 
         Directory.CreateDirectory(tempDir);
 
-        var tempExe = Path.Combine(
-            tempDir,
-            $"updater-{Guid.NewGuid():N}.exe");
+        var tempExe =
+            Path.Combine(
+                tempDir,
+                $"updater-{Guid.NewGuid():N}.exe");
 
-        File.Copy(currentExe, tempExe, true);
+        File.Copy(
+            currentExe,
+            tempExe,
+            true);
 
-        var psi = new ProcessStartInfo(tempExe)
-        {
-            UseShellExecute = false
-        };
+        var psi =
+            new ProcessStartInfo(tempExe)
+            {
+                UseShellExecute = false
+            };
 
         foreach (var arg in originalArgs)
             psi.ArgumentList.Add(arg);
 
         psi.ArgumentList.Add("--temp-run");
+
         Process.Start(psi);
     }
 
-    private static async Task<ReleaseInfo?> GetLatestReleaseAsync()
+    private static async Task<ReleaseInfo> GetLatestReleaseAsync()
     {
-        using var http = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(30)
-        };
+        using var http = CreateHttpClient();
 
-        http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "WOJD-Localization-Studio-Updater/1.0");
+        var url =
+            $"{LatestManifestUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
 
-        http.DefaultRequestHeaders.Accept.ParseAdd(
-            "application/vnd.github+json");
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                url);
 
-        using var response = await http.GetAsync(LatestReleaseUrl);
+        request.Headers.CacheControl =
+            new CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MaxAge = TimeSpan.Zero
+            };
 
-        if (!response.IsSuccessStatusCode)
-            return null;
+        request.Headers.Pragma.ParseAdd("no-cache");
+
+        using var response =
+            await http.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead);
+
+        response.EnsureSuccessStatusCode();
 
         await using var stream =
             await response.Content.ReadAsStreamAsync();
 
-        using var json =
-            await JsonDocument.ParseAsync(stream);
+        var manifest =
+            await JsonSerializer.DeserializeAsync<UpdateManifest>(
+                stream,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
 
-        var root = json.RootElement;
-
-        var tag =
-            root.GetProperty("tag_name").GetString()
-            ?? string.Empty;
-
-        var text = tag.TrimStart('v', 'V');
-
-        if (!Version.TryParse(text, out var version))
-            return null;
-
-        foreach (var asset in
-                 root.GetProperty("assets").EnumerateArray())
+        if (manifest is null ||
+            string.IsNullOrWhiteSpace(manifest.Version) ||
+            string.IsNullOrWhiteSpace(manifest.PackageUrl) ||
+            string.IsNullOrWhiteSpace(manifest.Sha256))
         {
-            if (!string.Equals(
-                    asset.GetProperty("name").GetString(),
-                    PackageAssetName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var url =
-                asset.GetProperty("browser_download_url")
-                    .GetString();
-
-            if (!string.IsNullOrWhiteSpace(url))
-                return new ReleaseInfo(
-                    version,
-                    text,
-                    url);
+            throw new InvalidDataException(
+                "Invalid update.json manifest.");
         }
 
-        return null;
+        if (!Version.TryParse(
+                manifest.Version,
+                out var version))
+        {
+            throw new InvalidDataException(
+                $"Invalid manifest version: {manifest.Version}");
+        }
+
+        return new ReleaseInfo(
+            version,
+            manifest.Version,
+            manifest.PackageUrl,
+            manifest.Sha256);
     }
 
-    private static Version ReadLocalVersion(string installDir)
+    private static Version ReadLocalVersion(
+        string installDir)
     {
         try
         {
             var path =
-                Path.Combine(installDir, "version.txt");
+                Path.Combine(
+                    installDir,
+                    "version.txt");
 
             return Version.TryParse(
                 File.ReadAllText(path).Trim(),
@@ -226,36 +257,56 @@ internal static class Program
     }
 
     private static async Task DownloadAndApplyPackageAsync(
-        string url,
+        ReleaseInfo release,
         string installDir)
     {
-        using var http = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(5)
-        };
+        using var http = CreateHttpClient();
 
-        http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "WOJD-Localization-Studio-Updater/1.0");
-
-        var tempRoot = Path.Combine(
-            Path.GetTempPath(),
-            "WOJD-Localization-Studio",
-            Guid.NewGuid().ToString("N"));
+        var tempRoot =
+            Path.Combine(
+                Path.GetTempPath(),
+                "WOJD-Localization-Studio",
+                Guid.NewGuid().ToString("N"));
 
         var zipPath =
-            Path.Combine(tempRoot, "update.zip");
+            Path.Combine(
+                tempRoot,
+                "update.zip");
 
         Directory.CreateDirectory(tempRoot);
 
         try
         {
+            using var request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
+                    release.DownloadUrl);
+
+            request.Headers.CacheControl =
+                new CacheControlHeaderValue
+                {
+                    NoCache = true,
+                    NoStore = true
+                };
+
+            using var response =
+                await http.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead);
+
+            response.EnsureSuccessStatusCode();
+
             await using (var input =
-                         await http.GetStreamAsync(url))
+                         await response.Content.ReadAsStreamAsync())
             await using (var output =
                          File.Create(zipPath))
             {
                 await input.CopyToAsync(output);
             }
+
+            await VerifyPackageAsync(
+                zipPath,
+                release.Sha256);
 
             await ApplyLocalPackageAsync(
                 zipPath,
@@ -265,7 +316,9 @@ internal static class Program
         {
             try
             {
-                Directory.Delete(tempRoot, true);
+                Directory.Delete(
+                    tempRoot,
+                    true);
             }
             catch
             {
@@ -273,19 +326,51 @@ internal static class Program
         }
     }
 
+    private static async Task VerifyPackageAsync(
+        string path,
+        string? expectedSha256)
+    {
+        if (string.IsNullOrWhiteSpace(expectedSha256))
+            return;
+
+        await using var stream =
+            File.OpenRead(path);
+
+        var hash =
+            await SHA256.HashDataAsync(stream);
+
+        var actual =
+            Convert
+                .ToHexString(hash)
+                .ToLowerInvariant();
+
+        if (!string.Equals(
+                actual,
+                expectedSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "Downloaded update hash mismatch.");
+        }
+    }
+
     private static Task ApplyLocalPackageAsync(
         string zipPath,
         string installDir)
     {
-        var tempRoot = Path.Combine(
-            Path.GetTempPath(),
-            "WOJD-Localization-Studio",
-            Guid.NewGuid().ToString("N"));
+        var tempRoot =
+            Path.Combine(
+                Path.GetTempPath(),
+                "WOJD-Localization-Studio",
+                Guid.NewGuid().ToString("N"));
 
         var extractDir =
-            Path.Combine(tempRoot, "files");
+            Path.Combine(
+                tempRoot,
+                "files");
 
-        Directory.CreateDirectory(extractDir);
+        Directory.CreateDirectory(
+            extractDir);
 
         try
         {
@@ -294,18 +379,24 @@ internal static class Program
                 extractDir,
                 overwriteFiles: true);
 
-            Directory.CreateDirectory(installDir);
+            Directory.CreateDirectory(
+                installDir);
 
-            foreach (var source in Directory.EnumerateFiles(
+            foreach (var source in
+                     Directory.EnumerateFiles(
                          extractDir,
                          "*",
                          SearchOption.AllDirectories))
             {
                 var relative =
-                    Path.GetRelativePath(extractDir, source);
+                    Path.GetRelativePath(
+                        extractDir,
+                        source);
 
                 var destination =
-                    Path.Combine(installDir, relative);
+                    Path.Combine(
+                        installDir,
+                        relative);
 
                 Directory.CreateDirectory(
                     Path.GetDirectoryName(destination)!);
@@ -320,7 +411,9 @@ internal static class Program
         {
             try
             {
-                Directory.Delete(tempRoot, true);
+                Directory.Delete(
+                    tempRoot,
+                    true);
             }
             catch
             {
@@ -330,10 +423,35 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static HttpClient CreateHttpClient()
+    {
+        var handler =
+            new HttpClientHandler
+            {
+                AllowAutoRedirect = true
+            };
+
+        var http =
+            new HttpClient(handler)
+            {
+                Timeout =
+                    TimeSpan.FromMinutes(5)
+            };
+
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "WOJD-Localization-Studio-Updater/1.0");
+
+        return http;
+    }
+
     private static bool IsMainAppRunning()
         => Process
-            .GetProcessesByName("WOJD-Localization-Studio")
-            .Any(p => p.Id != Environment.ProcessId);
+            .GetProcessesByName(
+                "WOJD-Localization-Studio")
+            .Any(
+                p =>
+                    p.Id !=
+                    Environment.ProcessId);
 
     private static async Task WaitForProcessExitAsync(
         int pid,
@@ -347,15 +465,16 @@ internal static class Program
             using var cts =
                 new CancellationTokenSource(timeout);
 
-            await process.WaitForExitAsync(cts.Token);
+            await process.WaitForExitAsync(
+                cts.Token);
         }
         catch
         {
-            // Процесс уже завершён либо вышел таймаут.
         }
     }
 
-    private static void TryDelete(string path)
+    private static void TryDelete(
+        string path)
     {
         try
         {
@@ -367,10 +486,33 @@ internal static class Program
         }
     }
 
+    private static void Log(
+        string installDir,
+        string message)
+    {
+        try
+        {
+            File.AppendAllText(
+                Path.Combine(
+                    installDir,
+                    "update.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [Updater] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed record UpdateManifest(
+        string Version,
+        string PackageUrl,
+        string Sha256);
+
     private sealed record ReleaseInfo(
         Version Version,
         string VersionText,
-        string DownloadUrl);
+        string DownloadUrl,
+        string? Sha256);
 
     private sealed class Options
     {
@@ -385,9 +527,11 @@ internal static class Program
         public bool Scheduled { get; private set; }
         public bool TempRun { get; private set; }
 
-        public static Options Parse(string[] args)
+        public static Options Parse(
+            string[] args)
         {
-            var result = new Options();
+            var result =
+                new Options();
 
             for (var i = 0; i < args.Length; i++)
             {
@@ -395,27 +539,32 @@ internal static class Program
                 {
                     case "--install-dir"
                         when i + 1 < args.Length:
-                        result.InstallDir = args[++i];
+                        result.InstallDir =
+                            args[++i];
                         break;
 
                     case "--package-url"
                         when i + 1 < args.Length:
-                        result.PackageUrl = args[++i];
+                        result.PackageUrl =
+                            args[++i];
                         break;
 
                     case "--package-file"
                         when i + 1 < args.Length:
-                        result.PackageFile = args[++i];
+                        result.PackageFile =
+                            args[++i];
                         break;
 
                     case "--version"
                         when i + 1 < args.Length:
-                        result.VersionText = args[++i];
+                        result.VersionText =
+                            args[++i];
                         break;
 
                     case "--restart"
                         when i + 1 < args.Length:
-                        result.RestartExe = args[++i];
+                        result.RestartExe =
+                            args[++i];
                         break;
 
                     case "--wait-pid"
@@ -423,15 +572,18 @@ internal static class Program
                              int.TryParse(
                                  args[++i],
                                  out var pid):
-                        result.WaitPid = pid;
+                        result.WaitPid =
+                            pid;
                         break;
 
                     case "--scheduled":
-                        result.Scheduled = true;
+                        result.Scheduled =
+                            true;
                         break;
 
                     case "--temp-run":
-                        result.TempRun = true;
+                        result.TempRun =
+                            true;
                         break;
                 }
             }
