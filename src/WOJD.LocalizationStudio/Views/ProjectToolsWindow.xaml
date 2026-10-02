@@ -1,0 +1,581 @@
+<Window x:Class="WOJD.LocalizationStudio.Views.ProjectToolsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Инструменты проекта"
+        Width="1280"
+        Height="820"
+        MinWidth="1000"
+        MinHeight="650"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}">
+    <Window.Resources>
+        <Style x:Key="ToolSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Margin="2,0,2,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <TextBlock Text="Инструменты проекта"
+                           FontSize="24"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="ProjectSubtitle"
+                           Margin="0,4,0,0"
+                           Foreground="{StaticResource MutedTextBrush}"/>
+            </StackPanel>
+
+            <Button Grid.Column="1"
+                    Content="Обновить данные"
+                    Style="{StaticResource SecondaryButton}"
+                    Padding="16,8"
+                    Click="RefreshAll_Click"/>
+        </Grid>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="Namespace">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="NamespaceSearchBox"
+                                 Padding="10,7"
+                                 TextChanged="NamespaceSearchBox_TextChanged"
+                                 ToolTip="Поиск Namespace"/>
+                        <Button Grid.Column="1"
+                                Content="Сбросить"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,7"
+                                Margin="8,0,0,0"
+                                Click="NamespaceReset_Click"/>
+                    </Grid>
+
+                    <DataGrid x:Name="NamespaceGrid"
+                              Grid.Row="1"
+                              Margin="0,10,0,10"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              MouseDoubleClick="NamespaceGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="*"/>
+                            <DataGridTextColumn Header="Всего" Binding="{Binding Total}" Width="85"/>
+                            <DataGridTextColumn Header="Переведено" Binding="{Binding Translated}" Width="105"/>
+                            <DataGridTextColumn Header="Без перевода" Binding="{Binding Untranslated}" Width="115"/>
+                            <DataGridTextColumn Header="QA" Binding="{Binding Errors}" Width="75"/>
+                            <DataGridTextColumn Header="Прогресс %" Binding="{Binding ProgressPercent, StringFormat={}{0:F1}}" Width="100"/>
+                            <DataGridCheckBoxColumn Header="Избранное" Binding="{Binding Favorite}" Width="95"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="2"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
+                        <Button Content="★ Избранное"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Margin="0,0,8,0"
+                                Click="ToggleFavoriteNamespace_Click"/>
+                        <Button Content="Показать Namespace"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="14,8"
+                                Click="FilterNamespace_Click"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Фильтры">
+                <StackPanel Margin="18">
+                    <TextBlock Text="Умный фильтр"
+                               Style="{StaticResource ToolSectionTitle}"/>
+
+                    <WrapPanel Margin="0,0,0,16">
+                        <CheckBox x:Name="FilterUntranslated" Content="Без перевода" Margin="0,0,18,8"/>
+                        <CheckBox x:Name="FilterQa" Content="QA-ошибки" Margin="0,0,18,8"/>
+                        <CheckBox x:Name="FilterEmptySource" Content="Пустой оригинал" Margin="0,0,18,8"/>
+                        <CheckBox x:Name="FilterCjk" Content="Китайский в переводе" Margin="0,0,18,8"/>
+                        <CheckBox x:Name="FilterPlaceholders" Content="Есть плейсхолдеры" Margin="0,0,18,8"/>
+                        <CheckBox x:Name="FilterLong" Content="Длинный перевод" Margin="0,0,18,8"/>
+                    </WrapPanel>
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Namespace"
+                                   VerticalAlignment="Center"/>
+                        <TextBox x:Name="FilterNamespaceBox"
+                                 Grid.Column="1"
+                                 Padding="9,6"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Имя фильтра"
+                                   VerticalAlignment="Center"/>
+                        <TextBox x:Name="FilterNameBox"
+                                 Grid.Column="1"
+                                 Padding="9,6"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Применить"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8"
+                                Margin="0,0,8,0"
+                                Click="ApplySmartFilter_Click"/>
+                        <Button Content="Сохранить фильтр"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="16,8"
+                                Margin="0,0,8,0"
+                                Click="SaveSmartFilter_Click"/>
+                        <Button Content="Сбросить активный"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="16,8"
+                                Click="ClearSmartFilter_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Сохранённые фильтры"
+                               Style="{StaticResource ToolSectionTitle}"
+                               Margin="0,24,0,10"/>
+
+                    <ListBox x:Name="SavedFiltersList"
+                             Height="220"
+                             DisplayMemberPath="Name"
+                             MouseDoubleClick="SavedFiltersList_MouseDoubleClick"/>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Единообразие">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="ConsistencyGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Проблема" Binding="{Binding Kind}" Width="220"/>
+                            <DataGridTextColumn Header="Исходник / перевод" Binding="{Binding Source}" Width="*"/>
+                            <DataGridTextColumn Header="Вариантов" Binding="{Binding Variants.Count}" Width="85"/>
+                            <DataGridTextColumn Header="Использований" Binding="{Binding Occurrences}" Width="105"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                Margin="0,10,0,0">
+                        <TextBox x:Name="ConsistencyTranslationBox"
+                                 Width="480"
+                                 Padding="9,7"
+                                 ToolTip="Введите утверждённый вариант"/>
+                        <Button Content="Применить ко всем"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8"
+                                Margin="8,0,0,0"
+                                Click="ApplyConsistency_Click"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Заметки">
+                <Grid Margin="18">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="NoteIdentityText"
+                               Style="{StaticResource ToolSectionTitle}"/>
+
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <ComboBox x:Name="NoteStateBox"
+                                  Width="220"
+                                  HorizontalAlignment="Left"
+                                  Padding="8,6">
+                            <ComboBoxItem Content="Черновик"/>
+                            <ComboBoxItem Content="Нужно проверить"/>
+                            <ComboBoxItem Content="Термин"/>
+                            <ComboBoxItem Content="Контекст неизвестен"/>
+                            <ComboBoxItem Content="Проверено"/>
+                        </ComboBox>
+
+                        <TextBox x:Name="NoteTextBox"
+                                 Grid.Row="1"
+                                 Margin="0,10,0,0"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Padding="12"/>
+                    </Grid>
+
+                    <Button Grid.Row="2"
+                            Content="Сохранить заметку"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="16,8"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,0,0"
+                            Click="SaveNote_Click"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Статистика">
+                <StackPanel Margin="20">
+                    <TextBlock Text="Статистика проекта"
+                               Style="{StaticResource ToolSectionTitle}"/>
+                    <TextBlock x:Name="StatisticsText"
+                               FontSize="16"
+                               LineHeight="28"
+                               TextWrapping="Wrap"/>
+                    <Button Content="Экспорт CSV…"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="16,8"
+                            HorizontalAlignment="Left"
+                            Margin="0,20,0,0"
+                            Click="ExportStatistics_Click"/>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="История">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="HistoryGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Время UTC" Binding="{Binding Utc}" Width="150"/>
+                            <DataGridTextColumn Header="Файл" Binding="{Binding FilePath}" Width="220"/>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="170"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="120"/>
+                            <DataGridTextColumn Header="Операция" Binding="{Binding OperationName}" Width="170"/>
+                            <DataGridTextColumn Header="Было" Binding="{Binding Before}" Width="*"/>
+                            <DataGridTextColumn Header="Стало" Binding="{Binding After}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Button Grid.Row="1"
+                            Content="Вернуть выбранное изменение"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="16,8"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,0,0"
+                            Click="RestoreHistory_Click"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Review">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="ReviewGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              MouseDoubleClick="ReviewGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Файл" Binding="{Binding FilePath}" Width="200"/>
+                            <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="55"/>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="190"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="120"/>
+                            <DataGridTextColumn Header="Причина" Binding="{Binding Reason}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Button Grid.Row="1"
+                            Content="Открыть строку"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="16,8"
+                            HorizontalAlignment="Right"
+                            Margin="0,10,0,0"
+                            Click="OpenReview_Click"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Глоссарий">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="GlossaryGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Исходный термин" Binding="{Binding Source}" Width="*"/>
+                            <DataGridTextColumn Header="Перевод" Binding="{Binding Translation}" Width="*"/>
+                            <DataGridTextColumn Header="Категория" Binding="{Binding Category}" Width="150"/>
+                            <DataGridTextColumn Header="Правило" Binding="{Binding Requirement}" Width="130"/>
+                            <DataGridTextColumn Header="Комментарий" Binding="{Binding Comment}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,10,0,0">
+                        <Button Content="Добавить"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="14,8"
+                                Margin="0,0,8,0"
+                                Click="AddGlossary_Click"/>
+                        <Button Content="Удалить"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Click="RemoveGlossary_Click"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Синхронизация">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox x:Name="ProtectExistingTranslations"
+                                  IsChecked="True"
+                                  Content="Не трогать уже переведённые строки"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,16,0"/>
+                        <Button Content="Найти конфликты"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Margin="0,0,8,0"
+                                Click="RefreshConflicts_Click"/>
+                        <Button Content="Синхронизировать из остальных открытых файлов"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="14,8"
+                                Click="SyncOpenDocuments_Click"/>
+                    </StackPanel>
+
+                    <DataGrid x:Name="ConflictsGrid"
+                              Grid.Row="1"
+                              Margin="0,10,0,10"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="220"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="150"/>
+                            <DataGridTextColumn Header="Тип" Binding="{Binding Kind}" Width="260"/>
+                            <DataGridTextColumn Header="Записей" Binding="{Binding Occurrences}" Width="90"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <TextBlock x:Name="SyncStatusText"
+                               Grid.Row="2"
+                               Foreground="{StaticResource MutedTextBrush}"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Git">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBox x:Name="GitStatusBox"
+                             IsReadOnly="True"
+                             FontFamily="Consolas"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
+
+                    <Grid Grid.Row="1"
+                          Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="GitCommitMessageBox"
+                                 Padding="9,7"
+                                 ToolTip="Сообщение коммита"/>
+                        <Button Grid.Column="1"
+                                Content="Обновить"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Margin="8,0,8,0"
+                                Click="RefreshGit_Click"/>
+                        <Button Grid.Column="2"
+                                Content="Commit"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8"
+                                Click="CommitGit_Click"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Релиз">
+                <StackPanel Margin="20">
+                    <TextBlock Text="Пакет изменений русификатора"
+                               Style="{StaticResource ToolSectionTitle}"/>
+
+                    <TextBlock Text="Версия"/>
+                    <TextBox x:Name="ReleaseVersionBox"
+                             Padding="9,7"
+                             Margin="0,5,0,12"/>
+
+                    <TextBlock Text="Changelog"/>
+                    <TextBox x:Name="ReleaseChangelogBox"
+                             Height="280"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Padding="10"
+                             Margin="0,5,0,12"/>
+
+                    <Button Content="Собрать ZIP…"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="18,9"
+                            HorizontalAlignment="Left"
+                            Click="CreateReleasePackage_Click"/>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Проект">
+                <StackPanel Margin="20">
+                    <TextBlock Text="Профиль WOJD"
+                               Style="{StaticResource ToolSectionTitle}"/>
+
+                    <TextBlock Text="Название"/>
+                    <TextBox x:Name="ProjectNameBox" Padding="9,7" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Корневая папка"/>
+                    <TextBox x:Name="ProjectRootBox" Padding="9,7" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Исходный язык"/>
+                    <TextBox x:Name="NativeLanguageBox" Padding="9,7" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Целевой язык"/>
+                    <TextBox x:Name="TargetLanguageBox" Padding="9,7" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Source LOCRES (необязательно)"/>
+                    <TextBox x:Name="SourceLocresBox" Padding="9,7" Margin="0,5,0,16"/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Сохранить профиль"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8"
+                                Margin="0,0,8,0"
+                                Click="SaveProjectProfile_Click"/>
+                        <Button Content="Перестроить SQLite-индекс"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="16,8"
+                                Click="RebuildIndex_Click"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="ProjectActionStatus"
+                               Margin="0,12,0,0"
+                               Foreground="{StaticResource MutedTextBrush}"/>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Совместная работа">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DataGrid x:Name="AssignmentsGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="*"/>
+                            <DataGridTextColumn Header="Исполнитель" Binding="{Binding Assignee}" Width="220"/>
+                            <DataGridTextColumn Header="Статус" Binding="{Binding State}" Width="180"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Margin="0,10,0,0">
+                        <Button Content="Добавить назначение"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="14,8"
+                                Margin="0,0,8,0"
+                                Click="AddAssignment_Click"/>
+                        <Button Content="Экспорт JSON…"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Margin="0,0,8,0"
+                                Click="ExportAssignments_Click"/>
+                        <Button Content="Импорт JSON…"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="14,8"
+                                Click="ImportAssignments_Click"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Контекст">
+                <Grid Margin="12">
+                    <DataGrid x:Name="ContextGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              MouseDoubleClick="ContextGrid_MouseDoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Связь" Binding="{Binding Relation}" Width="150"/>
+                            <DataGridTextColumn Header="Файл" Binding="{Binding FilePath}" Width="200"/>
+                            <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="55"/>
+                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace}" Width="170"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="110"/>
+                            <DataGridTextColumn Header="Оригинал" Binding="{Binding Original}" Width="*"/>
+                            <DataGridTextColumn Header="Перевод" Binding="{Binding Translation}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
