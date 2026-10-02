@@ -592,7 +592,7 @@ internal static class UpdateScheduler
                         Path.DirectorySeparatorChar);
 
             var taskCommand =
-                $""{updater}" --scheduled --install-dir "{installDir}"";
+                $"\"{updater}\" --scheduled --install-dir \"{installDir}\"";
 
             var info =
                 new ProcessStartInfo(
