@@ -8,7 +8,8 @@ public sealed record WorkspaceState(
     List<string> OpenFolders,
     string? ActiveFile,
     Dictionary<string, int> SelectedRows,
-    List<DraftFileState> Drafts);
+    List<DraftFileState> Drafts,
+    List<string>? SearchHistory = null);
 
 public sealed record DraftFileState(
     string FilePath,
