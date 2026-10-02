@@ -34,6 +34,20 @@ public partial class MainWindow : Window
             await _viewModel.LoadPathAsync(node.FullPath);
     }
 
+    private void CloseFileMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menuItem ||
+            menuItem.Parent is not ContextMenu contextMenu ||
+            contextMenu.PlacementTarget?.DataContext is not FileNode node ||
+            node.IsDirectory)
+        {
+            return;
+        }
+
+        if (_viewModel.CloseFileCommand.CanExecute(node))
+            _viewModel.CloseFileCommand.Execute(node);
+    }
+
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         await UpdateService.CheckNowAsync(
