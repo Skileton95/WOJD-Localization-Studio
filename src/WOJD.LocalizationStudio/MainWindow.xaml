@@ -89,12 +89,19 @@
                 </MenuItem>
 
                 <MenuItem Header="Инструменты">
+                    <MenuItem Header="Инструменты проекта…"
+                              Click="ProjectTools_Click"/>
                     <MenuItem Header="Поиск по проекту…"
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
+                    <MenuItem Header="Расширенный редактор…"
+                              Click="ExpandedEditor_Click"/>
                     <Separator/>
                     <MenuItem Header="Сравнить со старой версией…"
                               Click="CompareFile_Click"/>
+                    <Separator/>
+                    <MenuItem Header="Настройки…"
+                              Click="Settings_Click"/>
                 </MenuItem>
 
                 <MenuItem Header="Справка">
