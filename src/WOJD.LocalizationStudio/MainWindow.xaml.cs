@@ -89,6 +89,80 @@ public partial class MainWindow : Window
             EntriesGrid.ScrollIntoView(EntriesGrid.SelectedItem);
     }
 
+    private List<LocalizationEntry> GetSelectedEntries()
+        => EntriesGrid.SelectedItems
+            .OfType<LocalizationEntry>()
+            .ToList();
+
+    private void CopyOriginalToTranslation_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var entries = GetSelectedEntries();
+
+        if (entries.Count == 0 &&
+            _viewModel.SelectedEntry is not null)
+        {
+            entries.Add(_viewModel.SelectedEntry);
+        }
+
+        _viewModel.CopyOriginalToTranslation(entries);
+    }
+
+    private void ClearSelectedTranslations_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var entries = GetSelectedEntries();
+
+        if (entries.Count == 0 &&
+            _viewModel.SelectedEntry is not null)
+        {
+            entries.Add(_viewModel.SelectedEntry);
+        }
+
+        if (entries.Count == 0)
+            return;
+
+        var result =
+            AppDialog.Show(
+                $"Очистить перевод у строк: {entries.Count}?",
+                "Массовое действие",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                this);
+
+        if (result == MessageBoxResult.Yes)
+            _viewModel.ClearTranslations(entries);
+    }
+
+    private async void ExportSelected_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.ExportEntriesAsync(
+            GetSelectedEntries(),
+            "selected");
+    }
+
+    private async void ExportUntranslated_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.ExportEntriesAsync(
+            _viewModel.GetUntranslatedEntries(),
+            "untranslated");
+    }
+
+    private async void ExportErrors_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.ExportEntriesAsync(
+            _viewModel.GetErrorEntries(),
+            "qa-errors");
+    }
+
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         await UpdateService.CheckNowAsync(
