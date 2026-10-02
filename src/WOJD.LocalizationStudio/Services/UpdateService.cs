@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -18,12 +19,12 @@ public sealed record UpdateProgressState(
 
 public static class UpdateService
 {
-    private const string LatestReleaseUrl = "https://api.github.com/repos/Skileton95/WOJD-Localization-Studio/releases/latest";
-    private const string PackageAssetName = "WOJD-Localization-Studio-win-x64.zip";
+    private const string LatestManifestUrl =
+        "https://github.com/Skileton95/WOJD-Localization-Studio/releases/latest/download/update.json";
 
-    private static readonly HttpClient ApiHttp = CreateApiHttpClient();
-    private static readonly HttpClient DownloadHttp = CreateDownloadHttpClient();
+    private static readonly HttpClient Http = CreateHttpClient();
     private static readonly SemaphoreSlim CheckLock = new(1, 1);
+
     private static DispatcherTimer? _timer;
     private static string? _ignoredVersion;
 
@@ -36,45 +37,113 @@ public static class UpdateService
     {
         UpdateScheduler.TryRegister();
 
+        UpdateDiagnostics.Write(
+            $"Startup check. Current version: {GetCurrentVersion().ToString(3)}");
+
         await CheckAndPromptAsync(
             owner,
             reportProgress,
             confirmDiscardUnsaved,
-            showErrors: false);
+            isManual: false);
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(1)
+        };
+
         _timer.Tick += async (_, _) =>
             await CheckAndPromptAsync(
                 owner,
                 reportProgress,
                 confirmDiscardUnsaved,
-                showErrors: false);
+                isManual: false);
 
         _timer.Start();
     }
+
+    public static Task CheckNowAsync(
+        Window owner,
+        Action<UpdateProgressState> reportProgress,
+        Func<bool> confirmDiscardUnsaved)
+        => CheckAndPromptAsync(
+            owner,
+            reportProgress,
+            confirmDiscardUnsaved,
+            isManual: true);
 
     private static async Task CheckAndPromptAsync(
         Window owner,
         Action<UpdateProgressState> reportProgress,
         Func<bool> confirmDiscardUnsaved,
-        bool showErrors)
+        bool isManual)
     {
-        if (IsApplyingUpdate || !await CheckLock.WaitAsync(0))
+        if (IsApplyingUpdate)
+        {
+            if (isManual)
+            {
+                MessageBox.Show(
+                    owner,
+                    "Обновление уже выполняется.",
+                    "Проверка обновлений",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
             return;
+        }
+
+        if (!await CheckLock.WaitAsync(0))
+        {
+            if (isManual)
+            {
+                MessageBox.Show(
+                    owner,
+                    "Проверка обновлений уже выполняется.",
+                    "Проверка обновлений",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
+            return;
+        }
 
         var progressStarted = false;
 
         try
         {
-            var release = await GetLatestReleaseAsync();
-            if (release is null)
-                return;
-
             var current = GetCurrentVersion();
-            if (release.Version <= current || release.VersionText == _ignoredVersion)
-                return;
 
-            var dialog = new UpdateAvailableDialog(release.VersionText)
+            UpdateDiagnostics.Write(
+                $"Checking updates. Manual={isManual}; Current={current.ToString(3)}");
+
+            var release = await GetLatestReleaseAsync();
+
+            UpdateDiagnostics.Write(
+                $"Manifest received. Latest={release.VersionText}; Package={release.DownloadUrl}");
+
+            if (release.Version <= current)
+            {
+                if (isManual)
+                {
+                    MessageBox.Show(
+                        owner,
+                        $"Установлена последняя версия v{current.ToString(3)}.",
+                        "Проверка обновлений",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+
+                return;
+            }
+
+            if (!isManual &&
+                release.VersionText == _ignoredVersion)
+            {
+                return;
+            }
+
+            var dialog = new UpdateAvailableDialog(
+                release.VersionText)
             {
                 Owner = owner
             };
@@ -91,19 +160,24 @@ public static class UpdateService
             IsApplyingUpdate = true;
             progressStarted = true;
 
-            reportProgress(new UpdateProgressState(
-                true,
-                0,
-                true,
-                $"Подготовка обновления {release.VersionText}..."));
+            reportProgress(
+                new UpdateProgressState(
+                    true,
+                    0,
+                    true,
+                    $"Подготовка обновления {release.VersionText}..."));
 
-            var packagePath = await DownloadPackageAsync(release, reportProgress);
+            var packagePath =
+                await DownloadPackageAsync(
+                    release,
+                    reportProgress);
 
-            reportProgress(new UpdateProgressState(
-                true,
-                100,
-                false,
-                "Обновление загружено. Подготовка к установке..."));
+            reportProgress(
+                new UpdateProgressState(
+                    true,
+                    100,
+                    false,
+                    "Обновление загружено. Подготовка к установке..."));
 
             if (!UpdaterLauncher.TryLaunchLocalPackage(
                     packagePath,
@@ -114,11 +188,15 @@ public static class UpdateService
                     "Не найден компонент обновления.");
             }
 
-            reportProgress(new UpdateProgressState(
-                true,
-                100,
-                false,
-                "Установка обновления. Программа будет перезапущена..."));
+            UpdateDiagnostics.Write(
+                $"Updater launched for version {release.VersionText}.");
+
+            reportProgress(
+                new UpdateProgressState(
+                    true,
+                    100,
+                    false,
+                    "Установка обновления. Программа будет перезапущена..."));
 
             Application.Current.Shutdown();
         }
@@ -126,20 +204,24 @@ public static class UpdateService
         {
             IsApplyingUpdate = false;
 
+            UpdateDiagnostics.Write(
+                $"Update check failed: {ex}");
+
             if (progressStarted)
             {
-                reportProgress(new UpdateProgressState(
-                    true,
-                    0,
-                    false,
-                    $"Ошибка обновления: {ex.Message}"));
+                reportProgress(
+                    new UpdateProgressState(
+                        true,
+                        0,
+                        false,
+                        $"Ошибка обновления: {ex.Message}"));
             }
 
-            if (showErrors || progressStarted)
+            if (isManual || progressStarted)
             {
                 MessageBox.Show(
                     owner,
-                    ex.Message,
+                    $"{ex.Message}\n\nПодробности записаны в update.log.",
                     "Ошибка обновления",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -155,32 +237,44 @@ public static class UpdateService
         ReleaseInfo release,
         Action<UpdateProgressState> reportProgress)
     {
-        using var response = await DownloadHttp.GetAsync(
-            release.DownloadUrl,
-            HttpCompletionOption.ResponseHeadersRead);
+        using var request =
+            CreateNoCacheRequest(
+                release.DownloadUrl);
+
+        using var response =
+            await Http.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead);
 
         response.EnsureSuccessStatusCode();
 
-        var totalBytes = response.Content.Headers.ContentLength;
-        var downloadDir = Path.Combine(
-            Path.GetTempPath(),
-            "WOJD-Localization-Studio",
-            "downloads");
+        var totalBytes =
+            response.Content.Headers.ContentLength;
+
+        var downloadDir =
+            Path.Combine(
+                Path.GetTempPath(),
+                "WOJD-Localization-Studio",
+                "downloads");
 
         Directory.CreateDirectory(downloadDir);
 
-        var packagePath = Path.Combine(
-            downloadDir,
-            $"WOJD-Localization-Studio-{release.VersionText}.zip");
+        var packagePath =
+            Path.Combine(
+                downloadDir,
+                $"WOJD-Localization-Studio-{release.VersionText}.zip");
 
-        await using var input = await response.Content.ReadAsStreamAsync();
-        await using var output = new FileStream(
-            packagePath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            128 * 1024,
-            useAsync: true);
+        await using var input =
+            await response.Content.ReadAsStreamAsync();
+
+        await using var output =
+            new FileStream(
+                packagePath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                128 * 1024,
+                useAsync: true);
 
         var buffer = new byte[128 * 1024];
         long received = 0;
@@ -188,156 +282,234 @@ public static class UpdateService
 
         while (true)
         {
-            var read = await input.ReadAsync(buffer);
+            var read =
+                await input.ReadAsync(buffer);
+
             if (read == 0)
                 break;
 
-            await output.WriteAsync(buffer.AsMemory(0, read));
+            await output.WriteAsync(
+                buffer.AsMemory(0, read));
+
             received += read;
 
             if (totalBytes is > 0)
             {
-                var percent = (int)Math.Clamp(
-                    received * 100L / totalBytes.Value,
-                    0,
-                    100);
+                var percent =
+                    (int)Math.Clamp(
+                        received * 100L /
+                        totalBytes.Value,
+                        0,
+                        100);
 
                 if (percent != lastPercent)
                 {
                     lastPercent = percent;
-                    reportProgress(new UpdateProgressState(
-                        true,
-                        percent,
-                        false,
-                        $"Скачивание обновления {release.VersionText}..."));
+
+                    reportProgress(
+                        new UpdateProgressState(
+                            true,
+                            percent,
+                            false,
+                            $"Скачивание обновления {release.VersionText}..."));
                 }
             }
             else
             {
-                reportProgress(new UpdateProgressState(
-                    true,
-                    0,
-                    true,
-                    $"Скачивание обновления {release.VersionText}..."));
+                reportProgress(
+                    new UpdateProgressState(
+                        true,
+                        0,
+                        true,
+                        $"Скачивание обновления {release.VersionText}..."));
             }
         }
 
         await output.FlushAsync();
 
-        if (!string.IsNullOrWhiteSpace(release.Sha256))
-        {
-            reportProgress(new UpdateProgressState(
+        reportProgress(
+            new UpdateProgressState(
                 true,
                 100,
                 false,
                 "Проверка загруженного обновления..."));
 
-            await using var verifyStream = File.OpenRead(packagePath);
-            var hash = await SHA256.HashDataAsync(verifyStream);
-            var actual = Convert.ToHexString(hash).ToLowerInvariant();
+        await using var verifyStream =
+            File.OpenRead(packagePath);
 
-            if (!string.Equals(actual, release.Sha256, StringComparison.OrdinalIgnoreCase))
+        var hash =
+            await SHA256.HashDataAsync(
+                verifyStream);
+
+        var actual =
+            Convert
+                .ToHexString(hash)
+                .ToLowerInvariant();
+
+        if (!string.Equals(
+                actual,
+                release.Sha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            try
             {
-                try { File.Delete(packagePath); } catch { }
-
-                throw new InvalidDataException(
-                    "Контрольная сумма загруженного обновления не совпала.");
+                File.Delete(packagePath);
             }
+            catch
+            {
+            }
+
+            throw new InvalidDataException(
+                "Контрольная сумма загруженного обновления не совпала.");
         }
+
+        UpdateDiagnostics.Write(
+            $"Package downloaded and verified: {packagePath}");
 
         return packagePath;
     }
 
-    private static async Task<ReleaseInfo?> GetLatestReleaseAsync()
+    private static async Task<ReleaseInfo> GetLatestReleaseAsync()
     {
-        using var response = await ApiHttp.GetAsync(LatestReleaseUrl);
+        var cacheBust =
+            DateTimeOffset.UtcNow
+                .ToUnixTimeMilliseconds();
+
+        var url =
+            $"{LatestManifestUrl}?t={cacheBust}";
+
+        using var request =
+            CreateNoCacheRequest(url);
+
+        using var response =
+            await Http.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead);
+
         if (!response.IsSuccessStatusCode)
-            return null;
-
-        await using var stream = await response.Content.ReadAsStreamAsync();
-        using var json = await JsonDocument.ParseAsync(stream);
-        var root = json.RootElement;
-
-        var tag = root.GetProperty("tag_name").GetString() ?? string.Empty;
-        var versionText = tag.TrimStart('v', 'V');
-
-        if (!Version.TryParse(versionText, out var version))
-            return null;
-
-        foreach (var asset in root.GetProperty("assets").EnumerateArray())
         {
-            if (!string.Equals(
-                    asset.GetProperty("name").GetString(),
-                    PackageAssetName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var url = asset.GetProperty("browser_download_url").GetString();
-            if (string.IsNullOrWhiteSpace(url))
-                continue;
-
-            string? sha256 = null;
-
-            if (asset.TryGetProperty("digest", out var digestElement))
-            {
-                var digest = digestElement.GetString();
-                if (!string.IsNullOrWhiteSpace(digest) &&
-                    digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
-                {
-                    sha256 = digest["sha256:".Length..];
-                }
-            }
-
-            return new ReleaseInfo(
-                version,
-                versionText,
-                url,
-                sha256);
+            throw new HttpRequestException(
+                $"Сервер обновлений вернул HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
         }
 
-        return null;
+        await using var stream =
+            await response.Content.ReadAsStreamAsync();
+
+        var manifest =
+            await JsonSerializer.DeserializeAsync<UpdateManifest>(
+                stream,
+                new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+        if (manifest is null ||
+            string.IsNullOrWhiteSpace(manifest.Version) ||
+            string.IsNullOrWhiteSpace(manifest.PackageUrl) ||
+            string.IsNullOrWhiteSpace(manifest.Sha256))
+        {
+            throw new InvalidDataException(
+                "Файл update.json имеет неверный формат.");
+        }
+
+        if (!Version.TryParse(
+                manifest.Version,
+                out var version))
+        {
+            throw new InvalidDataException(
+                $"Некорректная версия в update.json: {manifest.Version}");
+        }
+
+        return new ReleaseInfo(
+            version,
+            manifest.Version,
+            manifest.PackageUrl,
+            manifest.Sha256);
+    }
+
+    private static HttpRequestMessage CreateNoCacheRequest(
+        string url)
+    {
+        var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                url);
+
+        request.Headers.CacheControl =
+            new CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MaxAge = TimeSpan.Zero
+            };
+
+        request.Headers.Pragma.ParseAdd(
+            "no-cache");
+
+        return request;
     }
 
     private static Version GetCurrentVersion()
-        => Assembly.GetExecutingAssembly().GetName().Version
+        => Assembly
+               .GetExecutingAssembly()
+               .GetName()
+               .Version
            ?? new Version(0, 0, 0, 0);
 
-    private static HttpClient CreateApiHttpClient()
+    private static HttpClient CreateHttpClient()
     {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(20)
-        };
+        var handler =
+            new HttpClientHandler
+            {
+                AllowAutoRedirect = true
+            };
 
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "WOJD-Localization-Studio-Updater/1.0");
-
-        client.DefaultRequestHeaders.Accept.ParseAdd(
-            "application/vnd.github+json");
-
-        return client;
-    }
-
-    private static HttpClient CreateDownloadHttpClient()
-    {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(5)
-        };
+        var client =
+            new HttpClient(handler)
+            {
+                Timeout =
+                    TimeSpan.FromMinutes(5)
+            };
 
         client.DefaultRequestHeaders.UserAgent.ParseAdd(
             "WOJD-Localization-Studio-Updater/1.0");
 
         return client;
     }
+
+    private sealed record UpdateManifest(
+        string Version,
+        string PackageUrl,
+        string Sha256);
 
     private sealed record ReleaseInfo(
         Version Version,
         string VersionText,
         string DownloadUrl,
-        string? Sha256);
+        string Sha256);
+}
+
+internal static class UpdateDiagnostics
+{
+    private static readonly object Sync = new();
+
+    public static void Write(string message)
+    {
+        try
+        {
+            lock (Sync)
+            {
+                File.AppendAllText(
+                    Path.Combine(
+                        AppContext.BaseDirectory,
+                        "update.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
+            }
+        }
+        catch
+        {
+        }
+    }
 }
 
 internal static class UpdaterLauncher
@@ -347,27 +519,32 @@ internal static class UpdaterLauncher
         string version,
         bool restart)
     {
-        var updater = Path.Combine(
-            AppContext.BaseDirectory,
-            "Updater",
-            "WOJD-Localization-Studio.Updater.exe");
+        var updater =
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "Updater",
+                "WOJD-Localization-Studio.Updater.exe");
 
         if (!File.Exists(updater))
             return false;
 
-        var appExe = Path.Combine(
-            AppContext.BaseDirectory,
-            "WOJD-Localization-Studio.exe");
+        var appExe =
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "WOJD-Localization-Studio.exe");
 
-        var info = new ProcessStartInfo(updater)
-        {
-            UseShellExecute = false
-        };
+        var info =
+            new ProcessStartInfo(updater)
+            {
+                UseShellExecute = false
+            };
 
         info.ArgumentList.Add("--apply");
         info.ArgumentList.Add("--install-dir");
         info.ArgumentList.Add(
-            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+            AppContext.BaseDirectory
+                .TrimEnd(
+                    Path.DirectorySeparatorChar));
 
         info.ArgumentList.Add("--package-file");
         info.ArgumentList.Add(packagePath);
@@ -376,7 +553,8 @@ internal static class UpdaterLauncher
         info.ArgumentList.Add(version);
 
         info.ArgumentList.Add("--wait-pid");
-        info.ArgumentList.Add(Environment.ProcessId.ToString());
+        info.ArgumentList.Add(
+            Environment.ProcessId.ToString());
 
         if (restart)
         {
@@ -385,38 +563,46 @@ internal static class UpdaterLauncher
         }
 
         Process.Start(info);
+
         return true;
     }
 }
 
 internal static class UpdateScheduler
 {
-    private const string TaskName = "WOJD Localization Studio Updater";
+    private const string TaskName =
+        "WOJD Localization Studio Updater";
 
     public static void TryRegister()
     {
         try
         {
-            var updater = Path.Combine(
-                AppContext.BaseDirectory,
-                "Updater",
-                "WOJD-Localization-Studio.Updater.exe");
+            var updater =
+                Path.Combine(
+                    AppContext.BaseDirectory,
+                    "Updater",
+                    "WOJD-Localization-Studio.Updater.exe");
 
             if (!File.Exists(updater))
                 return;
 
             var installDir =
-                AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                AppContext.BaseDirectory
+                    .TrimEnd(
+                        Path.DirectorySeparatorChar);
 
             var taskCommand =
-                $"\"{updater}\" --scheduled --install-dir \"{installDir}\"";
+                $""{updater}" --scheduled --install-dir "{installDir}"";
 
-            var info = new ProcessStartInfo("schtasks.exe")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
+            var info =
+                new ProcessStartInfo(
+                    "schtasks.exe")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle =
+                        ProcessWindowStyle.Hidden
+                };
 
             info.ArgumentList.Add("/Create");
             info.ArgumentList.Add("/TN");
@@ -429,13 +615,18 @@ internal static class UpdateScheduler
             info.ArgumentList.Add("1");
             info.ArgumentList.Add("/F");
 
-            using var process = Process.Start(info);
+            using var process =
+                Process.Start(info);
+
             process?.WaitForExit(5000);
+
+            UpdateDiagnostics.Write(
+                $"Scheduled updater task registration exit code: {process?.ExitCode}");
         }
-        catch
+        catch (Exception ex)
         {
-            // Встроенная проверка обновлений продолжит работать,
-            // даже если Планировщик Windows недоступен.
+            UpdateDiagnostics.Write(
+                $"Scheduled updater registration failed: {ex}");
         }
     }
 }
