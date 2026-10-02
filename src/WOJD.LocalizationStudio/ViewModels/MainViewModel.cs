@@ -17,29 +17,21 @@ public sealed class MainViewModel : ObservableObject
     private readonly ILocalizationFileAdapter _adapter =
         new NdjsonLocalizationAdapter();
 
-    private readonly Dictionary<LocalizationEntry, TranslationStatus>
-        _knownStatuses = new();
+    private readonly Dictionary<string, DocumentSession> _sessions =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly Dictionary<LocalizationEntry, string>
-        _knownTranslations = new();
-
-    private readonly Stack<TranslationEdit> _undoStack = new();
-    private readonly Stack<TranslationEdit> _redoStack = new();
+    private readonly Dictionary<LocalizationEntry, DocumentSession> _entrySessions =
+        new();
 
     private readonly DispatcherTimer _searchDebounceTimer;
 
-    private LocalizationDocument? _document;
+    private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
     private string _statusFilter = "Все";
     private string? _namespaceFilter;
     private bool _isBusy;
     private string _busyText = string.Empty;
-
-    private int _translatedCount;
-    private int _untranslatedCount;
-    private int _modifiedCount;
-    private bool _historyChangeInProgress;
 
     public MainViewModel()
     {
@@ -70,8 +62,21 @@ public sealed class MainViewModel : ObservableObject
         SaveCommand =
             new RelayCommand(
                 async () => await SaveAsync(),
-                () => _document is not null &&
-                      HasUnsavedChanges);
+                () => _activeSession?.HasUnsavedChanges == true);
+
+        SaveAllCommand =
+            new RelayCommand(
+                async () => await SaveAllAsync(),
+                () => _sessions.Values.Any(x => x.HasUnsavedChanges));
+
+        CloseFileCommand =
+            new RelayCommand(
+                async value =>
+                {
+                    if (value is FileNode node)
+                        await CloseFileAsync(node);
+                },
+                value => value is FileNode { IsDirectory: false });
 
         ApplyCommand =
             new RelayCommand(
@@ -124,12 +129,12 @@ public sealed class MainViewModel : ObservableObject
         UndoCommand =
             new RelayCommand(
                 UndoTranslation,
-                () => _undoStack.Count > 0);
+                () => _activeSession?.UndoStack.Count > 0);
 
         RedoCommand =
             new RelayCommand(
                 RedoTranslation,
-                () => _redoStack.Count > 0);
+                () => _activeSession?.RedoStack.Count > 0);
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -140,15 +145,14 @@ public sealed class MainViewModel : ObservableObject
 
     public ICollectionView EntriesView { get; }
 
-    public string[] StatusFilters { get; } =
-        ["Все", "Без перевода", "Переведено", "Изменено"];
-
     public string AppVersion
         => $"v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"}";
 
     public RelayCommand OpenFileCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
     public RelayCommand SaveCommand { get; }
+    public RelayCommand SaveAllCommand { get; }
+    public RelayCommand CloseFileCommand { get; }
     public RelayCommand ApplyCommand { get; }
     public RelayCommand PreviousCommand { get; }
     public RelayCommand NextCommand { get; }
@@ -168,6 +172,9 @@ public sealed class MainViewModel : ObservableObject
         {
             if (!SetProperty(ref _selectedEntry, value))
                 return;
+
+            if (_activeSession is not null)
+                _activeSession.SelectedEntry = value;
 
             PreviousCommand.RaiseCanExecuteChanged();
             NextCommand.RaiseCanExecuteChanged();
@@ -230,10 +237,10 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public int TotalCount => Entries.Count;
-    public int TranslatedCount => _translatedCount;
-    public int UntranslatedCount => _untranslatedCount;
-    public int ModifiedCount => _modifiedCount;
-    public bool HasUnsavedChanges => _modifiedCount > 0;
+    public int TranslatedCount => _activeSession?.TranslatedCount ?? 0;
+    public int UntranslatedCount => _activeSession?.UntranslatedCount ?? 0;
+    public int ModifiedCount => _activeSession?.ModifiedCount ?? 0;
+    public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
     public async Task LoadPathAsync(
         string path,
@@ -250,56 +257,63 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        if (confirmDiscard &&
-            !ConfirmDiscardUnsaved())
+        var fullPath = Path.GetFullPath(path);
+
+        if (_sessions.TryGetValue(fullPath, out var existing))
         {
+            ActivateSession(existing);
             return;
         }
 
         IsBusy = true;
         BusyText =
-            $"Открытие {Path.GetFileName(path)}...";
+            $"Открытие {Path.GetFileName(fullPath)}...";
 
         try
         {
-            // Адаптер выполняет чтение и JSON-разбор вне UI-потока.
             var document =
-                await _adapter.LoadAsync(path);
+                await _adapter.LoadAsync(fullPath);
 
-            UnsubscribeEntries();
+            var node =
+                FindNodeByPath(fullPath)
+                ?? new FileNode
+                {
+                    Name = Path.GetFileName(fullPath),
+                    FullPath = fullPath,
+                    IsDirectory = false,
+                    EntryCount = document.Entries.Count
+                };
 
-            _document = document;
+            if (FindNodeByPath(fullPath) is null)
+                FileTree.Add(node);
 
-            _knownStatuses.Clear();
-            _knownTranslations.Clear();
-            _undoStack.Clear();
-            _redoStack.Clear();
-            _historyChangeInProgress = false;
-            _translatedCount = 0;
-            _untranslatedCount = 0;
-            _modifiedCount = 0;
+            node.EntryCount = document.Entries.Count;
+
+            var session =
+                new DocumentSession
+                {
+                    Document = document,
+                    Node = node
+                };
 
             foreach (var entry in document.Entries)
             {
-                entry.PropertyChanged +=
-                    Entry_PropertyChanged;
+                entry.PropertyChanged += Entry_PropertyChanged;
+                _entrySessions[entry] = session;
 
                 var status = entry.Status;
-                _knownStatuses[entry] = status;
-                _knownTranslations[entry] = entry.Translation;
-                ChangeStatusCounter(status, 1);
+                session.KnownStatuses[entry] = status;
+                session.KnownTranslations[entry] = entry.Translation;
+
+                ChangeStatusCounter(
+                    session,
+                    status,
+                    1);
             }
 
-            // Одно Reset-событие вместо десятков тысяч Add.
-            Entries.ReplaceAll(document.Entries);
-
-            RaiseStatsChanged();
-            RaiseHistoryCommandStates();
-
-            SelectedEntry =
-                EntriesView
-                    .Cast<LocalizationEntry>()
-                    .FirstOrDefault();
+            _sessions[fullPath] = session;
+            ActivateSession(session);
+            RaiseGlobalCommandStates();
         }
         catch (Exception ex)
         {
@@ -318,15 +332,51 @@ public sealed class MainViewModel : ObservableObject
 
     public bool ConfirmDiscardUnsaved()
     {
-        if (!HasUnsavedChanges)
+        var dirty =
+            _sessions.Values
+                .Where(x => x.HasUnsavedChanges)
+                .Select(x => x.Node.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (dirty.Length == 0)
             return true;
 
+        var preview =
+            string.Join(
+                Environment.NewLine,
+                dirty.Take(8).Select(x => $"• {x}"));
+
+        if (dirty.Length > 8)
+            preview += $"{Environment.NewLine}• …ещё {dirty.Length - 8}";
+
         return AppDialog.Show(
-                   "Есть несохранённые изменения. Продолжить без сохранения?",
+                   $"Есть несохранённые изменения в файлах:{Environment.NewLine}{Environment.NewLine}{preview}{Environment.NewLine}{Environment.NewLine}Продолжить без сохранения?",
                    "Несохранённые изменения",
                    MessageBoxButton.YesNo,
                    MessageBoxImage.Warning)
                == MessageBoxResult.Yes;
+    }
+
+    private void ActivateSession(
+        DocumentSession session)
+    {
+        _activeSession = session;
+
+        Entries.ReplaceAll(
+            session.Document.Entries);
+
+        EntriesView.Refresh();
+
+        SelectedEntry =
+            session.SelectedEntry
+            ?? EntriesView
+                .Cast<LocalizationEntry>()
+                .FirstOrDefault();
+
+        RaiseStatsChanged();
+        RaiseHistoryCommandStates();
+        RaiseGlobalCommandStates();
     }
 
     private async Task OpenFileAsync()
@@ -334,42 +384,15 @@ public sealed class MainViewModel : ObservableObject
         var dialog = new OpenFileDialog
         {
             Filter =
-                "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*"
+                "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*",
+            Multiselect = true
         };
 
         if (dialog.ShowDialog() != true)
             return;
 
-        await LoadPathAsync(dialog.FileName);
-
-        if (_document is not null &&
-            string.Equals(
-                _document.FilePath,
-                dialog.FileName,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            var alreadyOpen =
-                FileTree.Any(
-                    node =>
-                        !node.IsDirectory &&
-                        string.Equals(
-                            node.FullPath,
-                            dialog.FileName,
-                            StringComparison.OrdinalIgnoreCase));
-
-            if (!alreadyOpen)
-            {
-                FileTree.Add(
-                    new FileNode
-                    {
-                        Name =
-                            Path.GetFileName(dialog.FileName),
-                        FullPath = dialog.FileName,
-                        IsDirectory = false,
-                        EntryCount = Entries.Count
-                    });
-            }
-        }
+        foreach (var file in dialog.FileNames)
+            await LoadPathAsync(file);
     }
 
     private async Task OpenFolderAsync()
@@ -379,29 +402,43 @@ public sealed class MainViewModel : ObservableObject
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ConfirmDiscardUnsaved())
-            return;
-
         IsBusy = true;
         BusyText = "Сканирование папки...";
 
         try
         {
-            // Подсчёт строк по файлам больше не блокирует окно.
-            var root =
-                await Task.Run(
-                    () => BuildTree(dialog.FolderName));
+            var folderPath =
+                Path.GetFullPath(dialog.FolderName);
 
-            FileTree.ReplaceAll([root]);
+            var existingRoot =
+                FileTree.FirstOrDefault(
+                    x =>
+                        x.IsDirectory &&
+                        string.Equals(
+                            Path.GetFullPath(x.FullPath),
+                            folderPath,
+                            StringComparison.OrdinalIgnoreCase));
 
-            var first = FindFirstSupported(root);
+            FileNode root;
+
+            if (existingRoot is not null)
+            {
+                root = existingRoot;
+            }
+            else
+            {
+                root =
+                    await Task.Run(
+                        () => BuildTree(folderPath));
+
+                FileTree.Add(root);
+            }
+
+            var first =
+                FindFirstSupported(root);
 
             if (first is not null)
-            {
-                await LoadPathAsync(
-                    first.FullPath,
-                    confirmDiscard: false);
-            }
+                await LoadPathAsync(first.FullPath);
         }
         catch (Exception ex)
         {
@@ -418,14 +455,19 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private FileNode BuildTree(string path)
+    private FileNode BuildTree(
+        string path)
     {
-        var node = new FileNode
-        {
-            Name = Path.GetFileName(path),
-            FullPath = path,
-            IsDirectory = true
-        };
+        var node =
+            new FileNode
+            {
+                Name =
+                    string.IsNullOrWhiteSpace(Path.GetFileName(path))
+                        ? path
+                        : Path.GetFileName(path),
+                FullPath = path,
+                IsDirectory = true
+            };
 
         try
         {
@@ -448,7 +490,7 @@ public sealed class MainViewModel : ObservableObject
                     new FileNode
                     {
                         Name = Path.GetFileName(file),
-                        FullPath = file,
+                        FullPath = Path.GetFullPath(file),
                         IsDirectory = false,
                         EntryCount = CountFileRows(file)
                     });
@@ -469,19 +511,21 @@ public sealed class MainViewModel : ObservableObject
         {
             var count = 0;
 
-            using var stream = new FileStream(
-                path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite,
-                bufferSize: 1024 * 1024,
-                options: FileOptions.SequentialScan);
+            using var stream =
+                new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite,
+                    bufferSize: 1024 * 1024,
+                    options: FileOptions.SequentialScan);
 
-            using var reader = new StreamReader(
-                stream,
-                Encoding.UTF8,
-                detectEncodingFromByteOrderMarks: true,
-                bufferSize: 1024 * 1024);
+            using var reader =
+                new StreamReader(
+                    stream,
+                    Encoding.UTF8,
+                    detectEncodingFromByteOrderMarks: true,
+                    bufferSize: 1024 * 1024);
 
             while (reader.ReadLine() is { } line)
             {
@@ -495,6 +539,50 @@ public sealed class MainViewModel : ObservableObject
         {
             return 0;
         }
+    }
+
+    private FileNode? FindNodeByPath(
+        string path)
+    {
+        foreach (var node in FileTree)
+        {
+            var found =
+                FindNodeByPath(
+                    node,
+                    path);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static FileNode? FindNodeByPath(
+        FileNode node,
+        string path)
+    {
+        if (!node.IsDirectory &&
+            string.Equals(
+                Path.GetFullPath(node.FullPath),
+                Path.GetFullPath(path),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return node;
+        }
+
+        foreach (var child in node.Children)
+        {
+            var found =
+                FindNodeByPath(
+                    child,
+                    path);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
     }
 
     private static FileNode? FindFirstSupported(
@@ -517,7 +605,7 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task SaveAsync()
     {
-        if (_document is null)
+        if (_activeSession is null)
             return;
 
         IsBusy = true;
@@ -525,14 +613,8 @@ public sealed class MainViewModel : ObservableObject
 
         try
         {
-            BackupService.CreateBackup(
-                _document.FilePath);
-
-            await _adapter.SaveAsync(
-                _document);
-
-            RebuildStatusCache();
-            RaiseStatsChanged();
+            await SaveSessionAsync(
+                _activeSession);
         }
         catch (Exception ex)
         {
@@ -547,6 +629,170 @@ public sealed class MainViewModel : ObservableObject
             BusyText = string.Empty;
             IsBusy = false;
         }
+    }
+
+    private async Task SaveAllAsync()
+    {
+        var dirty =
+            _sessions.Values
+                .Where(x => x.HasUnsavedChanges)
+                .ToArray();
+
+        if (dirty.Length == 0)
+            return;
+
+        IsBusy = true;
+        BusyText =
+            $"Сохранение файлов: 0/{dirty.Length}";
+
+        try
+        {
+            for (var i = 0; i < dirty.Length; i++)
+            {
+                BusyText =
+                    $"Сохранение файлов: {i + 1}/{dirty.Length}";
+
+                await SaveSessionAsync(
+                    dirty[i]);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                ex.Message,
+                "Ошибка сохранения",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            BusyText = string.Empty;
+            IsBusy = false;
+            RaiseGlobalCommandStates();
+        }
+    }
+
+    private async Task SaveSessionAsync(
+        DocumentSession session)
+    {
+        BackupService.CreateBackup(
+            session.Document.FilePath);
+
+        await _adapter.SaveAsync(
+            session.Document);
+
+        RebuildStatusCache(
+            session);
+
+        session.Node.IsModified = false;
+
+        if (ReferenceEquals(
+                session,
+                _activeSession))
+        {
+            RaiseStatsChanged();
+        }
+
+        RaiseGlobalCommandStates();
+    }
+
+    private async Task CloseFileAsync(
+        FileNode node)
+    {
+        var path =
+            Path.GetFullPath(node.FullPath);
+
+        if (_sessions.TryGetValue(
+                path,
+                out var session))
+        {
+            if (session.HasUnsavedChanges)
+            {
+                var result =
+                    AppDialog.Show(
+                        $"В файле «{node.Name}» есть несохранённые изменения. Закрыть его без сохранения?",
+                        "Закрытие файла",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                if (result != MessageBoxResult.Yes)
+                    return;
+            }
+
+            foreach (var entry in session.Document.Entries)
+            {
+                entry.PropertyChanged -= Entry_PropertyChanged;
+                _entrySessions.Remove(entry);
+            }
+
+            _sessions.Remove(path);
+
+            if (ReferenceEquals(
+                    session,
+                    _activeSession))
+            {
+                _activeSession = null;
+
+                var next =
+                    _sessions.Values.FirstOrDefault();
+
+                if (next is not null)
+                {
+                    ActivateSession(next);
+                }
+                else
+                {
+                    Entries.ReplaceAll([]);
+                    SelectedEntry = null;
+                    RaiseStatsChanged();
+                    RaiseHistoryCommandStates();
+                }
+            }
+        }
+
+        RemoveNode(
+            node);
+
+        RaiseGlobalCommandStates();
+
+        await Task.CompletedTask;
+    }
+
+    private void RemoveNode(
+        FileNode target)
+    {
+        if (FileTree.Remove(target))
+            return;
+
+        foreach (var root in FileTree)
+        {
+            if (RemoveNode(
+                    root,
+                    target))
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool RemoveNode(
+        FileNode parent,
+        FileNode target)
+    {
+        if (parent.Children.Remove(target))
+            return true;
+
+        foreach (var child in parent.Children)
+        {
+            if (RemoveNode(
+                    child,
+                    target))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ApplyCurrent()
@@ -633,12 +879,20 @@ public sealed class MainViewModel : ObservableObject
 
     private void UndoTranslation()
     {
-        if (_undoStack.Count == 0)
+        var session =
+            _activeSession;
+
+        if (session is null ||
+            session.UndoStack.Count == 0)
+        {
             return;
+        }
 
-        var edit = _undoStack.Pop();
+        var edit =
+            session.UndoStack.Pop();
 
-        _historyChangeInProgress = true;
+        session.HistoryChangeInProgress = true;
+
         try
         {
             SelectedEntry = edit.Entry;
@@ -646,21 +900,29 @@ public sealed class MainViewModel : ObservableObject
         }
         finally
         {
-            _historyChangeInProgress = false;
+            session.HistoryChangeInProgress = false;
         }
 
-        _redoStack.Push(edit);
+        session.RedoStack.Push(edit);
         RaiseHistoryCommandStates();
     }
 
     private void RedoTranslation()
     {
-        if (_redoStack.Count == 0)
+        var session =
+            _activeSession;
+
+        if (session is null ||
+            session.RedoStack.Count == 0)
+        {
             return;
+        }
 
-        var edit = _redoStack.Pop();
+        var edit =
+            session.RedoStack.Pop();
 
-        _historyChangeInProgress = true;
+        session.HistoryChangeInProgress = true;
+
         try
         {
             SelectedEntry = edit.Entry;
@@ -668,10 +930,10 @@ public sealed class MainViewModel : ObservableObject
         }
         finally
         {
-            _historyChangeInProgress = false;
+            session.HistoryChangeInProgress = false;
         }
 
-        _undoStack.Push(edit);
+        session.UndoStack.Push(edit);
         RaiseHistoryCommandStates();
     }
 
@@ -687,102 +949,135 @@ public sealed class MainViewModel : ObservableObject
     {
         if (e.PropertyName !=
                 nameof(LocalizationEntry.Translation) ||
-            sender is not LocalizationEntry entry)
+            sender is not LocalizationEntry entry ||
+            !_entrySessions.TryGetValue(
+                entry,
+                out var session))
         {
             return;
         }
 
-        var currentTranslation = entry.Translation;
+        var currentTranslation =
+            entry.Translation;
 
-        if (!_knownTranslations.TryGetValue(
+        if (!session.KnownTranslations.TryGetValue(
                 entry,
                 out var previousTranslation))
         {
-            previousTranslation = currentTranslation;
+            previousTranslation =
+                currentTranslation;
         }
 
-        if (!_historyChangeInProgress &&
+        if (!session.HistoryChangeInProgress &&
             !string.Equals(
                 previousTranslation,
                 currentTranslation,
                 StringComparison.Ordinal))
         {
-            _undoStack.Push(
+            session.UndoStack.Push(
                 new TranslationEdit(
                     entry,
                     previousTranslation,
                     currentTranslation));
 
-            _redoStack.Clear();
-            RaiseHistoryCommandStates();
+            session.RedoStack.Clear();
         }
 
-        _knownTranslations[entry] = currentTranslation;
+        session.KnownTranslations[entry] =
+            currentTranslation;
 
-        var current = entry.Status;
+        var current =
+            entry.Status;
 
-        if (!_knownStatuses.TryGetValue(
+        if (!session.KnownStatuses.TryGetValue(
                 entry,
                 out var previous))
         {
             previous = current;
-            _knownStatuses[entry] = current;
+            session.KnownStatuses[entry] = current;
         }
 
         if (previous != current)
         {
             ChangeStatusCounter(
+                session,
                 previous,
                 -1);
 
             ChangeStatusCounter(
+                session,
                 current,
                 1);
 
-            _knownStatuses[entry] = current;
+            session.KnownStatuses[entry] =
+                current;
+        }
+
+        session.Node.IsModified =
+            session.HasUnsavedChanges;
+
+        if (ReferenceEquals(
+                session,
+                _activeSession))
+        {
             RaiseStatsChanged();
+            RaiseHistoryCommandStates();
+
+            if (StatusFilter != "Все" ||
+                !string.IsNullOrWhiteSpace(SearchText))
+            {
+                EntriesView.Refresh();
+            }
         }
 
-        if (StatusFilter != "Все" ||
-            !string.IsNullOrWhiteSpace(SearchText))
-        {
-            EntriesView.Refresh();
-        }
-
-        SaveCommand.RaiseCanExecuteChanged();
+        RaiseGlobalCommandStates();
     }
 
-    private void RebuildStatusCache()
+    private static void RebuildStatusCache(
+        DocumentSession session)
     {
-        _knownStatuses.Clear();
-        _translatedCount = 0;
-        _untranslatedCount = 0;
-        _modifiedCount = 0;
+        session.KnownStatuses.Clear();
+        session.KnownTranslations.Clear();
+        session.TranslatedCount = 0;
+        session.UntranslatedCount = 0;
+        session.ModifiedCount = 0;
 
-        foreach (var entry in Entries)
+        foreach (var entry in
+                 session.Document.Entries)
         {
-            var status = entry.Status;
-            _knownStatuses[entry] = status;
-            ChangeStatusCounter(status, 1);
+            var status =
+                entry.Status;
+
+            session.KnownStatuses[entry] =
+                status;
+
+            session.KnownTranslations[entry] =
+                entry.Translation;
+
+            ChangeStatusCounter(
+                session,
+                status,
+                1);
         }
     }
 
-    private void ChangeStatusCounter(
+    private static void ChangeStatusCounter(
+        DocumentSession session,
         TranslationStatus status,
         int delta)
     {
         switch (status)
         {
             case TranslationStatus.Translated:
-                _translatedCount += delta;
+                session.TranslatedCount += delta;
                 break;
 
             case TranslationStatus.Untranslated:
-                _untranslatedCount += delta;
+                session.UntranslatedCount += delta;
                 break;
 
             case TranslationStatus.Modified:
-                _modifiedCount += delta;
+                session.ModifiedCount += delta;
                 break;
         }
     }
@@ -794,21 +1089,13 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(UntranslatedCount));
         OnPropertyChanged(nameof(ModifiedCount));
         OnPropertyChanged(nameof(HasUnsavedChanges));
-
-        SaveCommand.RaiseCanExecuteChanged();
     }
 
-    private void UnsubscribeEntries()
+    private void RaiseGlobalCommandStates()
     {
-        foreach (var entry in Entries)
-        {
-            entry.PropertyChanged -=
-                Entry_PropertyChanged;
-        }
+        SaveCommand.RaiseCanExecuteChanged();
+        SaveAllCommand.RaiseCanExecuteChanged();
+        CloseFileCommand.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(HasUnsavedChanges));
     }
-
-    private sealed record TranslationEdit(
-        LocalizationEntry Entry,
-        string Before,
-        string After);
 }
