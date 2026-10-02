@@ -15,6 +15,8 @@ public partial class App : Application
 
         try
         {
+            AppSettingsService.Load();
+
             var window = new MainWindow();
             MainWindow = window;
             ShutdownMode = ShutdownMode.OnMainWindowClose;
