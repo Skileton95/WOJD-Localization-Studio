@@ -26,7 +26,12 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
-        await UpdateService.StartAsync(this, SetUpdateProgress, _viewModel.ConfirmDiscardUnsaved);
+
+        await _viewModel.RestoreWorkspaceAsync();
+        await UpdateService.StartAsync(
+            this,
+            SetUpdateProgress,
+            _viewModel.ConfirmDiscardUnsaved);
     }
 
     private async void FileTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -94,8 +99,19 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (!UpdateService.IsApplyingUpdate && !_viewModel.ConfirmDiscardUnsaved())
+        if (UpdateService.IsApplyingUpdate)
+        {
+            _viewModel.PersistWorkspaceState(includeDrafts: true);
+            return;
+        }
+
+        if (!_viewModel.ConfirmDiscardUnsaved())
+        {
             e.Cancel = true;
+            return;
+        }
+
+        _viewModel.PersistWorkspaceState(includeDrafts: false);
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
