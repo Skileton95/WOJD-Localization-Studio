@@ -29,6 +29,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly Dictionary<string, DraftFileState> _recoveryDrafts =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly List<string> _projectSearchHistory = [];
+
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
@@ -315,6 +317,7 @@ public sealed class MainViewModel : ObservableObject
     public int ModifiedCount => _activeSession?.ModifiedCount ?? 0;
     public int ErrorCount => _activeSession?.ValidationErrorCount ?? 0;
     public LocalizationDocument? ActiveDocument => _activeSession?.Document;
+    public IReadOnlyList<string> ProjectSearchHistory => _projectSearchHistory;
     public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
     public IReadOnlyList<LocalizationEntry> GetUntranslatedEntries()
@@ -409,6 +412,83 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public async Task<ProjectSearchResponse> SearchProjectAsync(
+        string query,
+        bool matchCase,
+        bool exactMatch,
+        bool useRegex)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new ProjectSearchResponse([], false);
+
+        RememberProjectSearchQuery(query);
+
+        var documents =
+            _sessions.Values
+                .Select(x => x.Document)
+                .ToList();
+
+        return await Task.Run(
+            () =>
+                ProjectSearchService.Search(
+                    documents,
+                    query.Trim(),
+                    matchCase,
+                    exactMatch,
+                    useRegex));
+    }
+
+    public void OpenProjectSearchResult(
+        ProjectSearchResult result)
+    {
+        var path =
+            Path.GetFullPath(result.FilePath);
+
+        if (!_sessions.TryGetValue(
+                path,
+                out var session))
+        {
+            return;
+        }
+
+        ActivateSession(session);
+
+        StatusFilter = "Все";
+        NamespaceFilter = null;
+        SearchText = string.Empty;
+        EntriesView.Refresh();
+
+        SelectedEntry = result.Entry;
+        EntriesView.MoveCurrentTo(result.Entry);
+    }
+
+    private void RememberProjectSearchQuery(
+        string query)
+    {
+        query = query.Trim();
+
+        if (query.Length == 0)
+            return;
+
+        _projectSearchHistory.RemoveAll(
+            x =>
+                string.Equals(
+                    x,
+                    query,
+                    StringComparison.OrdinalIgnoreCase));
+
+        _projectSearchHistory.Insert(0, query);
+
+        if (_projectSearchHistory.Count > 20)
+        {
+            _projectSearchHistory.RemoveRange(
+                20,
+                _projectSearchHistory.Count - 20);
+        }
+
+        ScheduleWorkspaceSave();
+    }
+
     public async Task RestoreWorkspaceAsync()
     {
         var state =
@@ -420,6 +500,16 @@ public sealed class MainViewModel : ObservableObject
         _workspaceRestoreInProgress = true;
         _restoredDraftEntries = 0;
         _recoveryDrafts.Clear();
+        _projectSearchHistory.Clear();
+
+        if (state.SearchHistory is not null)
+        {
+            _projectSearchHistory.AddRange(
+                state.SearchHistory
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20));
+        }
 
         foreach (var draft in state.Drafts)
         {
@@ -572,7 +662,8 @@ public sealed class MainViewModel : ObservableObject
                         ? null
                         : Path.GetFullPath(_activeSession.Document.FilePath),
                     selectedRows,
-                    drafts);
+                    drafts,
+                    _projectSearchHistory.ToList());
 
             WorkspaceStateService.Save(state);
         }
