@@ -101,6 +101,8 @@
                     <Separator/>
                     <MenuItem Header="Сравнить со старой версией…"
                               Click="CompareFile_Click"/>
+                    <MenuItem Header="История резервных копий…"
+                              Click="BackupHistory_Click"/>
                     <Separator/>
                     <MenuItem Header="Настройки…"
                               Click="Settings_Click"/>
@@ -109,6 +111,9 @@
                 <MenuItem Header="Справка">
                     <MenuItem Header="Проверить обновления"
                               Click="CheckUpdates_Click"/>
+                    <Separator/>
+                    <MenuItem Header="О программе…"
+                              Click="About_Click"/>
                 </MenuItem>
             </Menu>
         </Border>
@@ -847,6 +852,12 @@
                            Margin="0,0,0,12"/>
                 <ProgressBar Height="6"
                              IsIndeterminate="True"/>
+                <Button Content="Отмена"
+                        Command="{Binding CancelOperationCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Padding="14,7"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Center"/>
             </StackPanel>
         </Border>
 
