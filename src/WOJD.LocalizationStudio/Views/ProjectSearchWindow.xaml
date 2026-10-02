@@ -1,0 +1,148 @@
+<Window x:Class="WOJD.LocalizationStudio.Views.ProjectSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Поиск по проекту"
+        Width="1180"
+        Height="720"
+        MinWidth="900"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Поиск по всем открытым файлам"
+                       FontSize="22"
+                       FontWeight="SemiBold"/>
+            <TextBlock Text="Ищет по Namespace, ключу, оригиналу и переводу."
+                       Margin="0,5,0,12"
+                       Foreground="{StaticResource MutedTextBrush}"/>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ComboBox x:Name="QueryBox"
+                          IsEditable="True"
+                          ItemsSource="{Binding History}"
+                          Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                          Padding="10,8"
+                          MinHeight="38"
+                          ToolTip="История последних запросов доступна через стрелку справа"/>
+
+                <Button Grid.Column="1"
+                        Content="Найти"
+                        Width="110"
+                        Margin="10,0,0,0"
+                        Style="{StaticResource PrimaryButton}"
+                        Click="Search_Click"
+                        IsDefault="True"/>
+            </Grid>
+        </StackPanel>
+
+        <Grid Grid.Row="1"
+              Margin="0,12,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal">
+                <CheckBox Content="Учитывать регистр"
+                          IsChecked="{Binding MatchCase}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,18,0"/>
+                <CheckBox Content="Точное совпадение"
+                          IsChecked="{Binding ExactMatch}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,18,0"/>
+                <CheckBox Content="Regex"
+                          IsChecked="{Binding UseRegex}"
+                          VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ResultStatus}"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="White"
+                BorderBrush="{StaticResource BorderBrushApp}"
+                BorderThickness="1"
+                CornerRadius="8"
+                ClipToBounds="True">
+            <DataGrid x:Name="ResultsGrid"
+                      ItemsSource="{Binding Results}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      RowHeaderWidth="0"
+                      BorderThickness="0"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      EnableRowVirtualization="True"
+                      EnableColumnVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      MouseDoubleClick="ResultsGrid_MouseDoubleClick">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Файл"
+                                        Binding="{Binding FileName}"
+                                        Width="190"/>
+                    <DataGridTextColumn Header="#"
+                                        Binding="{Binding Index}"
+                                        Width="60"/>
+                    <DataGridTextColumn Header="Namespace"
+                                        Binding="{Binding Namespace}"
+                                        Width="210"/>
+                    <DataGridTextColumn Header="Ключ"
+                                        Binding="{Binding Key}"
+                                        Width="150"/>
+                    <DataGridTextColumn Header="Где"
+                                        Binding="{Binding MatchField}"
+                                        Width="95"/>
+                    <DataGridTextColumn Header="Совпадение"
+                                        Binding="{Binding Preview}"
+                                        Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <Grid Grid.Row="3"
+              Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Text="Двойной клик открывает файл и нужную строку."
+                       Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center"/>
+
+            <Button Grid.Column="1"
+                    Content="Открыть результат"
+                    Padding="16,8"
+                    Style="{StaticResource PrimaryButton}"
+                    Click="OpenSelected_Click"
+                    Margin="0,0,10,0"/>
+
+            <Button Grid.Column="2"
+                    Content="Закрыть"
+                    Padding="16,8"
+                    Style="{StaticResource SecondaryButton}"
+                    Click="Close_Click"/>
+        </Grid>
+    </Grid>
+</Window>
