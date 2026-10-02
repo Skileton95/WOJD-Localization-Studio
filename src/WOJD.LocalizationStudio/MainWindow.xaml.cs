@@ -286,6 +286,19 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private void ProjectReplace_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new ProjectReplaceWindow(_viewModel)
+            {
+                Owner = this
+            };
+
+        dialog.ShowDialog();
+    }
+
     private void ExpandedEditor_Click(
         object sender,
         RoutedEventArgs e)
