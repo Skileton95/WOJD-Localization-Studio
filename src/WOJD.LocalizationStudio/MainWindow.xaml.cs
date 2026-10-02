@@ -11,6 +11,7 @@ namespace WOJD.LocalizationStudio;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private bool _filesPanelVisible = true;
 
     public MainWindow()
     {
@@ -49,12 +50,39 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.Key == Key.F &&
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             SearchBox.Focus();
+            Keyboard.Focus(SearchBox);
             SearchBox.SelectAll();
             e.Handled = true;
         }
+    }
+
+    private void ToggleFilesPanel_Click(object sender, RoutedEventArgs e)
+    {
+        _filesPanelVisible = !_filesPanelVisible;
+
+        FilesPanel.Visibility = _filesPanelVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        FilesColumn.Width = _filesPanelVisible
+            ? new GridLength(220)
+            : new GridLength(0);
+
+        FilesDividerColumn.Width = _filesPanelVisible
+            ? new GridLength(1)
+            : new GridLength(0);
+
+        FilesPanelToggleButton.Content =
+            _filesPanelVisible ? "‹" : "›";
+
+        FilesPanelToggleButton.ToolTip =
+            _filesPanelVisible
+                ? "Скрыть панель файлов"
+                : "Показать панель файлов";
     }
 
     private void SetUpdateProgress(UpdateProgressState state)
