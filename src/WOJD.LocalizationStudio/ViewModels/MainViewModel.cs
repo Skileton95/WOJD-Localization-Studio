@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
@@ -384,6 +385,7 @@ public sealed class MainViewModel : ObservableObject
 
             using var reader = new StreamReader(
                 stream,
+                Encoding.UTF8,
                 detectEncodingFromByteOrderMarks: true,
                 bufferSize: 1024 * 1024);
 
