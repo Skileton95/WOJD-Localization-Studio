@@ -9,7 +9,8 @@ public sealed record WorkspaceState(
     string? ActiveFile,
     Dictionary<string, int> SelectedRows,
     List<DraftFileState> Drafts,
-    List<string>? SearchHistory = null);
+    List<string>? SearchHistory = null,
+    List<string>? PinnedFiles = null);
 
 public sealed record DraftFileState(
     string FilePath,
