@@ -8,6 +8,9 @@ namespace WOJD.LocalizationStudio.Services;
 
 public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 {
+    private static readonly string[] NamespaceFields =
+        ["namespace", "Namespace"];
+
     private static readonly string[] KeyFields =
         ["key", "Key", "id", "Id", "name", "Name"];
 
@@ -78,6 +81,10 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
                 if (root.ValueKind != JsonValueKind.Object)
                     continue;
 
+                var entryNamespace =
+                    ReadString(root, NamespaceFields)
+                    ?? string.Empty;
+
                 var key =
                     ReadString(root, KeyFields)
                     ?? $"row_{index}";
@@ -98,6 +105,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
                 var entry = new LocalizationEntry
                 {
                     Index = index++,
+                    Namespace = entryNamespace,
                     Key = key,
                     Original = original,
                     TranslationField = translationField,
