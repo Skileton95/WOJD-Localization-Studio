@@ -314,6 +314,7 @@ public sealed class MainViewModel : ObservableObject
     public int UntranslatedCount => _activeSession?.UntranslatedCount ?? 0;
     public int ModifiedCount => _activeSession?.ModifiedCount ?? 0;
     public int ErrorCount => _activeSession?.ValidationErrorCount ?? 0;
+    public LocalizationDocument? ActiveDocument => _activeSession?.Document;
     public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
     public IReadOnlyList<LocalizationEntry> GetUntranslatedEntries()
