@@ -132,7 +132,7 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="FilesColumn" Width="220"/>
+                <ColumnDefinition x:Name="FilesColumn" Width="300"/>
                 <ColumnDefinition x:Name="FilesDividerColumn" Width="1"/>
                 <ColumnDefinition Width="24"/>
                 <ColumnDefinition Width="*"/>
@@ -161,8 +161,9 @@
                                     <TextBlock Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="2"
                                                Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               Margin="8,0,4,0"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontWeight="SemiBold"
+                                               Margin="8,0,6,0"
                                                VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
@@ -183,7 +184,7 @@
                                             Padding="0"
                                             FontSize="14"
                                             FontWeight="SemiBold"
-                                            Foreground="{StaticResource MutedTextBrush}"
+                                            Foreground="#D94C4C"
                                             Background="Transparent"
                                             BorderThickness="0"
                                             Cursor="Hand"
@@ -208,7 +209,7 @@
                                                                             Property="Background"
                                                                             Value="#FFF0F0"/>
                                                                     <Setter Property="Foreground"
-                                                                            Value="#D94C4C"/>
+                                                                            Value="#B92E37"/>
                                                                 </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
