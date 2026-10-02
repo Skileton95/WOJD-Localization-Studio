@@ -34,6 +34,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="Открыть файл" Command="{Binding OpenFileCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
                     <Button Content="Открыть папку" Command="{Binding OpenFolderCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
+                    <Button Content="Проверить обновления" Click="CheckUpdates_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
                     <Button Content="Сохранить" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}"/>
                 </StackPanel>
             </Grid>
