@@ -1206,6 +1206,25 @@ public sealed class MainViewModel : ObservableObject
             entry);
     }
 
+    public void ApplyProjectReplacements(
+        IEnumerable<ProjectReplaceCandidate> candidates)
+    {
+        BeginOperation("Массовая замена по проекту");
+
+        try
+        {
+            foreach (var candidate in candidates)
+            {
+                candidate.Entry.Translation =
+                    candidate.NewTranslation;
+            }
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
     public void ApplyConsistencyTranslation(
         ConsistencyIssue issue,
         string translation)
