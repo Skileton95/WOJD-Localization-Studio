@@ -293,7 +293,7 @@ public partial class MainWindow : Window
             : Visibility.Collapsed;
 
         FilesColumn.Width = _filesPanelVisible
-            ? new GridLength(220)
+            ? new GridLength(300)
             : new GridLength(0);
 
         FilesDividerColumn.Width = _filesPanelVisible
