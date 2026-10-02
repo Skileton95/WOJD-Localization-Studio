@@ -42,6 +42,7 @@ public sealed class MainViewModel : ObservableObject
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
+    private string _namespaceSearchText = string.Empty;
     private string _replaceText = string.Empty;
     private bool _isReplacePanelVisible;
     private string _statusFilter = "Все";
@@ -318,6 +319,16 @@ public sealed class MainViewModel : ObservableObject
             ApplyCommand.RaiseCanExecuteChanged();
             ReplaceCurrentCommand.RaiseCanExecuteChanged();
             ScheduleWorkspaceSave();
+        }
+    }
+
+    public string NamespaceSearchText
+    {
+        get => _namespaceSearchText;
+        set
+        {
+            if (SetProperty(ref _namespaceSearchText, value))
+                RefreshNamespaceStats();
         }
     }
 
@@ -1017,16 +1028,156 @@ public sealed class MainViewModel : ObservableObject
 
     private void RefreshNamespaceStats()
     {
-        NamespaceStats.ReplaceAll(
+        var stats =
             ProjectAnalysisService.BuildNamespaceStats(
                 _sessions.Values.Select(x => x.Document),
-                _projectMetadata.FavoriteNamespaces));
+                _projectMetadata.FavoriteNamespaces);
+
+        if (!string.IsNullOrWhiteSpace(
+                NamespaceSearchText))
+        {
+            stats =
+                stats
+                    .Where(x =>
+                        x.Namespace.Contains(
+                            NamespaceSearchText.Trim(),
+                            StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        }
+
+        NamespaceStats.ReplaceAll(stats);
     }
 
     public IReadOnlyList<LocalizationDocument> GetOpenDocuments()
         => _sessions.Values
             .Select(x => x.Document)
             .ToList();
+
+    public void FilterToNamespace(string ns)
+    {
+        StatusFilter = "Все";
+        NamespaceFilter = ns;
+    }
+
+    public void ToggleFavoriteNamespace(string ns)
+    {
+        if (_projectMetadata.FavoriteNamespaces.Contains(ns))
+            _projectMetadata.FavoriteNamespaces.Remove(ns);
+        else
+            _projectMetadata.FavoriteNamespaces.Add(ns);
+
+        SaveProjectMetadata();
+    }
+
+    public void OpenEntry(
+        string filePath,
+        LocalizationEntry entry)
+    {
+        var path =
+            Path.GetFullPath(filePath);
+
+        if (!_sessions.TryGetValue(path, out var session))
+            return;
+
+        ActivateSession(session);
+        StatusFilter = "Все";
+        NamespaceFilter = null;
+        SearchText = string.Empty;
+        EntriesView.Refresh();
+        SelectedEntry = entry;
+        EntriesView.MoveCurrentTo(entry);
+    }
+
+    public void RestoreHistoryRecord(
+        ChangeHistoryRecord record)
+    {
+        var path =
+            Path.GetFullPath(record.FilePath);
+
+        if (!_sessions.TryGetValue(path, out var session))
+            return;
+
+        var entry =
+            session.Document.Entries
+                .FirstOrDefault(x =>
+                    x.Index == record.RowIndex &&
+                    string.Equals(
+                        x.Namespace,
+                        record.Namespace,
+                        StringComparison.Ordinal) &&
+                    string.Equals(
+                        x.Key,
+                        record.Key,
+                        StringComparison.Ordinal));
+
+        if (entry is null)
+            return;
+
+        BeginOperation("Восстановление из истории");
+        try
+        {
+            entry.Translation = record.Before;
+        }
+        finally
+        {
+            EndOperation();
+        }
+
+        OpenEntry(
+            record.FilePath,
+            entry);
+    }
+
+    public void ApplyConsistencyTranslation(
+        ConsistencyIssue issue,
+        string translation)
+    {
+        BeginOperation("Унификация перевода");
+
+        try
+        {
+            foreach (var entry in issue.Entries)
+                entry.Translation = translation;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    public async Task<string?> RebuildProjectIndexAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_projectRoot is null)
+            return null;
+
+        return await ProjectIndexService.RebuildAsync(
+            _projectRoot,
+            GetOpenDocuments(),
+            cancellationToken);
+    }
+
+    public void SaveProjectProfile(
+        ProjectProfile profile)
+    {
+        ProjectProfileService.Save(profile);
+
+        _projectRoot =
+            Path.GetFullPath(profile.RootPath);
+
+        _projectProfile =
+            profile;
+
+        _projectMetadata =
+            StudioProjectMetadataService.Load(
+                _projectRoot);
+
+        OnPropertyChanged(nameof(ProjectRoot));
+        OnPropertyChanged(nameof(ProjectProfile));
+        OnPropertyChanged(nameof(ProjectMetadata));
+        OnPropertyChanged(nameof(ProjectName));
+        RefreshNamespaceStats();
+    }
 
     public void SaveProjectMetadata()
     {
