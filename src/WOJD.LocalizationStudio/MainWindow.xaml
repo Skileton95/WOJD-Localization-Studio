@@ -94,6 +94,8 @@
                     <MenuItem Header="Поиск по проекту…"
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
+                    <MenuItem Header="Массовая замена по проекту…"
+                              Click="ProjectReplace_Click"/>
                     <MenuItem Header="Расширенный редактор…"
                               Click="ExpandedEditor_Click"/>
                     <Separator/>
