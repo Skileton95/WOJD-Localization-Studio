@@ -7,6 +7,7 @@ internal sealed class DocumentSession
 
     public Dictionary<LocalizationEntry, TranslationStatus> KnownStatuses { get; } = new();
     public Dictionary<LocalizationEntry, string> KnownTranslations { get; } = new();
+    public Dictionary<LocalizationEntry, bool> KnownValidationStates { get; } = new();
 
     public Stack<TranslationEdit> UndoStack { get; } = new();
     public Stack<TranslationEdit> RedoStack { get; } = new();
@@ -17,6 +18,7 @@ internal sealed class DocumentSession
     public int TranslatedCount { get; set; }
     public int UntranslatedCount { get; set; }
     public int ModifiedCount { get; set; }
+    public int ValidationErrorCount { get; set; }
 
     public bool HasUnsavedChanges => ModifiedCount > 0;
 }
