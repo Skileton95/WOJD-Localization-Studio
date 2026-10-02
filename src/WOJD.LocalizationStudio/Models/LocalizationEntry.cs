@@ -1,4 +1,5 @@
 using WOJD.LocalizationStudio.Infrastructure;
+using WOJD.LocalizationStudio.Services;
 
 namespace WOJD.LocalizationStudio.Models;
 
@@ -6,6 +7,8 @@ public sealed class LocalizationEntry : ObservableObject
 {
     private string _translation = string.Empty;
     private string _savedTranslation = string.Empty;
+    private int _validationIssueCount;
+    private string _validationSummary = string.Empty;
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
@@ -31,6 +34,7 @@ public sealed class LocalizationEntry : ObservableObject
                 OnPropertyChanged(nameof(Status));
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(CharacterCount));
+                RefreshValidation();
             }
         }
     }
@@ -51,6 +55,32 @@ public sealed class LocalizationEntry : ObservableObject
 
     public int CharacterCount => Translation.Length;
 
+    public int ValidationIssueCount => _validationIssueCount;
+    public bool HasValidationIssues => _validationIssueCount > 0;
+    public string ValidationSummary => _validationSummary;
+
+    public void RefreshValidation()
+    {
+        var result =
+            TranslationValidator.Validate(
+                Original,
+                Translation);
+
+        var issueCountChanged =
+            SetProperty(
+                ref _validationIssueCount,
+                result.IssueCount,
+                nameof(ValidationIssueCount));
+
+        SetProperty(
+            ref _validationSummary,
+            result.Summary,
+            nameof(ValidationSummary));
+
+        if (issueCountChanged)
+            OnPropertyChanged(nameof(HasValidationIssues));
+    }
+
     public void InitializeSavedTranslation(string value)
     {
         _translation = value;
@@ -60,6 +90,7 @@ public sealed class LocalizationEntry : ObservableObject
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(CharacterCount));
+        RefreshValidation();
     }
 
     public void MarkSaved(string? rawLine = null)
