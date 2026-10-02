@@ -1,0 +1,105 @@
+<Window x:Class="WOJD.LocalizationStudio.Views.ExpandedEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Расширенный редактор"
+        Width="1100"
+        Height="720"
+        MinWidth="800"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="{Binding Identity}"
+                           FontSize="18"
+                           FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding ValidationSummary}"
+                           Margin="0,4,0,0"
+                           Foreground="#D94C4C"/>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="Закрыть"
+                    Style="{StaticResource SecondaryButton}"
+                    Padding="16,8"
+                    Click="Close_Click"/>
+        </Grid>
+
+        <Grid Grid.Row="1"
+              Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="1"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Margin="0,0,14,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Оригинал"
+                           FontWeight="SemiBold"/>
+                <Border Grid.Row="1"
+                        Margin="0,8,0,0"
+                        Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrushApp}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding OriginalDisplay}"
+                                   TextWrapping="Wrap"
+                                   FontSize="16"/>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <Border Grid.Column="1"
+                    Background="{StaticResource BorderBrushApp}"/>
+
+            <Grid Grid.Column="2"
+                  Margin="14,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Перевод"
+                           FontWeight="SemiBold"/>
+                <TextBox Grid.Row="1"
+                         Margin="0,8,0,0"
+                         Text="{Binding Translation, UpdateSourceTrigger=PropertyChanged}"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         AcceptsTab="True"
+                         VerticalScrollBarVisibility="Auto"
+                         Padding="14"
+                         FontSize="16"
+                         BorderBrush="{StaticResource AccentBrush}"
+                         BorderThickness="1"/>
+                <TextBlock Grid.Row="2"
+                           Margin="0,8,0,0"
+                           Foreground="{StaticResource MutedTextBrush}">
+                    <Run Text="Длина: "/>
+                    <Run Text="{Binding CharacterCount}"/>
+                </TextBlock>
+            </Grid>
+        </Grid>
+
+        <TextBlock Grid.Row="2"
+                   Margin="0,12,0,0"
+                   Text="Плейсхолдеры, теги и переносы проверяются автоматически. Ctrl+Enter закрывает окно."
+                   Foreground="{StaticResource MutedTextBrush}"/>
+    </Grid>
+</Window>
