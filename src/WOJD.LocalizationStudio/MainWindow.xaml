@@ -399,6 +399,7 @@
 
             <Grid Grid.Column="3" Margin="14">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="40"/>
                     <RowDefinition Height="46"/>
                     <RowDefinition Height="48"/>
                     <RowDefinition Height="Auto"/>
@@ -407,7 +408,56 @@
                     <RowDefinition Height="280"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="1"
+                <ScrollViewer Grid.Row="0"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              Margin="0,0,0,6">
+                    <ItemsControl ItemsSource="{Binding OpenTabs}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,6,0"
+                                        Padding="4,2,2,2"
+                                        Background="White"
+                                        BorderBrush="{StaticResource BorderBrushApp}"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{Binding Name}"
+                                                Click="OpenTab_Click"
+                                                PreviewMouseDown="OpenTab_PreviewMouseDown"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="8,4"
+                                                Cursor="Hand"
+                                                ToolTip="{Binding FullPath}"/>
+                                        <Button Content="📌"
+                                                Click="PinTab_Click"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="3"
+                                                Cursor="Hand"
+                                                ToolTip="Закрепить / открепить"/>
+                                        <Button Content="×"
+                                                Click="OpenTabClose_Click"
+                                                Foreground="#D94C4C"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="5,3"
+                                                Cursor="Hand"
+                                                ToolTip="Закрыть файл"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <Border Grid.Row="2"
                         Background="White"
                         BorderBrush="{StaticResource BorderBrushApp}"
                         BorderThickness="1"
@@ -428,7 +478,7 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Row="0"
+                <StackPanel Grid.Row="1"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
                     <Button Command="{Binding FilterAllCommand}"
@@ -487,7 +537,7 @@
 
                 </StackPanel>
 
-                <Border Grid.Row="2"
+                <Border Grid.Row="3"
                         Margin="0,4,0,4"
                         Padding="8"
                         Background="White"
@@ -538,7 +588,7 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Row="3"
+                <StackPanel Grid.Row="4"
                             Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Margin="0,4,0,6">
@@ -597,7 +647,7 @@
                     </Border>
                 </StackPanel>
 
-                <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <Border Grid.Row="6" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                     <DataGrid x:Name="EntriesGrid"
                               ItemsSource="{Binding EntriesView, Mode=OneWay}"
                               SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
