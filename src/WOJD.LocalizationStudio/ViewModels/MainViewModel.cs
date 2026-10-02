@@ -316,6 +316,98 @@ public sealed class MainViewModel : ObservableObject
     public int ErrorCount => _activeSession?.ValidationErrorCount ?? 0;
     public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
+    public IReadOnlyList<LocalizationEntry> GetUntranslatedEntries()
+        => _activeSession?.Document.Entries
+               .Where(x => x.Status == TranslationStatus.Untranslated)
+               .ToList()
+           ?? [];
+
+    public IReadOnlyList<LocalizationEntry> GetErrorEntries()
+        => _activeSession?.Document.Entries
+               .Where(x => x.HasValidationIssues)
+               .ToList()
+           ?? [];
+
+    public void CopyOriginalToTranslation(
+        IEnumerable<LocalizationEntry> entries)
+    {
+        foreach (var entry in entries.Distinct())
+            entry.Translation = entry.Original;
+    }
+
+    public void ClearTranslations(
+        IEnumerable<LocalizationEntry> entries)
+    {
+        foreach (var entry in entries.Distinct())
+            entry.Translation = string.Empty;
+    }
+
+    public async Task ExportEntriesAsync(
+        IEnumerable<LocalizationEntry> entries,
+        string suffix)
+    {
+        var items =
+            entries.Distinct().ToList();
+
+        if (items.Count == 0)
+        {
+            AppDialog.Show(
+                "Нет строк для экспорта.",
+                "Экспорт",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        var baseName =
+            _activeSession is null
+                ? "export"
+                : Path.GetFileNameWithoutExtension(
+                    _activeSession.Document.FilePath);
+
+        var dialog =
+            new SaveFileDialog
+            {
+                Filter = "NDJSON (*.ndjson)|*.ndjson|JSONL (*.jsonl)|*.jsonl",
+                FileName = $"{baseName}.{suffix}.ndjson",
+                AddExtension = true,
+                DefaultExt = ".ndjson"
+            };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        IsBusy = true;
+        BusyText = $"Экспорт строк: {items.Count}";
+
+        try
+        {
+            await NdjsonExportService.ExportAsync(
+                items,
+                dialog.FileName);
+
+            AppDialog.Show(
+                $"Экспортировано строк: {items.Count}.",
+                "Экспорт завершён",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                ex.Message,
+                "Ошибка экспорта",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            BusyText = string.Empty;
+            IsBusy = false;
+        }
+    }
+
     public async Task RestoreWorkspaceAsync()
     {
         var state =
