@@ -24,7 +24,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
-        await UpdateService.StartAsync(this);
+        await UpdateService.StartAsync(this, SetUpdateProgress, _viewModel.ConfirmDiscardUnsaved);
     }
 
     private async void FileTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -35,7 +35,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (!_viewModel.ConfirmDiscardUnsaved()) e.Cancel = true;
+        if (!UpdateService.IsApplyingUpdate && !_viewModel.ConfirmDiscardUnsaved())
+            e.Cancel = true;
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -46,5 +47,23 @@ public partial class MainWindow : Window
             SearchBox.SelectAll();
             e.Handled = true;
         }
+    }
+
+    private void SetUpdateProgress(UpdateProgressState state)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => SetUpdateProgress(state));
+            return;
+        }
+
+        UpdatePanel.Visibility = state.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        UpdateStatusText.Text = state.Status;
+        UpdateProgressBar.IsIndeterminate = state.IsIndeterminate;
+        UpdateProgressBar.Value = state.Progress;
+
+        UpdatePercentText.Text = state.IsIndeterminate
+            ? string.Empty
+            : $"{Math.Clamp((int)Math.Round(state.Progress), 0, 100)}%";
     }
 }
