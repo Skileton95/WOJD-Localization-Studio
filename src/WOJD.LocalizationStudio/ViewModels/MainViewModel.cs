@@ -20,6 +20,12 @@ public sealed class MainViewModel : ObservableObject
     private readonly Dictionary<LocalizationEntry, TranslationStatus>
         _knownStatuses = new();
 
+    private readonly Dictionary<LocalizationEntry, string>
+        _knownTranslations = new();
+
+    private readonly Stack<TranslationEdit> _undoStack = new();
+    private readonly Stack<TranslationEdit> _redoStack = new();
+
     private readonly DispatcherTimer _searchDebounceTimer;
 
     private LocalizationDocument? _document;
@@ -33,6 +39,7 @@ public sealed class MainViewModel : ObservableObject
     private int _translatedCount;
     private int _untranslatedCount;
     private int _modifiedCount;
+    private bool _historyChangeInProgress;
 
     public MainViewModel()
     {
@@ -108,6 +115,21 @@ public sealed class MainViewModel : ObservableObject
                     StatusFilter = "Все";
                     NamespaceFilter = ns;
                 });
+
+        ClearNamespaceFilterCommand =
+            new RelayCommand(
+                () => NamespaceFilter = null,
+                () => !string.IsNullOrWhiteSpace(NamespaceFilter));
+
+        UndoCommand =
+            new RelayCommand(
+                UndoTranslation,
+                () => _undoStack.Count > 0);
+
+        RedoCommand =
+            new RelayCommand(
+                RedoTranslation,
+                () => _redoStack.Count > 0);
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -135,6 +157,9 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand FilterUntranslatedCommand { get; }
     public RelayCommand FilterModifiedCommand { get; }
     public RelayCommand FilterNamespaceCommand { get; }
+    public RelayCommand ClearNamespaceFilterCommand { get; }
+    public RelayCommand UndoCommand { get; }
+    public RelayCommand RedoCommand { get; }
 
     public LocalizationEntry? SelectedEntry
     {
@@ -182,6 +207,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(NamespaceFilterLabel));
                 EntriesView.Refresh();
+                ClearNamespaceFilterCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -245,6 +271,10 @@ public sealed class MainViewModel : ObservableObject
             _document = document;
 
             _knownStatuses.Clear();
+            _knownTranslations.Clear();
+            _undoStack.Clear();
+            _redoStack.Clear();
+            _historyChangeInProgress = false;
             _translatedCount = 0;
             _untranslatedCount = 0;
             _modifiedCount = 0;
@@ -256,6 +286,7 @@ public sealed class MainViewModel : ObservableObject
 
                 var status = entry.Status;
                 _knownStatuses[entry] = status;
+                _knownTranslations[entry] = entry.Translation;
                 ChangeStatusCounter(status, 1);
             }
 
@@ -263,6 +294,7 @@ public sealed class MainViewModel : ObservableObject
             Entries.ReplaceAll(document.Entries);
 
             RaiseStatsChanged();
+            RaiseHistoryCommandStates();
 
             SelectedEntry =
                 EntriesView
@@ -589,6 +621,56 @@ public sealed class MainViewModel : ObservableObject
         StatusFilter = status;
     }
 
+    private void UndoTranslation()
+    {
+        if (_undoStack.Count == 0)
+            return;
+
+        var edit = _undoStack.Pop();
+
+        _historyChangeInProgress = true;
+        try
+        {
+            SelectedEntry = edit.Entry;
+            edit.Entry.Translation = edit.Before;
+        }
+        finally
+        {
+            _historyChangeInProgress = false;
+        }
+
+        _redoStack.Push(edit);
+        RaiseHistoryCommandStates();
+    }
+
+    private void RedoTranslation()
+    {
+        if (_redoStack.Count == 0)
+            return;
+
+        var edit = _redoStack.Pop();
+
+        _historyChangeInProgress = true;
+        try
+        {
+            SelectedEntry = edit.Entry;
+            edit.Entry.Translation = edit.After;
+        }
+        finally
+        {
+            _historyChangeInProgress = false;
+        }
+
+        _undoStack.Push(edit);
+        RaiseHistoryCommandStates();
+    }
+
+    private void RaiseHistoryCommandStates()
+    {
+        UndoCommand.RaiseCanExecuteChanged();
+        RedoCommand.RaiseCanExecuteChanged();
+    }
+
     private void Entry_PropertyChanged(
         object? sender,
         PropertyChangedEventArgs e)
@@ -599,6 +681,33 @@ public sealed class MainViewModel : ObservableObject
         {
             return;
         }
+
+        var currentTranslation = entry.Translation;
+
+        if (!_knownTranslations.TryGetValue(
+                entry,
+                out var previousTranslation))
+        {
+            previousTranslation = currentTranslation;
+        }
+
+        if (!_historyChangeInProgress &&
+            !string.Equals(
+                previousTranslation,
+                currentTranslation,
+                StringComparison.Ordinal))
+        {
+            _undoStack.Push(
+                new TranslationEdit(
+                    entry,
+                    previousTranslation,
+                    currentTranslation));
+
+            _redoStack.Clear();
+            RaiseHistoryCommandStates();
+        }
+
+        _knownTranslations[entry] = currentTranslation;
 
         var current = entry.Status;
 
@@ -687,4 +796,9 @@ public sealed class MainViewModel : ObservableObject
                 Entry_PropertyChanged;
         }
     }
+
+    private sealed record TranslationEdit(
+        LocalizationEntry Entry,
+        string Before,
+        string After);
 }
