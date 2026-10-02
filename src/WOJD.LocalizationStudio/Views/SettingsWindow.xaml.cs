@@ -184,6 +184,10 @@ public partial class SettingsWindow : Window
             WindowTop = source.WindowTop,
             WindowMaximized = source.WindowMaximized,
             BackupLimit = source.BackupLimit,
+            ColumnWidths =
+                new Dictionary<string, double>(
+                    source.ColumnWidths,
+                    StringComparer.OrdinalIgnoreCase),
             Hotkeys =
                 new Dictionary<string, string>(
                     source.Hotkeys,
