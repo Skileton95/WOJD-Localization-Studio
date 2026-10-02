@@ -275,11 +275,22 @@
                     <Button Command="{Binding FilterModifiedCommand}"
                             Style="{StaticResource SecondaryButton}"
                             Padding="13,7"
-                            Margin="0,0,12,0">
+                            Margin="0,0,8,0">
                         <TextBlock>
                             <Run Text="Изменено  "/>
                             <Run Text="{Binding ModifiedCount, Mode=OneWay}"
                                  Foreground="#F3A51B"/>
+                        </TextBlock>
+                    </Button>
+
+                    <Button Command="{Binding FilterErrorsCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="13,7"
+                            Margin="0,0,12,0">
+                        <TextBlock>
+                            <Run Text="Ошибки  "/>
+                            <Run Text="{Binding ErrorCount, Mode=OneWay}"
+                                 Foreground="#D94C4C"/>
                         </TextBlock>
                     </Button>
 
@@ -416,6 +427,19 @@
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
                               SelectionChanged="EntriesGrid_SelectionChanged">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="ToolTip"
+                                        Value="{Binding ValidationSummary}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasValidationIssues}"
+                                                 Value="True">
+                                        <Setter Property="Background"
+                                                Value="#FFF1F2"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="55"/>
                             <DataGridTemplateColumn Header="Namespace"
@@ -448,6 +472,32 @@
                             <DataGridTextColumn Header="Ключ" Binding="{Binding Key, Mode=OneWay}" Width="150"/>
                             <DataGridTextColumn Header="Оригинал" Binding="{Binding OriginalDisplay, Mode=OneWay}" Width="*"/>
                             <DataGridTextColumn Header="Перевод" Binding="{Binding Translation, Mode=OneWay}" Width="*"/>
+                            <DataGridTemplateColumn Header="QA"
+                                                    Width="48">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="!"
+                                                   FontWeight="Bold"
+                                                   Foreground="#D94C4C"
+                                                   HorizontalAlignment="Center"
+                                                   ToolTip="{Binding ValidationSummary}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility"
+                                                            Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasValidationIssues}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility"
+                                                                    Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Статус" Binding="{Binding StatusText, Mode=OneWay}" Width="150"/>
                         </DataGrid.Columns>
                     </DataGrid>
@@ -487,7 +537,13 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Button Grid.Column="1" Content="Предыдущая" Command="{Binding PreviousCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding SelectedEntry.ValidationSummary, Mode=OneWay}"
+                                       Foreground="#D94C4C"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding SelectedEntry.ValidationSummary, Mode=OneWay}"/>
+                            <Button Grid.Column="1" Content="Предыдущая" Command="{Binding PreviousCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="8,0,8,0"/>
                             <Button Grid.Column="2" Content="Следующая" Command="{Binding NextCommand}" Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                             <Button Grid.Column="3" Content="Применить" Command="{Binding ApplyCommand}" Style="{StaticResource PrimaryButton}" Padding="18,8"/>
                         </Grid>
