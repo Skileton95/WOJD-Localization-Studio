@@ -155,13 +155,15 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
                                     <TextBlock Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="2"
                                                Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
                                                Foreground="{StaticResource MutedTextBrush}"
-                                               Margin="8,0,0,0">
+                                               Margin="8,0,4,0"
+                                               VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -173,6 +175,55 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+                                    <Button Grid.Column="3"
+                                            Content="×"
+                                            Width="22"
+                                            Height="22"
+                                            Margin="2,0,0,0"
+                                            Padding="0"
+                                            FontSize="14"
+                                            FontWeight="SemiBold"
+                                            Foreground="{StaticResource MutedTextBrush}"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Cursor="Hand"
+                                            ToolTip="Закрыть файл"
+                                            Click="CloseFileTreeButton_Click">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="CloseFileBorder"
+                                                                    Background="{TemplateBinding Background}"
+                                                                    CornerRadius="5">
+                                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                                  VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver"
+                                                                         Value="True">
+                                                                    <Setter TargetName="CloseFileBorder"
+                                                                            Property="Background"
+                                                                            Value="#FFF0F0"/>
+                                                                    <Setter Property="Foreground"
+                                                                            Value="#D94C4C"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDirectory}"
+                                                                 Value="True">
+                                                        <Setter Property="Visibility"
+                                                                Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
                                 </Grid>
                             </HierarchicalDataTemplate>
                         </TreeView.Resources>
