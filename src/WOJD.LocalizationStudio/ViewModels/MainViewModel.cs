@@ -413,15 +413,33 @@ public sealed class MainViewModel : ObservableObject
     public void CopyOriginalToTranslation(
         IEnumerable<LocalizationEntry> entries)
     {
-        foreach (var entry in entries.Distinct())
-            entry.Translation = entry.Original;
+        BeginOperation("Оригинал → перевод");
+
+        try
+        {
+            foreach (var entry in entries.Distinct())
+                entry.Translation = entry.Original;
+        }
+        finally
+        {
+            EndOperation();
+        }
     }
 
     public void ClearTranslations(
         IEnumerable<LocalizationEntry> entries)
     {
-        foreach (var entry in entries.Distinct())
-            entry.Translation = string.Empty;
+        BeginOperation("Очистка переводов");
+
+        try
+        {
+            foreach (var entry in entries.Distinct())
+                entry.Translation = string.Empty;
+        }
+        finally
+        {
+            EndOperation();
+        }
     }
 
     public async Task ExportEntriesAsync(
@@ -1372,11 +1390,38 @@ public sealed class MainViewModel : ObservableObject
     private async Task SaveSessionAsync(
         DocumentSession session)
     {
+        var document = session.Document;
+
+        if (File.Exists(document.FilePath))
+        {
+            var diskInfo =
+                new FileInfo(document.FilePath);
+
+            var changedExternally =
+                document.LoadedLastWriteTimeUtc != default &&
+                (diskInfo.LastWriteTimeUtc != document.LoadedLastWriteTimeUtc ||
+                 diskInfo.Length != document.LoadedFileLength);
+
+            if (changedExternally)
+            {
+                var overwrite =
+                    AppDialog.Show(
+                        $"Файл «{session.Node.Name}» был изменён другой программой после открытия.{Environment.NewLine}{Environment.NewLine}Перезаписать внешние изменения текущей версией редактора?",
+                        "Файл изменён извне",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                if (overwrite != MessageBoxResult.Yes)
+                    return;
+            }
+        }
+
         BackupService.CreateBackup(
-            session.Document.FilePath);
+            document.FilePath,
+            AppSettingsService.Current.BackupLimit);
 
         await _adapter.SaveAsync(
-            session.Document);
+            document);
 
         RebuildStatusCache(
             session);
@@ -1599,6 +1644,10 @@ public sealed class MainViewModel : ObservableObject
 
         var count = 0;
 
+        BeginOperation("Массовая замена");
+
+        try
+        {
         foreach (var entry in session.Document.Entries)
         {
             if (!string.IsNullOrWhiteSpace(NamespaceFilter) &&
@@ -1624,6 +1673,11 @@ public sealed class MainViewModel : ObservableObject
                     StringComparison.OrdinalIgnoreCase);
 
             count++;
+        }
+        }
+        finally
+        {
+            EndOperation();
         }
 
         AppDialog.Show(
@@ -1835,6 +1889,24 @@ public sealed class MainViewModel : ObservableObject
 
         session.UndoStack.Push(edit);
         RaiseHistoryCommandStates();
+    }
+
+    private void BeginOperation(string name)
+    {
+        _currentOperationId =
+            Guid.NewGuid().ToString("N");
+
+        _currentOperationName =
+            name;
+    }
+
+    private void EndOperation()
+    {
+        _currentOperationId =
+            Guid.NewGuid().ToString("N");
+
+        _currentOperationName =
+            "Редактирование";
     }
 
     private void RaiseHistoryCommandStates()
