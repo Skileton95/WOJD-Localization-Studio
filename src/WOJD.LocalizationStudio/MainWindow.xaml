@@ -11,6 +11,9 @@
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveAllCommand}"/>
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}"/>
         <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}"/>
+        <KeyBinding Key="H" Modifiers="Control" Command="{Binding ToggleReplaceCommand}"/>
+        <KeyBinding Key="F6" Command="{Binding NextUntranslatedCommand}"/>
+        <KeyBinding Key="F6" Modifiers="Shift" Command="{Binding PreviousUntranslatedCommand}"/>
         <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding ApplyCommand}"/>
     </Window.InputBindings>
 
@@ -60,6 +63,20 @@
                     <MenuItem Header="Повторить"
                               Command="{Binding RedoCommand}"
                               InputGestureText="Ctrl+Y"/>
+                    <Separator/>
+                    <MenuItem Header="Найти и заменить"
+                              Command="{Binding ToggleReplaceCommand}"
+                              InputGestureText="Ctrl+H"/>
+                    <MenuItem Header="Перейти к строке или ключу…"
+                              Click="GoTo_Click"
+                              InputGestureText="Ctrl+G"/>
+                    <Separator/>
+                    <MenuItem Header="Следующая непереведённая"
+                              Command="{Binding NextUntranslatedCommand}"
+                              InputGestureText="F6"/>
+                    <MenuItem Header="Предыдущая непереведённая"
+                              Command="{Binding PreviousUntranslatedCommand}"
+                              InputGestureText="Shift+F6"/>
                 </MenuItem>
 
                 <MenuItem Header="Справка">
@@ -194,6 +211,7 @@
                     <RowDefinition Height="46"/>
                     <RowDefinition Height="48"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="280"/>
                 </Grid.RowDefinitions>
@@ -267,7 +285,58 @@
 
                 </StackPanel>
 
-                <StackPanel Grid.Row="2"
+                <Border Grid.Row="2"
+                        Margin="0,4,0,4"
+                        Padding="8"
+                        Background="White"
+                        BorderBrush="{StaticResource BorderBrushApp}"
+                        BorderThickness="1"
+                        CornerRadius="7">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsReplacePanelVisible}"
+                                             Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Заменить на:"
+                                   VerticalAlignment="Center"
+                                   Margin="2,0,10,0"
+                                   Foreground="{StaticResource MutedTextBrush}"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding ReplaceText, UpdateSourceTrigger=PropertyChanged}"
+                                 MinWidth="180"
+                                 Padding="8,6"
+                                 BorderBrush="{StaticResource BorderBrushApp}"
+                                 BorderThickness="1"
+                                 VerticalContentAlignment="Center"/>
+                        <Button Grid.Column="2"
+                                Content="Заменить"
+                                Command="{Binding ReplaceCurrentCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                Padding="12,7"
+                                Margin="8,0,0,0"/>
+                        <Button Grid.Column="3"
+                                Content="Заменить всё"
+                                Command="{Binding ReplaceAllCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="12,7"
+                                Margin="8,0,0,0"/>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Row="3"
                             Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Margin="0,4,0,6">
@@ -326,7 +395,7 @@
                     </Border>
                 </StackPanel>
 
-                <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                     <DataGrid x:Name="EntriesGrid"
                               ItemsSource="{Binding EntriesView, Mode=OneWay}"
                               SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
@@ -345,7 +414,8 @@
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ScrollViewer.CanContentScroll="True"
                               SelectionMode="Single"
-                              SelectionUnit="FullRow">
+                              SelectionUnit="FullRow"
+                              SelectionChanged="EntriesGrid_SelectionChanged">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="55"/>
                             <DataGridTemplateColumn Header="Namespace"
@@ -383,7 +453,7 @@
                     </DataGrid>
                 </Border>
 
-                <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" Margin="0,12,0,0" Padding="16">
+                <Border Grid.Row="5" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" Margin="0,12,0,0" Padding="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
