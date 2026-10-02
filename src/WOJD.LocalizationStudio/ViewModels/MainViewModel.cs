@@ -846,6 +846,10 @@ public sealed class MainViewModel : ObservableObject
             var document =
                 await _adapter.LoadAsync(fullPath);
 
+            await ApplySourceContextAsync(
+                document,
+                fullPath);
+
             if (_recoveryDrafts.TryGetValue(
                     fullPath,
                     out var recoveryDraft))
@@ -946,6 +950,80 @@ public sealed class MainViewModel : ObservableObject
         {
             BusyText = string.Empty;
             IsBusy = false;
+        }
+    }
+
+    private async Task ApplySourceContextAsync(
+        LocalizationDocument document,
+        string openedPath)
+    {
+        if (!string.Equals(
+                document.AdapterId,
+                "locres",
+                StringComparison.OrdinalIgnoreCase) ||
+            _projectProfile is null ||
+            string.IsNullOrWhiteSpace(
+                _projectProfile.SourceLocresPath))
+        {
+            return;
+        }
+
+        var sourcePath =
+            _projectProfile.SourceLocresPath!;
+
+        if (!Path.IsPathRooted(sourcePath) &&
+            _projectRoot is not null)
+        {
+            sourcePath =
+                Path.Combine(
+                    _projectRoot,
+                    sourcePath);
+        }
+
+        sourcePath =
+            Path.GetFullPath(sourcePath);
+
+        if (!File.Exists(sourcePath) ||
+            string.Equals(
+                sourcePath,
+                openedPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            var sourceDocument =
+                await new LocresLocalizationAdapter()
+                    .LoadAsync(sourcePath);
+
+            var sourceMap =
+                sourceDocument.Entries
+                    .GroupBy(
+                        x => $"{x.Namespace}\u001F{x.Key}",
+                        StringComparer.Ordinal)
+                    .ToDictionary(
+                        x => x.Key,
+                        x => x.First().Translation,
+                        StringComparer.Ordinal);
+
+            foreach (var entry in document.Entries)
+            {
+                var id =
+                    $"{entry.Namespace}\u001F{entry.Key}";
+
+                if (sourceMap.TryGetValue(
+                        id,
+                        out var source))
+                {
+                    entry.SetOriginalContext(source);
+                }
+            }
+        }
+        catch
+        {
+            // Source context is optional and must not prevent target LOCRES opening.
         }
     }
 
