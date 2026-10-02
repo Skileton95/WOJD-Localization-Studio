@@ -848,10 +848,20 @@ public sealed class MainViewModel : ObservableObject
         BusyText =
             $"Открытие {Path.GetFileName(fullPath)}...";
 
+        using var operationCts =
+            new CancellationTokenSource();
+
+        _currentOperationCts =
+            operationCts;
+
+        CancelOperationCommand.RaiseCanExecuteChanged();
+
         try
         {
             var document =
-                await _adapter.LoadAsync(fullPath);
+                await _adapter.LoadAsync(
+                    fullPath,
+                    operationCts.Token);
 
             await ApplySourceContextAsync(
                 document,
@@ -863,6 +873,8 @@ public sealed class MainViewModel : ObservableObject
             {
                 foreach (var draftEntry in recoveryDraft.Entries)
                 {
+                    operationCts.Token.ThrowIfCancellationRequested();
+
                     var entry =
                         document.Entries.FirstOrDefault(
                             x =>
@@ -918,32 +930,20 @@ public sealed class MainViewModel : ObservableObject
                     Node = node
                 };
 
-            foreach (var entry in document.Entries)
-            {
-                entry.PropertyChanged += Entry_PropertyChanged;
-                _entrySessions[entry] = session;
-
-                entry.RefreshValidation();
-
-                var status = entry.Status;
-                session.KnownStatuses[entry] = status;
-                session.KnownTranslations[entry] = entry.Translation;
-                session.KnownValidationStates[entry] = entry.HasValidationIssues;
-
-                if (entry.HasValidationIssues)
-                    session.ValidationErrorCount++;
-
-                ChangeStatusCounter(
-                    session,
-                    status,
-                    1);
-            }
+            AttachDocumentToSession(
+                session,
+                document);
 
             _sessions[fullPath] = session;
             RefreshOpenTabs();
             ActivateSession(session);
             RaiseGlobalCommandStates();
             ScheduleWorkspaceSave();
+        }
+        catch (OperationCanceledException)
+        {
+            BusyText =
+                "Открытие отменено.";
         }
         catch (Exception ex)
         {
@@ -955,9 +955,135 @@ public sealed class MainViewModel : ObservableObject
         }
         finally
         {
+            if (ReferenceEquals(
+                    _currentOperationCts,
+                    operationCts))
+            {
+                _currentOperationCts = null;
+                CancelOperationCommand.RaiseCanExecuteChanged();
+            }
+
             BusyText = string.Empty;
             IsBusy = false;
         }
+    }
+
+    private void AttachDocumentToSession(
+        DocumentSession session,
+        LocalizationDocument document)
+    {
+        session.KnownStatuses.Clear();
+        session.KnownTranslations.Clear();
+        session.KnownValidationStates.Clear();
+        session.TranslatedCount = 0;
+        session.UntranslatedCount = 0;
+        session.ModifiedCount = 0;
+        session.ValidationErrorCount = 0;
+
+        foreach (var entry in document.Entries)
+        {
+            entry.PropertyChanged += Entry_PropertyChanged;
+            _entrySessions[entry] = session;
+
+            entry.RefreshValidation();
+
+            var status =
+                entry.Status;
+
+            session.KnownStatuses[entry] =
+                status;
+
+            session.KnownTranslations[entry] =
+                entry.Translation;
+
+            session.KnownValidationStates[entry] =
+                entry.HasValidationIssues;
+
+            if (entry.HasValidationIssues)
+                session.ValidationErrorCount++;
+
+            ChangeStatusCounter(
+                session,
+                status,
+                1);
+        }
+    }
+
+    public async Task ReloadActiveDocumentAsync()
+    {
+        if (_activeSession is null)
+            return;
+
+        await ReloadSessionFromDiskAsync(
+            _activeSession);
+    }
+
+    private async Task ReloadSessionFromDiskAsync(
+        DocumentSession session)
+    {
+        var oldDocument =
+            session.Document;
+
+        var selectedIdentity =
+            session.SelectedEntry is null
+                ? null
+                : $"{session.SelectedEntry.Namespace}\u001F{session.SelectedEntry.Key}\u001F{session.SelectedEntry.Index}";
+
+        foreach (var entry in oldDocument.Entries)
+        {
+            entry.PropertyChanged -= Entry_PropertyChanged;
+            _entrySessions.Remove(entry);
+        }
+
+        var reloaded =
+            await _adapter.LoadAsync(
+                oldDocument.FilePath);
+
+        await ApplySourceContextAsync(
+            reloaded,
+            oldDocument.FilePath);
+
+        session.Document =
+            reloaded;
+
+        session.Node.EntryCount =
+            reloaded.Entries.Count;
+
+        session.Node.IsModified =
+            false;
+
+        AttachDocumentToSession(
+            session,
+            reloaded);
+
+        if (selectedIdentity is not null)
+        {
+            var parts =
+                selectedIdentity.Split('\u001F');
+
+            if (parts.Length == 3 &&
+                int.TryParse(
+                    parts[2],
+                    out var selectedIndex))
+            {
+                session.SelectedEntry =
+                    reloaded.Entries.FirstOrDefault(
+                        x =>
+                            x.Index == selectedIndex &&
+                            string.Equals(
+                                x.Namespace,
+                                parts[0],
+                                StringComparison.Ordinal) &&
+                            string.Equals(
+                                x.Key,
+                                parts[1],
+                                StringComparison.Ordinal));
+            }
+        }
+
+        ActivateSession(session);
+        RefreshOpenTabs();
+        RefreshNamespaceStats();
     }
 
     private async Task ApplySourceContextAsync(
@@ -1374,10 +1500,19 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = true;
         BusyText = "Сканирование папки...";
 
+        using var operationCts =
+            new CancellationTokenSource();
+
+        _currentOperationCts =
+            operationCts;
+
+        CancelOperationCommand.RaiseCanExecuteChanged();
+
         try
         {
             var folderPath =
-                Path.GetFullPath(dialog.FolderName);
+                Path.GetFullPath(
+                    dialog.FolderName);
 
             EnsureProjectContext(
                 folderPath,
@@ -1392,23 +1527,25 @@ public sealed class MainViewModel : ObservableObject
                             folderPath,
                             StringComparison.OrdinalIgnoreCase));
 
-            FileNode root;
-
-            if (existingRoot is not null)
+            if (existingRoot is null)
             {
-                root = existingRoot;
-            }
-            else
-            {
-                root =
+                var root =
                     await Task.Run(
-                        () => BuildTree(folderPath));
+                        () => BuildTree(
+                            folderPath,
+                            operationCts.Token),
+                        operationCts.Token);
 
                 FileTree.Add(root);
                 ScheduleWorkspaceSave();
             }
 
-            // Файлы из папки загружаются лениво: только после выбора пользователем.
+            // Файлы загружаются лениво при выборе в дереве.
+        }
+        catch (OperationCanceledException)
+        {
+            BusyText =
+                "Сканирование отменено.";
         }
         catch (Exception ex)
         {
@@ -1420,14 +1557,25 @@ public sealed class MainViewModel : ObservableObject
         }
         finally
         {
+            if (ReferenceEquals(
+                    _currentOperationCts,
+                    operationCts))
+            {
+                _currentOperationCts = null;
+                CancelOperationCommand.RaiseCanExecuteChanged();
+            }
+
             BusyText = string.Empty;
             IsBusy = false;
         }
     }
 
     private FileNode BuildTree(
-        string path)
+        string path,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var node =
             new FileNode
             {
@@ -1446,8 +1594,12 @@ public sealed class MainViewModel : ObservableObject
                          .EnumerateDirectories(path)
                          .OrderBy(x => x))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 node.Children.Add(
-                    BuildTree(dir));
+                    BuildTree(
+                        dir,
+                        cancellationToken));
             }
 
             foreach (var file in
@@ -1456,15 +1608,29 @@ public sealed class MainViewModel : ObservableObject
                          .Where(_adapter.CanOpen)
                          .OrderBy(x => x))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 node.Children.Add(
                     new FileNode
                     {
                         Name = Path.GetFileName(file),
                         FullPath = Path.GetFullPath(file),
                         IsDirectory = false,
-                        EntryCount = CountFileRows(file)
+                        EntryCount =
+                            string.Equals(
+                                Path.GetExtension(file),
+                                ".locres",
+                                StringComparison.OrdinalIgnoreCase)
+                                ? 0
+                                : CountFileRows(
+                                    file,
+                                    cancellationToken)
                     });
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -1475,7 +1641,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private static int CountFileRows(
-        string path)
+        string path,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1499,11 +1666,17 @@ public sealed class MainViewModel : ObservableObject
 
             while (reader.ReadLine() is { } line)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (!string.IsNullOrWhiteSpace(line))
                     count++;
             }
 
             return count;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
