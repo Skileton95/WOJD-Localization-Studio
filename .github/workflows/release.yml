@@ -54,6 +54,13 @@ jobs:
           $hash = (Get-FileHash 'dist/WOJD-Localization-Studio-win-x64.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content -Path 'dist/WOJD-Localization-Studio-win-x64.zip.sha256' -Value "$hash  WOJD-Localization-Studio-win-x64.zip"
 
+          $manifest = [ordered]@{
+            version = $env:VERSION
+            packageUrl = "https://github.com/Skileton95/WOJD-Localization-Studio/releases/download/v$env:VERSION/WOJD-Localization-Studio-win-x64.zip"
+            sha256 = $hash
+          } | ConvertTo-Json -Compress
+          Set-Content -Path 'dist/update.json' -Value $manifest -NoNewline
+
       - name: Create or update release
         shell: pwsh
         env:
@@ -65,12 +72,14 @@ jobs:
             gh release upload $tag `
               'dist/WOJD-Localization-Studio-win-x64.zip' `
               'dist/WOJD-Localization-Studio-win-x64.zip.sha256' `
+              'dist/update.json' `
               --clobber
           }
           else {
             gh release create $tag `
               'dist/WOJD-Localization-Studio-win-x64.zip' `
               'dist/WOJD-Localization-Studio-win-x64.zip.sha256' `
+              'dist/update.json' `
               --title "WOJD Localization Studio $env:VERSION" `
               --generate-notes `
               --latest
