@@ -262,70 +262,72 @@ public static class UpdateService
         var packagePath =
             Path.Combine(
                 downloadDir,
-                $"WOJD-Localization-Studio-{release.VersionText}.zip");
+                $"WOJD-Localization-Studio-{release.VersionText}-{Guid.NewGuid():N}.zip");
 
-        await using var input =
-            await response.Content.ReadAsStreamAsync();
-
-        await using var output =
-            new FileStream(
-                packagePath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                128 * 1024,
-                useAsync: true);
-
-        var buffer = new byte[128 * 1024];
-        long received = 0;
-        var lastPercent = -1;
-
-        while (true)
+        // Важно: поток записи должен быть полностью закрыт до проверки SHA-256.
+        // Иначе Windows блокирует повторное открытие того же файла.
+        await using (var input =
+                     await response.Content.ReadAsStreamAsync())
+        await using (var output =
+                     new FileStream(
+                         packagePath,
+                         FileMode.CreateNew,
+                         FileAccess.Write,
+                         FileShare.None,
+                         128 * 1024,
+                         useAsync: true))
         {
-            var read =
-                await input.ReadAsync(buffer);
+            var buffer = new byte[128 * 1024];
+            long received = 0;
+            var lastPercent = -1;
 
-            if (read == 0)
-                break;
-
-            await output.WriteAsync(
-                buffer.AsMemory(0, read));
-
-            received += read;
-
-            if (totalBytes is > 0)
+            while (true)
             {
-                var percent =
-                    (int)Math.Clamp(
-                        received * 100L /
-                        totalBytes.Value,
-                        0,
-                        100);
+                var read =
+                    await input.ReadAsync(buffer);
 
-                if (percent != lastPercent)
+                if (read == 0)
+                    break;
+
+                await output.WriteAsync(
+                    buffer.AsMemory(0, read));
+
+                received += read;
+
+                if (totalBytes is > 0)
                 {
-                    lastPercent = percent;
+                    var percent =
+                        (int)Math.Clamp(
+                            received * 100L /
+                            totalBytes.Value,
+                            0,
+                            100);
 
+                    if (percent != lastPercent)
+                    {
+                        lastPercent = percent;
+
+                        reportProgress(
+                            new UpdateProgressState(
+                                true,
+                                percent,
+                                false,
+                                $"Скачивание обновления {release.VersionText}..."));
+                    }
+                }
+                else
+                {
                     reportProgress(
                         new UpdateProgressState(
                             true,
-                            percent,
-                            false,
+                            0,
+                            true,
                             $"Скачивание обновления {release.VersionText}..."));
                 }
             }
-            else
-            {
-                reportProgress(
-                    new UpdateProgressState(
-                        true,
-                        0,
-                        true,
-                        $"Скачивание обновления {release.VersionText}..."));
-            }
-        }
 
-        await output.FlushAsync();
+            await output.FlushAsync();
+        }
 
         reportProgress(
             new UpdateProgressState(
@@ -335,7 +337,13 @@ public static class UpdateService
                 "Проверка загруженного обновления..."));
 
         await using var verifyStream =
-            File.OpenRead(packagePath);
+            new FileStream(
+                packagePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                128 * 1024,
+                useAsync: true);
 
         var hash =
             await SHA256.HashDataAsync(
