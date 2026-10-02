@@ -5,6 +5,7 @@ using System.Windows.Input;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
+using WOJD.LocalizationStudio.Views;
 
 namespace WOJD.LocalizationStudio;
 
@@ -49,6 +50,40 @@ public partial class MainWindow : Window
             _viewModel.CloseFileCommand.Execute(node);
     }
 
+    private void GoTo_Click(object sender, RoutedEventArgs e)
+    {
+        ShowGoToDialog();
+    }
+
+    private void ShowGoToDialog()
+    {
+        var dialog = new TextInputDialog(
+            "Перейти",
+            "Введите номер строки, ключ или Namespace:Key.")
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _viewModel.GoTo(dialog.Value);
+
+        if (_viewModel.SelectedEntry is not null)
+        {
+            EntriesGrid.UpdateLayout();
+            EntriesGrid.ScrollIntoView(_viewModel.SelectedEntry);
+        }
+    }
+
+    private void EntriesGrid_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (EntriesGrid.SelectedItem is not null)
+            EntriesGrid.ScrollIntoView(EntriesGrid.SelectedItem);
+    }
+
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         await UpdateService.CheckNowAsync(
@@ -71,6 +106,14 @@ public partial class MainWindow : Window
             SearchBox.Focus();
             Keyboard.Focus(SearchBox);
             SearchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.G &&
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            ShowGoToDialog();
             e.Handled = true;
         }
     }
