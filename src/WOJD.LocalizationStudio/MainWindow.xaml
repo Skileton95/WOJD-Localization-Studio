@@ -15,7 +15,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="72"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="40"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
@@ -60,7 +59,21 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
                                     <TextBlock Grid.Column="1" Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding EntryCount, Mode=OneWay}" Foreground="{StaticResource MutedTextBrush}" Margin="8,0,0,0"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Margin="8,0,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDirectory}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </HierarchicalDataTemplate>
                         </TreeView.Resources>
@@ -176,24 +189,5 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,1,0,0">
-            <Grid Margin="24,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" VerticalAlignment="Center"><Run Text="Всего: "/><Run Text="{Binding TotalCount, Mode=OneWay}"/></TextBlock>
-                <TextBlock Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Переведено: "/><Run Text="{Binding TranslatedCount, Mode=OneWay}"/></TextBlock>
-                <TextBlock Grid.Column="2" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Без перевода: "/><Run Text="{Binding UntranslatedCount, Mode=OneWay}"/></TextBlock>
-                <TextBlock Grid.Column="3" Margin="24,0,0,0" VerticalAlignment="Center"><Run Text="Изменено: "/><Run Text="{Binding ModifiedCount, Mode=OneWay}"/></TextBlock>
-                <TextBlock Grid.Column="5" Text="{Binding CurrentFileName, Mode=OneWay}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,24,0"/>
-                <TextBlock Grid.Column="6" Text="{Binding SelectionPosition, Mode=OneWay}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/>
-            </Grid>
-        </Border>
     </Grid>
 </Window>

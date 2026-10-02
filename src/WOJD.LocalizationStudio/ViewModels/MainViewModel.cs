@@ -18,7 +18,6 @@ public sealed class MainViewModel : ObservableObject
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
     private string _statusFilter = "Все";
-    private string _currentFileName = "Файл не открыт";
     private bool _isBusy;
 
     public MainViewModel()
@@ -54,7 +53,6 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedEntry, value))
             {
-                OnPropertyChanged(nameof(SelectionPosition));
                 PreviousCommand.RaiseCanExecuteChanged();
                 NextCommand.RaiseCanExecuteChanged();
                 ApplyCommand.RaiseCanExecuteChanged();
@@ -80,12 +78,6 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    public string CurrentFileName
-    {
-        get => _currentFileName;
-        private set => SetProperty(ref _currentFileName, value);
-    }
-
     public bool IsBusy
     {
         get => _isBusy;
@@ -97,7 +89,6 @@ public sealed class MainViewModel : ObservableObject
     public int UntranslatedCount => Entries.Count(x => x.Status == TranslationStatus.Untranslated);
     public int ModifiedCount => Entries.Count(x => x.Status == TranslationStatus.Modified);
     public bool HasUnsavedChanges => ModifiedCount > 0;
-    public string SelectionPosition => SelectedEntry is null ? "—" : $"Строка {SelectedEntry.Index} из {TotalCount}";
 
     public async Task LoadPathAsync(string path)
     {
@@ -120,7 +111,6 @@ public sealed class MainViewModel : ObservableObject
                 entry.PropertyChanged += Entry_PropertyChanged;
                 Entries.Add(entry);
             }
-            CurrentFileName = Path.GetFileName(path);
             EntriesView.Refresh();
             SelectedEntry = Entries.FirstOrDefault();
             RefreshStats();
@@ -147,7 +137,22 @@ public sealed class MainViewModel : ObservableObject
         {
             Filter = "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*"
         };
-        if (dialog.ShowDialog() == true) await LoadPathAsync(dialog.FileName);
+        if (dialog.ShowDialog() != true) return;
+
+        await LoadPathAsync(dialog.FileName);
+
+        if (_document is not null &&
+            string.Equals(_document.FilePath, dialog.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            FileTree.Clear();
+            FileTree.Add(new FileNode
+            {
+                Name = Path.GetFileName(dialog.FileName),
+                FullPath = dialog.FileName,
+                IsDirectory = false,
+                EntryCount = Entries.Count
+            });
+        }
     }
 
     private async Task OpenFolderAsync()
@@ -170,10 +175,30 @@ public sealed class MainViewModel : ObservableObject
         {
             foreach (var dir in Directory.EnumerateDirectories(path).OrderBy(x => x)) node.Children.Add(BuildTree(dir));
             foreach (var file in Directory.EnumerateFiles(path).Where(_adapter.CanOpen).OrderBy(x => x))
-                node.Children.Add(new FileNode { Name = Path.GetFileName(file), FullPath = file, IsDirectory = false });
+            {
+                node.Children.Add(new FileNode
+                {
+                    Name = Path.GetFileName(file),
+                    FullPath = file,
+                    IsDirectory = false,
+                    EntryCount = CountFileRows(file)
+                });
+            }
         }
         catch { }
         return node;
+    }
+
+    private static int CountFileRows(string path)
+    {
+        try
+        {
+            return File.ReadLines(path).Count(line => !string.IsNullOrWhiteSpace(line));
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static FileNode? FindFirstSupported(FileNode node)
@@ -247,7 +272,6 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(UntranslatedCount));
         OnPropertyChanged(nameof(ModifiedCount));
         OnPropertyChanged(nameof(HasUnsavedChanges));
-        OnPropertyChanged(nameof(SelectionPosition));
         EntriesView.Refresh();
         SaveCommand.RaiseCanExecuteChanged();
     }
