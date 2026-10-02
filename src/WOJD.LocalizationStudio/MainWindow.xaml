@@ -8,6 +8,7 @@
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenFileCommand}"/>
         <KeyBinding Key="O" Modifiers="Control+Shift" Command="{Binding OpenFolderCommand}"/>
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}"/>
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveAllCommand}"/>
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}"/>
         <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}"/>
         <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding ApplyCommand}"/>
@@ -47,6 +48,9 @@
                     <MenuItem Header="Сохранить"
                               Command="{Binding SaveCommand}"
                               InputGestureText="Ctrl+S"/>
+                    <MenuItem Header="Сохранить всё"
+                              Command="{Binding SaveAllCommand}"
+                              InputGestureText="Ctrl+Shift+S"/>
                 </MenuItem>
 
                 <MenuItem Header="Правка">
@@ -110,13 +114,19 @@
                         <TreeView.Resources>
                             <HierarchicalDataTemplate DataType="{x:Type models:FileNode}" ItemsSource="{Binding Children, Mode=OneWay}">
                                 <Grid Margin="2,5">
+                                    <Grid.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Закрыть файл"
+                                                      Click="CloseFileMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Grid.ContextMenu>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="2"
                                                Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
                                                Foreground="{StaticResource MutedTextBrush}"
