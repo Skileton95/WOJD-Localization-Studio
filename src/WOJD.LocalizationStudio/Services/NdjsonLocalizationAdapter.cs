@@ -8,81 +8,202 @@ namespace WOJD.LocalizationStudio.Services;
 
 public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 {
-    private static readonly string[] KeyFields = ["key", "Key", "id", "Id", "name", "Name"];
-    private static readonly string[] OriginalFields = ["original", "Original", "source", "Source", "cn", "CN", "zh", "ZH", "text", "Text"];
-    private static readonly string[] TranslationFields = ["translated", "Translated", "translation", "Translation", "target", "Target", "ru", "RU", "value", "Value"];
+    private static readonly string[] KeyFields =
+        ["key", "Key", "id", "Id", "name", "Name"];
+
+    private static readonly string[] OriginalFields =
+        ["original", "Original", "source", "Source", "cn", "CN", "zh", "ZH", "text", "Text"];
+
+    private static readonly string[] TranslationFields =
+        ["translated", "Translated", "translation", "Translation", "target", "Target", "ru", "RU", "value", "Value"];
 
     public bool CanOpen(string path)
-        => string.Equals(Path.GetExtension(path), ".ndjson", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(Path.GetExtension(path), ".jsonl", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(
+               Path.GetExtension(path),
+               ".ndjson",
+               StringComparison.OrdinalIgnoreCase)
+           || string.Equals(
+               Path.GetExtension(path),
+               ".jsonl",
+               StringComparison.OrdinalIgnoreCase);
 
-    public async Task<LocalizationDocument> LoadAsync(string path, CancellationToken cancellationToken = default)
+    public Task<LocalizationDocument> LoadAsync(
+        string path,
+        CancellationToken cancellationToken = default)
     {
-        var document = new LocalizationDocument { FilePath = path };
-        using var stream = File.OpenRead(path);
-        using var reader = new StreamReader(stream, Encoding.UTF8, true, 64 * 1024);
+        // JSON-разбор выполняется вне UI-потока.
+        return Task.Run(
+            () => LoadCore(path, cancellationToken),
+            cancellationToken);
+    }
+
+    private static LocalizationDocument LoadCore(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var document = new LocalizationDocument
+        {
+            FilePath = path
+        };
+
+        using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 1024 * 1024,
+            options: FileOptions.SequentialScan);
+
+        using var reader = new StreamReader(
+            stream,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true,
+            bufferSize: 1024 * 1024);
 
         string? line;
         var index = 1;
-        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+
+        while ((line = reader.ReadLine()) is not null)
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            JsonObject obj;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
             try
             {
-                obj = JsonNode.Parse(line)?.AsObject() ?? new JsonObject();
+                using var json = JsonDocument.Parse(line);
+                var root = json.RootElement;
+
+                if (root.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var key =
+                    ReadString(root, KeyFields)
+                    ?? $"row_{index}";
+
+                var original =
+                    ReadString(root, OriginalFields)
+                    ?? string.Empty;
+
+                var translationField =
+                    TranslationFields.FirstOrDefault(
+                        field => root.TryGetProperty(field, out _))
+                    ?? "translation";
+
+                var translation =
+                    ReadString(root, [translationField])
+                    ?? string.Empty;
+
+                var entry = new LocalizationEntry
+                {
+                    Index = index++,
+                    Key = key,
+                    Original = original,
+                    TranslationField = translationField,
+                    RawLine = line
+                };
+
+                entry.InitializeSavedTranslation(translation);
+                document.Entries.Add(entry);
             }
             catch (JsonException)
             {
-                continue;
+                // Невалидная NDJSON-строка пропускается,
+                // как и в предыдущей версии редактора.
             }
-
-            var key = ReadString(obj, KeyFields) ?? $"row_{index}";
-            var original = ReadString(obj, OriginalFields) ?? string.Empty;
-            var translationField = TranslationFields.FirstOrDefault(obj.ContainsKey) ?? "translation";
-            var translation = ReadString(obj, [translationField]) ?? string.Empty;
-
-            var entry = new LocalizationEntry
-            {
-                Index = index++,
-                Key = key,
-                Original = original,
-                TranslationField = translationField,
-                RawObject = obj
-            };
-            entry.InitializeSavedTranslation(translation);
-            document.Entries.Add(entry);
         }
 
         return document;
     }
 
-    public async Task SaveAsync(LocalizationDocument document, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(
+        LocalizationDocument document,
+        CancellationToken cancellationToken = default)
     {
         var tempPath = document.FilePath + ".tmp";
-        await using var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, true);
-        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+
+        await using var stream = new FileStream(
+            tempPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 1024 * 1024,
+            useAsync: true);
+
+        await using var writer = new StreamWriter(
+            stream,
+            new UTF8Encoding(false),
+            bufferSize: 1024 * 1024);
+
+        var changedEntries =
+            new List<(LocalizationEntry Entry, string RawLine)>();
 
         foreach (var entry in document.Entries)
         {
-            entry.RawObject[entry.TranslationField] = entry.Translation;
-            var json = entry.RawObject.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
-            await writer.WriteLineAsync(json.AsMemory(), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var line = entry.RawLine;
+
+            if (entry.Status == TranslationStatus.Modified)
+            {
+                JsonObject obj;
+
+                try
+                {
+                    obj =
+                        JsonNode.Parse(entry.RawLine)?.AsObject()
+                        ?? new JsonObject();
+                }
+                catch (JsonException)
+                {
+                    obj = new JsonObject();
+                }
+
+                obj[entry.TranslationField] = entry.Translation;
+
+                line = obj.ToJsonString(
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = false
+                    });
+
+                changedEntries.Add((entry, line));
+            }
+
+            await writer.WriteLineAsync(
+                line.AsMemory(),
+                cancellationToken);
         }
 
         await writer.FlushAsync(cancellationToken);
-        File.Move(tempPath, document.FilePath, true);
-        foreach (var entry in document.Entries) entry.MarkSaved();
+
+        File.Move(
+            tempPath,
+            document.FilePath,
+            overwrite: true);
+
+        foreach (var (entry, rawLine) in changedEntries)
+            entry.MarkSaved(rawLine);
     }
 
-    private static string? ReadString(JsonObject obj, IEnumerable<string> names)
+    private static string? ReadString(
+        JsonElement root,
+        IEnumerable<string> names)
     {
         foreach (var name in names)
         {
-            if (!obj.TryGetPropertyValue(name, out var node) || node is null) continue;
-            if (node is JsonValue value && value.TryGetValue<string>(out var text)) return text;
-            return node.ToJsonString().Trim('"');
+            if (!root.TryGetProperty(name, out var value))
+                continue;
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Null => null,
+                _ => value.GetRawText().Trim('"')
+            };
         }
+
         return null;
     }
 }
