@@ -24,6 +24,10 @@ public sealed class MainViewModel : ObservableObject
         new();
 
     private readonly DispatcherTimer _searchDebounceTimer;
+    private readonly DispatcherTimer _workspaceSaveTimer;
+
+    private readonly Dictionary<string, DraftFileState> _recoveryDrafts =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
@@ -34,6 +38,8 @@ public sealed class MainViewModel : ObservableObject
     private string? _namespaceFilter;
     private bool _isBusy;
     private string _busyText = string.Empty;
+    private bool _workspaceRestoreInProgress;
+    private int _restoredDraftEntries;
 
     public MainViewModel()
     {
@@ -51,6 +57,19 @@ public sealed class MainViewModel : ObservableObject
         {
             _searchDebounceTimer.Stop();
             EntriesView.Refresh();
+        };
+
+        _workspaceSaveTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(1500)
+        };
+
+        _workspaceSaveTimer.Tick += (_, _) =>
+        {
+            _workspaceSaveTimer.Stop();
+
+            if (!_workspaceRestoreInProgress)
+                PersistWorkspaceState(includeDrafts: true);
         };
 
         OpenFileCommand =
@@ -218,6 +237,7 @@ public sealed class MainViewModel : ObservableObject
             NextCommand.RaiseCanExecuteChanged();
             ApplyCommand.RaiseCanExecuteChanged();
             ReplaceCurrentCommand.RaiseCanExecuteChanged();
+            ScheduleWorkspaceSave();
         }
     }
 
@@ -296,6 +316,188 @@ public sealed class MainViewModel : ObservableObject
     public int ErrorCount => _activeSession?.ValidationErrorCount ?? 0;
     public bool HasUnsavedChanges => _sessions.Values.Any(x => x.HasUnsavedChanges);
 
+    public async Task RestoreWorkspaceAsync()
+    {
+        var state =
+            WorkspaceStateService.Load();
+
+        if (state is null)
+            return;
+
+        _workspaceRestoreInProgress = true;
+        _restoredDraftEntries = 0;
+        _recoveryDrafts.Clear();
+
+        foreach (var draft in state.Drafts)
+        {
+            if (string.IsNullOrWhiteSpace(draft.FilePath))
+                continue;
+
+            _recoveryDrafts[Path.GetFullPath(draft.FilePath)] =
+                draft;
+        }
+
+        try
+        {
+            foreach (var folder in state.OpenFolders)
+            {
+                if (!Directory.Exists(folder))
+                    continue;
+
+                var fullFolder =
+                    Path.GetFullPath(folder);
+
+                var exists =
+                    FileTree.Any(
+                        x =>
+                            x.IsDirectory &&
+                            string.Equals(
+                                Path.GetFullPath(x.FullPath),
+                                fullFolder,
+                                StringComparison.OrdinalIgnoreCase));
+
+                if (!exists)
+                {
+                    var root =
+                        await Task.Run(
+                            () => BuildTree(fullFolder));
+
+                    FileTree.Add(root);
+                }
+            }
+
+            foreach (var file in state.OpenFiles)
+            {
+                if (File.Exists(file))
+                    await LoadPathAsync(file);
+            }
+
+            foreach (var pair in state.SelectedRows)
+            {
+                var path =
+                    Path.GetFullPath(pair.Key);
+
+                if (!_sessions.TryGetValue(path, out var session))
+                    continue;
+
+                session.SelectedEntry =
+                    session.Document.Entries
+                        .FirstOrDefault(x => x.Index == pair.Value)
+                    ?? session.SelectedEntry;
+            }
+
+            if (!string.IsNullOrWhiteSpace(state.ActiveFile))
+            {
+                var activePath =
+                    Path.GetFullPath(state.ActiveFile);
+
+                if (_sessions.TryGetValue(
+                        activePath,
+                        out var activeSession))
+                {
+                    ActivateSession(activeSession);
+                }
+            }
+        }
+        finally
+        {
+            _workspaceRestoreInProgress = false;
+            _recoveryDrafts.Clear();
+        }
+
+        if (_restoredDraftEntries > 0)
+        {
+            AppDialog.Show(
+                $"Восстановлено несохранённых переводов: {_restoredDraftEntries}.",
+                "Восстановление черновика",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        ScheduleWorkspaceSave();
+    }
+
+    public void PersistWorkspaceState(
+        bool includeDrafts)
+    {
+        try
+        {
+            var openFiles =
+                _sessions.Keys
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            var openFolders =
+                FileTree
+                    .Where(x => x.IsDirectory)
+                    .Select(x => Path.GetFullPath(x.FullPath))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+            var selectedRows =
+                _sessions.Values
+                    .Where(x => x.SelectedEntry is not null)
+                    .ToDictionary(
+                        x => Path.GetFullPath(x.Document.FilePath),
+                        x => x.SelectedEntry!.Index,
+                        StringComparer.OrdinalIgnoreCase);
+
+            var drafts =
+                new List<DraftFileState>();
+
+            if (includeDrafts)
+            {
+                foreach (var session in _sessions.Values)
+                {
+                    var entries =
+                        session.Document.Entries
+                            .Where(x => x.Status == TranslationStatus.Modified)
+                            .Select(
+                                x =>
+                                    new DraftEntryState(
+                                        x.Index,
+                                        x.Namespace,
+                                        x.Key,
+                                        x.Translation))
+                            .ToList();
+
+                    if (entries.Count > 0)
+                    {
+                        drafts.Add(
+                            new DraftFileState(
+                                Path.GetFullPath(session.Document.FilePath),
+                                entries));
+                    }
+                }
+            }
+
+            var state =
+                new WorkspaceState(
+                    openFiles,
+                    openFolders,
+                    _activeSession is null
+                        ? null
+                        : Path.GetFullPath(_activeSession.Document.FilePath),
+                    selectedRows,
+                    drafts);
+
+            WorkspaceStateService.Save(state);
+        }
+        catch
+        {
+            // Session persistence must never block editing.
+        }
+    }
+
+    private void ScheduleWorkspaceSave()
+    {
+        if (_workspaceRestoreInProgress)
+            return;
+
+        _workspaceSaveTimer.Stop();
+        _workspaceSaveTimer.Start();
+    }
+
     public async Task LoadPathAsync(
         string path,
         bool confirmDiscard = true)
@@ -327,6 +529,45 @@ public sealed class MainViewModel : ObservableObject
         {
             var document =
                 await _adapter.LoadAsync(fullPath);
+
+            if (_recoveryDrafts.TryGetValue(
+                    fullPath,
+                    out var recoveryDraft))
+            {
+                foreach (var draftEntry in recoveryDraft.Entries)
+                {
+                    var entry =
+                        document.Entries.FirstOrDefault(
+                            x =>
+                                x.Index == draftEntry.Index &&
+                                string.Equals(
+                                    x.Namespace,
+                                    draftEntry.Namespace,
+                                    StringComparison.Ordinal) &&
+                                string.Equals(
+                                    x.Key,
+                                    draftEntry.Key,
+                                    StringComparison.Ordinal))
+                        ?? document.Entries.FirstOrDefault(
+                            x =>
+                                string.Equals(
+                                    x.Namespace,
+                                    draftEntry.Namespace,
+                                    StringComparison.Ordinal) &&
+                                string.Equals(
+                                    x.Key,
+                                    draftEntry.Key,
+                                    StringComparison.Ordinal));
+
+                    if (entry is null)
+                        continue;
+
+                    entry.Translation =
+                        draftEntry.Translation;
+
+                    _restoredDraftEntries++;
+                }
+            }
 
             var node =
                 FindNodeByPath(fullPath)
@@ -374,6 +615,7 @@ public sealed class MainViewModel : ObservableObject
             _sessions[fullPath] = session;
             ActivateSession(session);
             RaiseGlobalCommandStates();
+            ScheduleWorkspaceSave();
         }
         catch (Exception ex)
         {
@@ -423,6 +665,9 @@ public sealed class MainViewModel : ObservableObject
     {
         _activeSession = session;
 
+        foreach (var node in FileTree)
+            SetActiveNode(node, session.Node);
+
         Entries.ReplaceAll(
             session.Document.Entries);
 
@@ -440,6 +685,18 @@ public sealed class MainViewModel : ObservableObject
         NextUntranslatedCommand.RaiseCanExecuteChanged();
         PreviousUntranslatedCommand.RaiseCanExecuteChanged();
         ReplaceAllCommand.RaiseCanExecuteChanged();
+        ScheduleWorkspaceSave();
+    }
+
+    private static void SetActiveNode(
+        FileNode node,
+        FileNode activeNode)
+    {
+        node.IsActive =
+            ReferenceEquals(node, activeNode);
+
+        foreach (var child in node.Children)
+            SetActiveNode(child, activeNode);
     }
 
     private async Task OpenFileAsync()
@@ -495,6 +752,7 @@ public sealed class MainViewModel : ObservableObject
                         () => BuildTree(folderPath));
 
                 FileTree.Add(root);
+                ScheduleWorkspaceSave();
             }
 
             var first =
@@ -757,6 +1015,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RaiseGlobalCommandStates();
+        ScheduleWorkspaceSave();
     }
 
     private async Task CloseFileAsync(
@@ -817,6 +1076,7 @@ public sealed class MainViewModel : ObservableObject
             node);
 
         RaiseGlobalCommandStates();
+        ScheduleWorkspaceSave();
 
         await Task.CompletedTask;
     }
@@ -1306,6 +1566,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RaiseGlobalCommandStates();
+        ScheduleWorkspaceSave();
     }
 
     private static void RebuildStatusCache(
