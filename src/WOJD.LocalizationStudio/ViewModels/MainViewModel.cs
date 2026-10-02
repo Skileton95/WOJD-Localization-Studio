@@ -163,7 +163,7 @@ public sealed class MainViewModel : ObservableObject
     {
         if (!_adapter.CanOpen(path))
         {
-            MessageBox.Show(
+            AppDialog.Show(
                 "Пока подключён базовый адаптер NDJSON/JSONL.",
                 "Формат файла",
                 MessageBoxButton.OK,
@@ -219,7 +219,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            AppDialog.Show(
                 ex.Message,
                 "Ошибка открытия",
                 MessageBoxButton.OK,
@@ -237,7 +237,7 @@ public sealed class MainViewModel : ObservableObject
         if (!HasUnsavedChanges)
             return true;
 
-        return MessageBox.Show(
+        return AppDialog.Show(
                    "Есть несохранённые изменения. Продолжить без сохранения?",
                    "Несохранённые изменения",
                    MessageBoxButton.YesNo,
@@ -311,7 +311,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            AppDialog.Show(
                 ex.Message,
                 "Ошибка открытия папки",
                 MessageBoxButton.OK,
@@ -442,7 +442,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            AppDialog.Show(
                 ex.Message,
                 "Ошибка сохранения",
                 MessageBoxButton.OK,
