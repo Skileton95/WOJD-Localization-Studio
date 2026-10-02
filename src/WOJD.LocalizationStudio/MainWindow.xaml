@@ -15,6 +15,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="72"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
@@ -189,5 +190,40 @@
             </Grid>
         </Grid>
 
+        <Border x:Name="UpdatePanel"
+                Grid.Row="2"
+                Visibility="Collapsed"
+                Background="White"
+                BorderBrush="{StaticResource BorderBrushApp}"
+                BorderThickness="0,1,0,0"
+                Padding="18,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="0,0,0,7">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="UpdateStatusText"
+                               Text="Подготовка обновления..."
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="UpdatePercentText"
+                               Grid.Column="1"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Margin="16,0,0,0"
+                               VerticalAlignment="Center"/>
+                </Grid>
+                <ProgressBar x:Name="UpdateProgressBar"
+                             Grid.Row="1"
+                             Height="6"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="0"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
