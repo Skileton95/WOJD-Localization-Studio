@@ -504,7 +504,10 @@ public sealed class MainViewModel : ObservableObject
 
         var q = SearchText.Trim();
 
-        return entry.Key.Contains(
+        return entry.Namespace.Contains(
+                   q,
+                   StringComparison.OrdinalIgnoreCase)
+               || entry.Key.Contains(
                    q,
                    StringComparison.OrdinalIgnoreCase)
                || entry.Original.Contains(
