@@ -181,6 +181,38 @@ public partial class MainWindow : Window
             "qa-errors");
     }
 
+    private void ProjectSearch_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ShowProjectSearchWindow();
+    }
+
+    private void ShowProjectSearchWindow()
+    {
+        var dialog =
+            new ProjectSearchWindow(_viewModel)
+            {
+                Owner = this
+            };
+
+        var navigated =
+            dialog.ShowDialog() == true;
+
+        if (!navigated ||
+            _viewModel.SelectedEntry is null)
+        {
+            return;
+        }
+
+        EntriesGrid.UpdateLayout();
+        EntriesGrid.ScrollIntoView(
+            _viewModel.SelectedEntry);
+        EntriesGrid.SelectedItem =
+            _viewModel.SelectedEntry;
+        EntriesGrid.Focus();
+    }
+
     private async void CompareFile_Click(
         object sender,
         RoutedEventArgs e)
@@ -267,7 +299,7 @@ public partial class MainWindow : Window
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.F &&
-            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            Keyboard.Modifiers == ModifierKeys.Control)
         {
             SearchBox.Focus();
             Keyboard.Focus(SearchBox);
@@ -276,8 +308,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.F &&
+            Keyboard.Modifiers ==
+                (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            ShowProjectSearchWindow();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.G &&
-            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            Keyboard.Modifiers == ModifierKeys.Control)
         {
             ShowGoToDialog();
             e.Handled = true;
