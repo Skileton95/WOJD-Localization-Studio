@@ -88,6 +88,11 @@
                               InputGestureText="Shift+F6"/>
                 </MenuItem>
 
+                <MenuItem Header="Инструменты">
+                    <MenuItem Header="Сравнить со старой версией…"
+                              Click="CompareFile_Click"/>
+                </MenuItem>
+
                 <MenuItem Header="Справка">
                     <MenuItem Header="Проверить обновления"
                               Click="CheckUpdates_Click"/>
