@@ -316,6 +316,32 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private void BackupHistory_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new BackupHistoryWindow(_viewModel)
+            {
+                Owner = this
+            };
+
+        dialog.ShowDialog();
+    }
+
+    private void About_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new AboutWindow
+            {
+                Owner = this
+            };
+
+        dialog.ShowDialog();
+    }
+
     private void Settings_Click(
         object sender,
         RoutedEventArgs e)
@@ -593,7 +619,11 @@ public partial class MainWindow : Window
             : Visibility.Collapsed;
 
         FilesColumn.Width = _filesPanelVisible
-            ? new GridLength(300)
+            ? new GridLength(
+                Math.Clamp(
+                    AppSettingsService.Current.FilesPanelWidth,
+                    180,
+                    700))
             : new GridLength(0);
 
         FilesDividerColumn.Width = _filesPanelVisible
@@ -646,6 +676,25 @@ public partial class MainWindow : Window
                     settings.FilesPanelWidth,
                     180,
                     700));
+
+        foreach (var column in EntriesGrid.Columns)
+        {
+            var key =
+                column.Header?.ToString();
+
+            if (string.IsNullOrWhiteSpace(key) ||
+                !settings.ColumnWidths.TryGetValue(
+                    key,
+                    out var width) ||
+                width <= 0)
+            {
+                continue;
+            }
+
+            column.Width =
+                new DataGridLength(
+                    width);
+        }
 
         _filesPanelVisible =
             !settings.FilesPanelCollapsed;
@@ -705,6 +754,23 @@ public partial class MainWindow : Window
         {
             settings.FilesPanelWidth =
                 FilesColumn.Width.Value;
+        }
+
+        settings.ColumnWidths.Clear();
+
+        foreach (var column in EntriesGrid.Columns)
+        {
+            var key =
+                column.Header?.ToString();
+
+            if (string.IsNullOrWhiteSpace(key))
+                continue;
+
+            var width =
+                column.ActualWidth;
+
+            if (width > 0)
+                settings.ColumnWidths[key] = width;
         }
 
         settings.FilesPanelCollapsed =
