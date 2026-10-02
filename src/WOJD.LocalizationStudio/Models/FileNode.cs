@@ -14,7 +14,7 @@ public sealed class FileNode : ObservableObject
     public bool IsDirectory { get; init; }
 
     public string DisplayName
-        => IsModified ? $"{Name} *" : Name;
+        => $"{(IsActive ? "● " : string.Empty)}{Name}{(IsModified ? " *" : string.Empty)}";
 
     public int EntryCount
     {
@@ -35,7 +35,11 @@ public sealed class FileNode : ObservableObject
     public bool IsActive
     {
         get => _isActive;
-        set => SetProperty(ref _isActive, value);
+        set
+        {
+            if (SetProperty(ref _isActive, value))
+                OnPropertyChanged(nameof(DisplayName));
+        }
     }
 
     public ObservableCollection<FileNode> Children { get; } = new();
