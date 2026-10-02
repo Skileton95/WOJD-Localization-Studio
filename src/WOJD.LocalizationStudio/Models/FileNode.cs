@@ -8,13 +8,14 @@ public sealed class FileNode : ObservableObject
     private int _entryCount;
     private bool _isModified;
     private bool _isActive;
+    private bool _isPinned;
 
     public string Name { get; init; } = string.Empty;
     public string FullPath { get; init; } = string.Empty;
     public bool IsDirectory { get; init; }
 
     public string DisplayName
-        => $"{(IsActive ? "● " : string.Empty)}{Name}{(IsModified ? " *" : string.Empty)}";
+        => $"{(IsPinned ? "📌 " : string.Empty)}{(IsActive ? "● " : string.Empty)}{Name}{(IsModified ? " *" : string.Empty)}";
 
     public int EntryCount
     {
@@ -38,6 +39,16 @@ public sealed class FileNode : ObservableObject
         set
         {
             if (SetProperty(ref _isActive, value))
+                OnPropertyChanged(nameof(DisplayName));
+        }
+    }
+
+    public bool IsPinned
+    {
+        get => _isPinned;
+        set
+        {
+            if (SetProperty(ref _isPinned, value))
                 OnPropertyChanged(nameof(DisplayName));
         }
     }
