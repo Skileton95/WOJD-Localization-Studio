@@ -28,6 +28,8 @@ public sealed class MainViewModel : ObservableObject
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
+    private string _replaceText = string.Empty;
+    private bool _isReplacePanelVisible;
     private string _statusFilter = "Все";
     private string? _namespaceFilter;
     private bool _isBusy;
@@ -135,6 +137,32 @@ public sealed class MainViewModel : ObservableObject
             new RelayCommand(
                 RedoTranslation,
                 () => _activeSession?.RedoStack.Count > 0);
+
+        ToggleReplaceCommand =
+            new RelayCommand(
+                () => IsReplacePanelVisible = !IsReplacePanelVisible);
+
+        ReplaceCurrentCommand =
+            new RelayCommand(
+                ReplaceCurrent,
+                () => SelectedEntry is not null &&
+                      !string.IsNullOrEmpty(SearchText));
+
+        ReplaceAllCommand =
+            new RelayCommand(
+                ReplaceAll,
+                () => _activeSession is not null &&
+                      !string.IsNullOrEmpty(SearchText));
+
+        NextUntranslatedCommand =
+            new RelayCommand(
+                () => NavigateUntranslated(1),
+                () => _activeSession is not null);
+
+        PreviousUntranslatedCommand =
+            new RelayCommand(
+                () => NavigateUntranslated(-1),
+                () => _activeSession is not null);
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -164,6 +192,11 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ClearNamespaceFilterCommand { get; }
     public RelayCommand UndoCommand { get; }
     public RelayCommand RedoCommand { get; }
+    public RelayCommand ToggleReplaceCommand { get; }
+    public RelayCommand ReplaceCurrentCommand { get; }
+    public RelayCommand ReplaceAllCommand { get; }
+    public RelayCommand NextUntranslatedCommand { get; }
+    public RelayCommand PreviousUntranslatedCommand { get; }
 
     public LocalizationEntry? SelectedEntry
     {
@@ -179,6 +212,7 @@ public sealed class MainViewModel : ObservableObject
             PreviousCommand.RaiseCanExecuteChanged();
             NextCommand.RaiseCanExecuteChanged();
             ApplyCommand.RaiseCanExecuteChanged();
+            ReplaceCurrentCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -192,7 +226,21 @@ public sealed class MainViewModel : ObservableObject
 
             _searchDebounceTimer.Stop();
             _searchDebounceTimer.Start();
+            ReplaceCurrentCommand.RaiseCanExecuteChanged();
+            ReplaceAllCommand.RaiseCanExecuteChanged();
         }
+    }
+
+    public string ReplaceText
+    {
+        get => _replaceText;
+        set => SetProperty(ref _replaceText, value);
+    }
+
+    public bool IsReplacePanelVisible
+    {
+        get => _isReplacePanelVisible;
+        set => SetProperty(ref _isReplacePanelVisible, value);
     }
 
     public string StatusFilter
@@ -377,6 +425,9 @@ public sealed class MainViewModel : ObservableObject
         RaiseStatsChanged();
         RaiseHistoryCommandStates();
         RaiseGlobalCommandStates();
+        NextUntranslatedCommand.RaiseCanExecuteChanged();
+        PreviousUntranslatedCommand.RaiseCanExecuteChanged();
+        ReplaceAllCommand.RaiseCanExecuteChanged();
     }
 
     private async Task OpenFileAsync()
@@ -795,6 +846,192 @@ public sealed class MainViewModel : ObservableObject
         return false;
     }
 
+    public void GoTo(string query)
+    {
+        var session = _activeSession;
+
+        if (session is null ||
+            string.IsNullOrWhiteSpace(query))
+        {
+            return;
+        }
+
+        query = query.Trim();
+
+        LocalizationEntry? target = null;
+
+        if (int.TryParse(query, out var row))
+        {
+            target =
+                session.Document.Entries
+                    .FirstOrDefault(x => x.Index == row);
+        }
+
+        target ??=
+            session.Document.Entries
+                .FirstOrDefault(
+                    x =>
+                        string.Equals(
+                            x.Key,
+                            query,
+                            StringComparison.OrdinalIgnoreCase));
+
+        if (target is null &&
+            query.Contains(':'))
+        {
+            var separator = query.IndexOf(':');
+            var ns = query[..separator].Trim();
+            var key = query[(separator + 1)..].Trim();
+
+            target =
+                session.Document.Entries
+                    .FirstOrDefault(
+                        x =>
+                            string.Equals(
+                                x.Namespace,
+                                ns,
+                                StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(
+                                x.Key,
+                                key,
+                                StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (target is null)
+        {
+            AppDialog.Show(
+                $"Строка или ключ «{query}» не найдены.",
+                "Переход",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        StatusFilter = "Все";
+        NamespaceFilter = null;
+        SearchText = string.Empty;
+        EntriesView.Refresh();
+
+        SelectedEntry = target;
+        EntriesView.MoveCurrentTo(target);
+    }
+
+    private void ReplaceCurrent()
+    {
+        var entry = SelectedEntry;
+
+        if (entry is null ||
+            string.IsNullOrEmpty(SearchText) ||
+            !entry.Translation.Contains(
+                SearchText,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        entry.Translation =
+            entry.Translation.Replace(
+                SearchText,
+                ReplaceText,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ReplaceAll()
+    {
+        var session = _activeSession;
+
+        if (session is null ||
+            string.IsNullOrEmpty(SearchText))
+        {
+            return;
+        }
+
+        var count = 0;
+
+        foreach (var entry in session.Document.Entries)
+        {
+            if (!string.IsNullOrWhiteSpace(NamespaceFilter) &&
+                !string.Equals(
+                    entry.Namespace,
+                    NamespaceFilter,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!entry.Translation.Contains(
+                    SearchText,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            entry.Translation =
+                entry.Translation.Replace(
+                    SearchText,
+                    ReplaceText,
+                    StringComparison.OrdinalIgnoreCase);
+
+            count++;
+        }
+
+        AppDialog.Show(
+            $"Заменено строк: {count}.",
+            "Найти и заменить",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void NavigateUntranslated(int direction)
+    {
+        var session = _activeSession;
+
+        if (session is null)
+            return;
+
+        var candidates =
+            session.Document.Entries
+                .Where(
+                    x =>
+                        x.Status == TranslationStatus.Untranslated &&
+                        (string.IsNullOrWhiteSpace(NamespaceFilter) ||
+                         string.Equals(
+                             x.Namespace,
+                             NamespaceFilter,
+                             StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+        if (candidates.Count == 0)
+        {
+            AppDialog.Show(
+                "Непереведённых строк в текущей области нет.",
+                "Навигация",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        var currentIndex =
+            SelectedEntry is null
+                ? -1
+                : candidates.IndexOf(SelectedEntry);
+
+        var nextIndex =
+            direction > 0
+                ? (currentIndex + 1 + candidates.Count) % candidates.Count
+                : (currentIndex <= 0 ? candidates.Count - 1 : currentIndex - 1);
+
+        StatusFilter = "Все";
+        SearchText = string.Empty;
+        EntriesView.Refresh();
+
+        var target = candidates[nextIndex];
+        SelectedEntry = target;
+        EntriesView.MoveCurrentTo(target);
+    }
+
     private void ApplyCurrent()
     {
         if (StatusFilter != "Все" ||
@@ -1096,6 +1333,9 @@ public sealed class MainViewModel : ObservableObject
         SaveCommand.RaiseCanExecuteChanged();
         SaveAllCommand.RaiseCanExecuteChanged();
         CloseFileCommand.RaiseCanExecuteChanged();
+        ReplaceAllCommand.RaiseCanExecuteChanged();
+        NextUntranslatedCommand.RaiseCanExecuteChanged();
+        PreviousUntranslatedCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(HasUnsavedChanges));
     }
 }
