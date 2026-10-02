@@ -18,36 +18,79 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0"
+                Background="White"
+                BorderBrush="{StaticResource BorderBrushApp}"
+                BorderThickness="0,0,0,1">
             <Grid Margin="24,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="38" Height="38" CornerRadius="10" Background="{StaticResource AccentSoftBrush}" Margin="0,0,14,0">
-                        <TextBlock Text="译" FontSize="22" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Border Width="38"
+                            Height="38"
+                            CornerRadius="10"
+                            Background="{StaticResource AccentSoftBrush}"
+                            Margin="0,0,14,0">
+                        <TextBlock Text="译"
+                                   FontSize="22"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
                     </Border>
-                    <TextBlock Text="WOJD Localization Studio" FontSize="23" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding AppVersion, Mode=OneWay}" Margin="12,4,0,0" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="WOJD Localization Studio"
+                               FontSize="23"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding AppVersion, Mode=OneWay}"
+                               Margin="12,4,0,0"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="Открыть файл" Command="{Binding OpenFileCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
-                    <Button Content="Открыть папку" Command="{Binding OpenFolderCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
-                    <Button Content="Проверить обновления" Click="CheckUpdates_Click" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
-                    <Button Content="Сохранить" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}"/>
-                </StackPanel>
+
+                <Menu Grid.Column="1"
+                      Background="Transparent"
+                      VerticalAlignment="Center">
+                    <Menu.Resources>
+                        <Style TargetType="{x:Type MenuItem}">
+                            <Setter Property="Padding" Value="14,8"/>
+                            <Setter Property="FontSize" Value="14"/>
+                        </Style>
+                    </Menu.Resources>
+
+                    <MenuItem Header="Файл">
+                        <MenuItem Header="Открыть файл"
+                                  Command="{Binding OpenFileCommand}"
+                                  InputGestureText="Ctrl+O"/>
+                        <MenuItem Header="Открыть папку"
+                                  Command="{Binding OpenFolderCommand}"
+                                  InputGestureText="Ctrl+Shift+O"/>
+                        <Separator/>
+                        <MenuItem Header="Сохранить"
+                                  Command="{Binding SaveCommand}"
+                                  InputGestureText="Ctrl+S"/>
+                    </MenuItem>
+
+                    <MenuItem Header="Справка">
+                        <MenuItem Header="Проверить обновления"
+                                  Click="CheckUpdates_Click"/>
+                    </MenuItem>
+                </Menu>
             </Grid>
         </Border>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300"/>
-                <ColumnDefinition Width="1"/>
+                <ColumnDefinition x:Name="FilesColumn" Width="220"/>
+                <ColumnDefinition x:Name="FilesDividerColumn" Width="1"/>
+                <ColumnDefinition Width="34"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="White" Padding="18,16">
+            <Border x:Name="FilesPanel" Grid.Column="0" Background="White" Padding="14,16">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Файлы" FontSize="18" FontWeight="SemiBold" Margin="4,0,0,14"/>
                     <TreeView ItemsSource="{Binding FileTree, Mode=OneWay}" BorderThickness="0" Background="Transparent" SelectedItemChanged="FileTree_SelectedItemChanged">
@@ -82,9 +125,28 @@
                     </TreeView>
                 </DockPanel>
             </Border>
-            <Border Grid.Column="1" Background="{StaticResource BorderBrushApp}"/>
+            <Border Grid.Column="1"
+                    Background="{StaticResource BorderBrushApp}"/>
 
-            <Grid Grid.Column="2" Margin="14">
+            <Border Grid.Column="2"
+                    Background="{StaticResource BackgroundBrush}">
+                <Button x:Name="FilesPanelToggleButton"
+                        Content="‹"
+                        Width="26"
+                        Height="42"
+                        Margin="4,12,4,0"
+                        VerticalAlignment="Top"
+                        Background="White"
+                        BorderBrush="{StaticResource BorderBrushApp}"
+                        BorderThickness="1"
+                        Foreground="{StaticResource MutedTextBrush}"
+                        FontSize="20"
+                        Cursor="Hand"
+                        ToolTip="Скрыть панель файлов"
+                        Click="ToggleFilesPanel_Click"/>
+            </Border>
+
+            <Grid Grid.Column="3" Margin="14">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="48"/>
                     <RowDefinition Height="46"/>
@@ -92,33 +154,77 @@
                     <RowDefinition Height="280"/>
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
-                    </Grid.ColumnDefinitions>
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Margin="0,0,10,0">
-                        <Grid>
-                            <TextBlock Text="⌕" FontSize="24" Foreground="{StaticResource MutedTextBrush}" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Padding="42,12,10,10" VerticalContentAlignment="Center" ToolTip="Поиск по namespace, ключу, оригиналу и переводу"/>
-                        </Grid>
-                    </Border>
-                    <ComboBox Grid.Column="1" ItemsSource="{Binding StatusFilters, Mode=OneWay}" SelectedItem="{Binding StatusFilter}" Padding="10,7" BorderBrush="{StaticResource BorderBrushApp}" Background="White"/>
-                </Grid>
+                <Border Grid.Row="0"
+                        Background="White"
+                        BorderBrush="{StaticResource BorderBrushApp}"
+                        BorderThickness="1"
+                        CornerRadius="7">
+                    <Grid>
+                        <TextBlock Text="⌕"
+                                   FontSize="24"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"/>
+                        <TextBox x:Name="SearchBox"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Padding="42,12,10,10"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Поиск по namespace, ключу, оригиналу и переводу"/>
+                    </Grid>
+                </Border>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
-                        <TextBlock><Run Text="Все  "/><Run Text="{Binding TotalCount, Mode=OneWay}" Foreground="{StaticResource AccentBrush}"/></TextBlock>
-                    </Border>
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
-                        <TextBlock><Run Text="Без перевода  "/><Run Text="{Binding UntranslatedCount, Mode=OneWay}" Foreground="{StaticResource MutedTextBrush}"/></TextBlock>
-                    </Border>
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7" Margin="0,0,8,0">
-                        <TextBlock><Run Text="Переведено  "/><Run Text="{Binding TranslatedCount, Mode=OneWay}" Foreground="#20B66B"/></TextBlock>
-                    </Border>
-                    <Border Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="7" Padding="13,7">
-                        <TextBlock><Run Text="Изменено  "/><Run Text="{Binding ModifiedCount, Mode=OneWay}" Foreground="#F3A51B"/></TextBlock>
-                    </Border>
+                <StackPanel Grid.Row="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button Command="{Binding FilterAllCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="13,7"
+                            Margin="0,0,8,0">
+                        <TextBlock>
+                            <Run Text="Все  "/>
+                            <Run Text="{Binding TotalCount, Mode=OneWay}"/>
+                        </TextBlock>
+                    </Button>
+
+                    <Button Command="{Binding FilterTranslatedCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="13,7"
+                            Margin="0,0,8,0">
+                        <TextBlock>
+                            <Run Text="Переведено  "/>
+                            <Run Text="{Binding TranslatedCount, Mode=OneWay}"
+                                 Foreground="#20B66B"/>
+                        </TextBlock>
+                    </Button>
+
+                    <Button Command="{Binding FilterUntranslatedCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="13,7"
+                            Margin="0,0,8,0">
+                        <TextBlock>
+                            <Run Text="Без перевода  "/>
+                            <Run Text="{Binding UntranslatedCount, Mode=OneWay}"
+                                 Foreground="{StaticResource MutedTextBrush}"/>
+                        </TextBlock>
+                    </Button>
+
+                    <Button Command="{Binding FilterModifiedCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="13,7"
+                            Margin="0,0,12,0">
+                        <TextBlock>
+                            <Run Text="Изменено  "/>
+                            <Run Text="{Binding ModifiedCount, Mode=OneWay}"
+                                 Foreground="#F3A51B"/>
+                        </TextBlock>
+                    </Button>
+
+                    <TextBlock Text="{Binding NamespaceFilterLabel, Mode=OneWay}"
+                               Foreground="{StaticResource AccentBrush}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
@@ -143,7 +249,33 @@
                               SelectionUnit="FullRow">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="55"/>
-                            <DataGridTextColumn Header="Namespace" Binding="{Binding Namespace, Mode=OneWay}" Width="250"/>
+                            <DataGridTemplateColumn Header="Namespace"
+                                                    Width="250">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding Namespace}"
+                                                Command="{Binding DataContext.FilterNamespaceCommand, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}"
+                                                CommandParameter="{Binding Namespace}"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="2,0"
+                                                HorizontalContentAlignment="Left"
+                                                Foreground="{StaticResource AccentBrush}"
+                                                Cursor="Hand"
+                                                ToolTip="Показать все строки этого Namespace">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Transparent"
+                                                            Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                          VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Ключ" Binding="{Binding Key, Mode=OneWay}" Width="150"/>
                             <DataGridTextColumn Header="Оригинал" Binding="{Binding OriginalDisplay, Mode=OneWay}" Width="*"/>
                             <DataGridTextColumn Header="Перевод" Binding="{Binding Translation, Mode=OneWay}" Width="*"/>
