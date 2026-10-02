@@ -54,6 +54,15 @@
                     <MenuItem Header="Сохранить всё"
                               Command="{Binding SaveAllCommand}"
                               InputGestureText="Ctrl+Shift+S"/>
+                    <Separator/>
+                    <MenuItem Header="Экспорт">
+                        <MenuItem Header="Выбранные строки…"
+                                  Click="ExportSelected_Click"/>
+                        <MenuItem Header="Непереведённые…"
+                                  Click="ExportUntranslated_Click"/>
+                        <MenuItem Header="Ошибки QA…"
+                                  Click="ExportErrors_Click"/>
+                    </MenuItem>
                 </MenuItem>
 
                 <MenuItem Header="Правка">
@@ -424,7 +433,7 @@
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ScrollViewer.CanContentScroll="True"
-                              SelectionMode="Single"
+                              SelectionMode="Extended"
                               SelectionUnit="FullRow"
                               SelectionChanged="EntriesGrid_SelectionChanged">
                         <DataGrid.RowStyle>
@@ -440,6 +449,17 @@
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Оригинал → перевод"
+                                          Click="CopyOriginalToTranslation_Click"/>
+                                <MenuItem Header="Очистить перевод"
+                                          Click="ClearSelectedTranslations_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Экспортировать выбранные…"
+                                          Click="ExportSelected_Click"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding Index, Mode=OneWay}" Width="55"/>
                             <DataGridTemplateColumn Header="Namespace"
