@@ -31,6 +31,14 @@ public sealed class MainViewModel : ObservableObject
 
     private readonly List<string> _projectSearchHistory = [];
 
+    private string? _projectRoot;
+    private ProjectProfile? _projectProfile;
+    private StudioProjectMetadata _projectMetadata = new();
+    private SavedSmartFilter? _activeSmartFilter;
+    private bool _isNamespacePanelVisible = true;
+    private string _currentOperationId = Guid.NewGuid().ToString("N");
+    private string _currentOperationName = "Редактирование";
+
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
     private string _searchText = string.Empty;
@@ -188,6 +196,53 @@ public sealed class MainViewModel : ObservableObject
             new RelayCommand(
                 () => NavigateUntranslated(-1),
                 () => _activeSession is not null);
+
+        SwitchFileCommand =
+            new RelayCommand(
+                value =>
+                {
+                    if (value is FileNode node)
+                        ActivateNode(node);
+                },
+                value => value is FileNode { IsDirectory: false });
+
+        PinFileCommand =
+            new RelayCommand(
+                value =>
+                {
+                    if (value is FileNode node)
+                    {
+                        node.IsPinned = !node.IsPinned;
+                        RefreshOpenTabs();
+                        ScheduleWorkspaceSave();
+                    }
+                },
+                value => value is FileNode { IsDirectory: false });
+
+        ToggleNamespacePanelCommand =
+            new RelayCommand(
+                () => IsNamespacePanelVisible = !IsNamespacePanelVisible);
+
+        ApplySmartFilterCommand =
+            new RelayCommand(
+                value =>
+                {
+                    if (value is SavedSmartFilter filter)
+                    {
+                        _activeSmartFilter = filter;
+                        OnPropertyChanged(nameof(ActiveSmartFilterName));
+                        EntriesView.Refresh();
+                    }
+                });
+
+        ClearSmartFilterCommand =
+            new RelayCommand(
+                () =>
+                {
+                    _activeSmartFilter = null;
+                    OnPropertyChanged(nameof(ActiveSmartFilterName));
+                    EntriesView.Refresh();
+                });
     }
 
     public BulkObservableCollection<LocalizationEntry>
@@ -195,6 +250,12 @@ public sealed class MainViewModel : ObservableObject
 
     public BulkObservableCollection<FileNode>
         FileTree { get; } = new();
+
+    public BulkObservableCollection<FileNode>
+        OpenTabs { get; } = new();
+
+    public BulkObservableCollection<NamespaceStat>
+        NamespaceStats { get; } = new();
 
     public ICollectionView EntriesView { get; }
 
@@ -223,6 +284,23 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ReplaceAllCommand { get; }
     public RelayCommand NextUntranslatedCommand { get; }
     public RelayCommand PreviousUntranslatedCommand { get; }
+    public RelayCommand SwitchFileCommand { get; }
+    public RelayCommand PinFileCommand { get; }
+    public RelayCommand ToggleNamespacePanelCommand { get; }
+    public RelayCommand ApplySmartFilterCommand { get; }
+    public RelayCommand ClearSmartFilterCommand { get; }
+
+    public string? ProjectRoot => _projectRoot;
+    public ProjectProfile? ProjectProfile => _projectProfile;
+    public StudioProjectMetadata ProjectMetadata => _projectMetadata;
+    public string ProjectName => _projectProfile?.Name ?? "Без проекта";
+    public string ActiveSmartFilterName => _activeSmartFilter?.Name ?? string.Empty;
+
+    public bool IsNamespacePanelVisible
+    {
+        get => _isNamespacePanelVisible;
+        set => SetProperty(ref _isNamespacePanelVisible, value);
+    }
 
     public LocalizationEntry? SelectedEntry
     {
