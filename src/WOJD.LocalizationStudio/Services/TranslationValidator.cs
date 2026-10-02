@@ -38,6 +38,23 @@ public static partial class TranslationValidator
             "Теги <…> не совпадают",
             issues);
 
+        CompareTokens(
+            source,
+            translation,
+            EscapeSequenceRegex(),
+            "Управляющие последовательности \\n/\\r/\\t не совпадают",
+            issues);
+
+        if (ContainsCjk(translation) &&
+            !string.Equals(
+                source,
+                translation,
+                StringComparison.Ordinal))
+        {
+            issues.Add(
+                "В переводе остались CJK-символы");
+        }
+
         var sourceNewLines = CountNewLines(source);
         var targetNewLines = CountNewLines(translation);
 
@@ -125,7 +142,17 @@ public static partial class TranslationValidator
         RegexOptions.CultureInvariant)]
     private static partial Regex PercentPlaceholderRegex();
 
+    private static bool ContainsCjk(string text)
+        => text.Any(ch =>
+            ch is >= '\u3400' and <= '\u4DBF' ||
+            ch is >= '\u4E00' and <= '\u9FFF' ||
+            ch is >= '\uF900' and <= '\uFAFF');
+
     [GeneratedRegex(@"<\/?[^<>]+?>",
         RegexOptions.CultureInvariant)]
     private static partial Regex TagRegex();
+
+    [GeneratedRegex(@"\\[nrt]",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex EscapeSequenceRegex();
 }
