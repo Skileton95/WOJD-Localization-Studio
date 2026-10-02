@@ -1832,15 +1832,70 @@ public sealed class MainViewModel : ObservableObject
 
             if (changedExternally)
             {
-                var overwrite =
-                    AppDialog.Show(
-                        $"Файл «{session.Node.Name}» был изменён другой программой после открытия.{Environment.NewLine}{Environment.NewLine}Перезаписать внешние изменения текущей версией редактора?",
-                        "Файл изменён извне",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
+                var dialog =
+                    new ExternalFileChangeDialog(
+                        session.Node.Name);
 
-                if (overwrite != MessageBoxResult.Yes)
-                    return;
+                if (Application.Current.MainWindow
+                    is Window owner)
+                {
+                    dialog.Owner = owner;
+                }
+
+                dialog.ShowDialog();
+
+                switch (dialog.Action)
+                {
+                    case ExternalFileChangeAction.Reload:
+                        await ReloadSessionFromDiskAsync(
+                            session);
+                        return;
+
+                    case ExternalFileChangeAction.Compare:
+                    {
+                        try
+                        {
+                            var diskDocument =
+                                await _adapter.LoadAsync(
+                                    document.FilePath);
+
+                            await ApplySourceContextAsync(
+                                diskDocument,
+                                document.FilePath);
+
+                            var compareWindow =
+                                new FileComparisonWindow(
+                                    document,
+                                    diskDocument,
+                                    "версия на диске");
+
+                            if (Application.Current.MainWindow
+                                is Window compareOwner)
+                            {
+                                compareWindow.Owner =
+                                    compareOwner;
+                            }
+
+                            compareWindow.ShowDialog();
+                        }
+                        catch (Exception ex)
+                        {
+                            AppDialog.Show(
+                                ex.Message,
+                                "Ошибка сравнения",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
+                        }
+
+                        return;
+                    }
+
+                    case ExternalFileChangeAction.KeepMine:
+                        break;
+
+                    default:
+                        return;
+                }
             }
         }
 
