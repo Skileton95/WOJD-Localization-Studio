@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
+        InstallSkillCardsMenu();
         Closing += MainWindow_Closing;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         Loaded += MainWindow_Loaded;
@@ -213,6 +215,104 @@ public partial class MainWindow : Window
         EntriesGrid.Focus();
     }
 
+    private void InstallSkillCardsMenu()
+    {
+        var menu = FindVisualChild<Menu>(this);
+
+        var tools =
+            menu?.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(x =>
+                    string.Equals(
+                        x.Header?.ToString(),
+                        "Инструменты",
+                        StringComparison.Ordinal));
+
+        if (tools is null)
+            return;
+
+        var skillCardsItem =
+            new MenuItem
+            {
+                Header = "Карточки навыков…",
+                InputGestureText = "Ctrl+K"
+            };
+
+        skillCardsItem.Click += SkillCards_Click;
+
+        tools.Items.Insert(0, skillCardsItem);
+        tools.Items.Insert(1, new Separator());
+    }
+
+    private static T? FindVisualChild<T>(
+        DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child =
+                VisualTreeHelper.GetChild(parent, i);
+
+            if (child is T match)
+                return match;
+
+            var nested = FindVisualChild<T>(child);
+
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private void SkillCards_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ShowSkillCardsWindow();
+    }
+
+    private void ShowSkillCardsWindow()
+    {
+        if (_viewModel.ActiveDocument is null)
+        {
+            AppDialog.Show(
+                "Сначала откройте файл локализации с ключами навыков.",
+                "Карточки навыков",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                this);
+            return;
+        }
+
+        try
+        {
+            var dialog =
+                new SkillCardsWindow(_viewModel)
+                {
+                    Owner = this
+                };
+
+            dialog.ShowDialog();
+
+            if (_viewModel.SelectedEntry is not null)
+            {
+                EntriesGrid.UpdateLayout();
+                EntriesGrid.SelectedItem = _viewModel.SelectedEntry;
+                EntriesGrid.ScrollIntoView(_viewModel.SelectedEntry);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                ex.Message,
+                "Карточки навыков",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error,
+                this);
+        }
+    }
+
     private async void CompareFile_Click(
         object sender,
         RoutedEventArgs e)
@@ -298,6 +398,14 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.K &&
+            Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            ShowSkillCardsWindow();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F7 &&
             (Keyboard.Modifiers == ModifierKeys.None ||
              Keyboard.Modifiers == ModifierKeys.Shift))
