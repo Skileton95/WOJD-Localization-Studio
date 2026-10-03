@@ -433,6 +433,8 @@ public partial class MainWindow : Window
             await _viewModel.ExportEntriesAsync(_viewModel.Entries.Where(x => x.Namespace == summary.Name).ToList(), "namespace");
     }
 
+    private void Consistency_Click(object sender, RoutedEventArgs e) => new ConsistencyWindow(_viewModel) { Owner = this }.ShowDialog();
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

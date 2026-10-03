@@ -58,8 +58,9 @@ public sealed partial class MainViewModel : ObservableObject
         _searchDebounceTimer.Tick += (_, _) =>
         {
             _searchDebounceTimer.Stop();
-            EntriesView.Refresh();
             RefreshNamespaces();
+            RefreshConsistency();
+            EntriesView.Refresh();
         };
 
         _workspaceSaveTimer = new DispatcherTimer
@@ -893,6 +894,7 @@ public sealed partial class MainViewModel : ObservableObject
                 .FirstOrDefault();
 
         RefreshNamespaces();
+        RefreshConsistency();
         RaiseStatsChanged();
         RaiseHistoryCommandStates();
         RaiseGlobalCommandStates();
@@ -1558,7 +1560,11 @@ public sealed partial class MainViewModel : ObservableObject
         if (obj is not LocalizationEntry entry)
             return false;
 
-        if (StatusFilter == "Ошибки")
+        if (StatusFilter == "Несогласованные")
+        {
+            if (!_inconsistentSources.Contains(entry.Original)) return false;
+        }
+        else if (StatusFilter == "Ошибки")
         {
             if (!entry.HasValidationIssues)
                 return false;

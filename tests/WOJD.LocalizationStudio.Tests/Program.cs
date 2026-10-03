@@ -53,6 +53,28 @@ internal static class Program
         var state = JsonSerializer.Deserialize<WorkspaceState>("{\"OpenFiles\":[],\"OpenFolders\":[],\"SelectedRows\":{},\"Drafts\":[]}");
         Check(state is { Layout: null, PinnedFiles: null }, "Existing v0.1.23 workspace must remain readable");
         Check(TranslationValidator.Validate("你好 {0}", "Привет {0}").IssueCount == 0, "QA placeholder matching");
+        var duplicate = new LocalizationDocument { FilePath = "duplicates" };
+        var other = new LocalizationEntry { Original = first.Original, Key = "other", Translation = "Другой {0}" };
+        duplicate.Entries.Add(other);
+        var consistency = ConsistencyService.Analyze(new[] { vm.ActiveDocument!, duplicate });
+        Check(consistency.Conflicts.Count == 1 && consistency.Conflicts[0].Count == 2, "Conflicting translations across files");
+        other.Translation = first.Translation;
+        Check(ConsistencyService.Analyze(new[] { vm.ActiveDocument!, duplicate }).Conflicts.Count == 0, "Resolved consistency");
+        var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
+        var window = new WOJD.LocalizationStudio.MainWindow();
+        window.DataContext = vm;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var content = (System.Windows.FrameworkElement)window.Content;
+        content.Measure(new System.Windows.Size(1540,980)); content.Arrange(new System.Windows.Rect(0,0,1540,980));
+        content.UpdateLayout();
+        Check(((System.Windows.Controls.DataGrid)window.FindName("EntriesGrid")).Items.Count == 1, "Table should bind the active session");
+        if (Environment.GetEnvironmentVariable("WOJD_TEST_RENDER") is { } renderPath)
+        {
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(1540, 980, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(content);
+            var png = new System.Windows.Media.Imaging.PngBitmapEncoder(); png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var output = File.Create(renderPath); png.Save(output);
+        }
         Console.WriteLine("PASS tabs, pinning, independent undo, UTF-8/unknown-field roundtrip, legacy workspace");
         // Leave test files in the isolated temp folder for failure diagnosis.
     }
