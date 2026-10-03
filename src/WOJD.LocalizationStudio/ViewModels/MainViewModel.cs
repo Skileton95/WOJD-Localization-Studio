@@ -14,8 +14,7 @@ namespace WOJD.LocalizationStudio.ViewModels;
 
 public sealed partial class MainViewModel : ObservableObject
 {
-    private readonly ILocalizationFileAdapter _adapter =
-        new NdjsonLocalizationAdapter();
+    private readonly FormatProviderRegistry _adapter = new();
 
     private readonly Dictionary<string, DocumentSession> _sessions =
         new(StringComparer.OrdinalIgnoreCase);

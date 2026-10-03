@@ -228,6 +228,12 @@ internal static class Program
         await SqliteProjectIndexService.EnsureAsync(transactionFile, default, null);
         Check(SqliteProjectIndexService.Read(transactionFile, default).Single().Entry.Translation == "updated", "SQLite rebuild after source hash change");
         var historyReader = new MainViewModel(); Check(historyReader.EditHistory.Count > 0, "Persistent edit history restored");
+        var providers = new FormatProviderRegistry();
+        Check((await providers.LoadAsync(b)).ProviderId == "ndjson", "Default format provider");
+        project.Sources[1].Format = "fmtstring NDJSON"; providers.DeclareProject(project);
+        Check((await providers.LoadAsync(b)).ProviderId == "fmtstring-ndjson", "Explicit fmtstring export provider");
+        var binaryRejected = false; try { await providers.LoadAsync(binary); } catch (NotSupportedException) { binaryRejected = true; }
+        Check(binaryRejected && FileSafetyService.Hash(binary) == binaryHash, "Unverified binary provider preserves source");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

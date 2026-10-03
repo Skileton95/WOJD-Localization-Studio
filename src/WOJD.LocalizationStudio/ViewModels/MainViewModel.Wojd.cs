@@ -22,13 +22,14 @@ public sealed partial class MainViewModel
     {
         var project = WojdProjectService.Load(path);
         Project = project;
+        _adapter.DeclareProject(project);
         RestoreEditHistory();
         System.IO.Directory.CreateDirectory(WorkspaceStateService.StorageDirectory);
         System.IO.File.WriteAllText(System.IO.Path.Combine(WorkspaceStateService.StorageDirectory, "last-project.txt"), project.ManifestPath);
         foreach (var source in project.Sources.Where(s => s.Role == "RU" && s.Format != "locres"))
         {
             var file = WojdProjectService.Resolve(project, source.Path);
-            if (System.IO.File.Exists(file) && new NdjsonLocalizationAdapter().CanOpen(file)) await LoadPathAsync(file);
+            if (System.IO.File.Exists(file) && new NdjsonLocalizationAdapter().CanOpen(file)) { await LoadPathAsync(file); var document = OpenDocuments.FirstOrDefault(d => d.FilePath.Equals(file, StringComparison.OrdinalIgnoreCase)); if (document is not null) document.ProviderId = _adapter.Resolve(file).Info.Id; }
         }
     }
 }

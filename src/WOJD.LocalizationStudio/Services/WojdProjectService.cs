@@ -52,13 +52,13 @@ public static class WojdProjectService
     }
     public static async Task<ProjectReadResult> ReadAsync(WojdProject project)
     {
-        Validate(project); var texts = new List<ProjectText>(); var issues = new List<string>();
+        Validate(project); var providers = new FormatProviderRegistry(); providers.DeclareProject(project); var texts = new List<ProjectText>(); var issues = new List<string>();
         foreach (var source in project.Sources)
         {
             var path = Resolve(project, source.Path);
             if (!File.Exists(path)) { issues.Add("Нет файла: " + source.Path); continue; }
             if (source.Format == "locres" || !new NdjsonLocalizationAdapter().CanOpen(path)) { issues.Add("Нужен проверенный экспорт NDJSON: " + source.Path); continue; }
-            var document = await new NdjsonLocalizationAdapter().LoadAsync(path);
+            var document = await providers.LoadAsync(path);
             issues.AddRange(document.LoadIssues.Select(x => $"{source.Path}:{x.Line}: {x.Message}"));
             texts.AddRange(document.Entries.Select(e => new ProjectText(path, source.Role, e.Index, e.Namespace, e.Key, e.Original,
                 source.Role == "RU" ? e.Translation : string.IsNullOrEmpty(e.Translation) ? e.Original : e.Translation)));

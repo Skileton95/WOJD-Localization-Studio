@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Провайдеры форматов…" Click="FormatProviders_Click"/>
                     <MenuItem Header="SQLite-индекс…" Click="SqliteIndex_Click"/>
                     <MenuItem Header="Контекст строки…" Click="Context_Click"/>
                     <MenuItem Header="Совместная работа…" Click="Collaboration_Click"/>
