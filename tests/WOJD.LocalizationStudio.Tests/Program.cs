@@ -182,6 +182,9 @@ internal static class Program
         migrationOld.Entries.Add(new() { Namespace = "OLD", Key = "old", Original = "独特原文", Translation = "Уникальный" });
         Check(PatchMigrationService.Preview([migrationTarget], [migrationOld], false).Single().Confirmed, "Unique unchanged source migration across renamed keys");
         Check(FileComparisonService.Compare(importTarget, importTarget).Items.All(x => !x.CanTransfer), "Legacy compare blocks collisions");
+        var term = new GlossaryTerm { Chinese = "独特", Russian = "Уникальный", Namespace = "UI" };
+        GlossaryService.Save(Path.Combine(folder, "glossary.json"), [term]);
+        Check(GlossaryService.Hints(GlossaryService.Load(Path.Combine(folder, "glossary.json")), migrationTarget.Entries[0]).Contains("Уникальный"), "Glossary Unicode persistence and namespace hints");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

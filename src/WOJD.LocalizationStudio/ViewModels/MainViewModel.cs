@@ -254,6 +254,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (!SetProperty(ref _selectedEntry, value))
                 return;
+            OnPropertyChanged(nameof(GlossaryHints));
 
             if (value is not null) _lastSelectedIndex = value.Index;
             if (_activeSession is not null)

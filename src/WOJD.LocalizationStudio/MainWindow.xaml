@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Глоссарий…" Click="Glossary_Click"/>
                     <MenuItem Header="Миграция между патчами…" Click="Migration_Click"/>
                     <MenuItem Header="Коллизии Namespace + Key…" Click="Collisions_Click"/>
                     <MenuItem Header="Импорт и синхронизация…" Click="ImportWorkflow_Click"/>
@@ -706,7 +707,10 @@
                             <TextBlock Text="{Binding SelectedEntry.LengthHint}" Foreground="#B76A00" Margin="10,0" FontSize="12"/>
                         </StackPanel>
                         <Border Grid.Column="2" Grid.Row="1" Margin="16,10,0,0" Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="7" Padding="14">
+                            <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding GlossaryHints}" TextWrapping="Wrap" MaxHeight="45" Foreground="#315B93" FontSize="12" ToolTip="{Binding GlossaryHints}"/>
                             <controls:TokenTextBox Source="{Binding SelectedEntry.Original}" x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                            </DockPanel>
                         </Border>
                         <Grid Grid.Column="2" Grid.Row="2" Margin="16,8,0,0">
                             <Grid.ColumnDefinitions>
