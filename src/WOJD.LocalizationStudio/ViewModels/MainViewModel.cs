@@ -52,7 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         _searchDebounceTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(220)
+            Interval = TimeSpan.FromMilliseconds(Settings.SearchDebounceMs)
         };
 
         _searchDebounceTimer.Tick += (_, _) =>
@@ -324,7 +324,12 @@ public sealed partial class MainViewModel : ObservableObject
     public bool IsBusy
     {
         get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
+        private set
+        {
+            if (!SetProperty(ref _isBusy, value)) return;
+            if (value) { _operationCancellation = new(); BusyPercent = 0; }
+            else { _operationCancellation?.Dispose(); _operationCancellation = null; }
+        }
     }
 
     public string BusyText
@@ -745,7 +750,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             var document =
-                await _adapter.LoadAsync(fullPath);
+                await _adapter.LoadAsync(fullPath, _operationCancellation!.Token, OperationProgress());
 
             if (_recoveryDrafts.TryGetValue(
                     fullPath,
@@ -1226,9 +1231,9 @@ public sealed partial class MainViewModel : ObservableObject
             session.Document.FilePath);
 
         await _adapter.SaveAsync(
-            session.Document);
+            session.Document, _operationCancellation?.Token ?? default, OperationProgress());
 
-        BackupService.Prune(session.Document.FilePath);
+        BackupService.Prune(session.Document.FilePath, Settings.BackupLimit);
         RebuildStatusCache(
             session);
 

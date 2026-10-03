@@ -93,6 +93,8 @@
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
                     <Separator/>
+                    <MenuItem Header="Настройки…" Click="Settings_Click"/>
+                    <MenuItem Header="Проблемы загрузки…" Click="LoadIssues_Click"/>
                     <MenuItem Header="История сохранений…" Click="SaveHistory_Click"/>
                     <MenuItem Header="Синхронизация патча…" Click="PatchSync_Click"/>
                     <MenuItem Header="Замена по проекту…" Click="ProjectReplace_Click"/>
@@ -703,8 +705,8 @@
                            FontWeight="SemiBold"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,12"/>
-                <ProgressBar Height="6"
-                             IsIndeterminate="True"/>
+                <ProgressBar Height="6" Value="{Binding BusyPercent}" Maximum="100"/>
+                <Button Content="Отменить" Click="CancelOperation_Click" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0"/>
             </StackPanel>
         </Border>
 

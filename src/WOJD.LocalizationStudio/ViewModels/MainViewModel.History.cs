@@ -38,8 +38,8 @@ public sealed partial class MainViewModel
         BackupService.CreateBackup(current.FilePath);
         if (session.HasUnsavedChanges)
             await NdjsonExportService.ExportAsync(current.Entries, BackupService.NewBackupPath(current.FilePath));
-        var restored = new LocalizationDocument { FilePath = current.FilePath, DiskHash = current.DiskHash };
-        restored.Entries.AddRange(old.Entries);
+        var restored = new LocalizationDocument { FilePath = current.FilePath, DiskHash = current.DiskHash, Encoding = old.Encoding, NewLine = old.NewLine };
+        restored.Entries.AddRange(old.Entries); restored.PreservedLines.AddRange(old.PreservedLines);
         await _adapter.SaveAsync(restored);
         await ReloadActiveFromDiskAsync();
     }

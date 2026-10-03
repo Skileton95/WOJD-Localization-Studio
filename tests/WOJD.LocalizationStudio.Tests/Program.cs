@@ -10,20 +10,34 @@ internal static class Program
     private static int _exit;
     public static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     [STAThread]
-    public static int Main()
+    public static int Main(string[] args)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         Dispatcher.CurrentDispatcher.BeginInvoke(new Action(async () =>
         {
-            try { await Run(); Console.WriteLine("All regression checks passed."); }
+            try { await Run(args); Console.WriteLine("All regression checks passed."); }
             catch (Exception e) { Console.Error.WriteLine(e); _exit = 1; }
             finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
         }));
         Dispatcher.Run();
         return _exit;
     }
-    private static async Task Run()
+    private static async Task Performance(int rows)
     {
+        var path = Path.Combine(Path.GetTempPath(), "wojd-perf-" + Guid.NewGuid() + ".ndjson");
+        await using (var writer = new StreamWriter(path))
+            for (var i = 0; i < rows; i++) await writer.WriteLineAsync($"{{\"namespace\":\"UI\",\"key\":\"k{i}\",\"source\":\"原文 {i}\",\"translation\":\"Перевод {i}\",\"extra\":42}}");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var adapter = new NdjsonLocalizationAdapter(); var document = await adapter.LoadAsync(path);
+        Check(document.Entries.Count == rows && document.Entries[^1].Key == "k" + (rows - 1), "Large-file loading");
+        Console.WriteLine($"PERF load rows={rows:N0} seconds={clock.Elapsed.TotalSeconds:F2} managedMB={GC.GetTotalMemory(false) / 1048576.0:F1}");
+        document.Entries[^1].Translation = "Проверено"; await adapter.SaveAsync(document);
+        Check(document.Entries[^1].Status == TranslationStatus.Translated, "Large-file save");
+        Console.WriteLine($"PERF load+save seconds={clock.Elapsed.TotalSeconds:F2}");
+    }
+    private static async Task Run(string[] args)
+    {
+        if (args.Length == 2 && args[0] == "--perf") { await Performance(int.Parse(args[1])); return; }
         var folder = Path.Combine(Path.GetTempPath(), "wojd-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(folder);
         var a = Path.Combine(folder, "a.ndjson");
@@ -90,6 +104,22 @@ internal static class Program
         await File.AppendAllTextAsync(a, "\n");
         var rejected = false; try { await adapter.SaveAsync(stale); } catch (IOException) { rejected = true; }
         Check(rejected && (await adapter.LoadAsync(a)).Entries[0].Translation == "Здравствуйте {0}", "External edits must block overwrite");
+        var corrupt = Path.Combine(folder, "corrupt.ndjson");
+        await File.WriteAllTextAsync(corrupt, "{broken}\n\n{\"namespace\":\"x\",\"key\":\"k\",\"source\":\"原文\",\"translation\":\"\"}\n[]\n");
+        var diagnostic = await adapter.LoadAsync(corrupt);
+        Check(diagnostic.LoadIssues.Count == 2 && diagnostic.Entries[0].LineNumber == 3, "Malformed physical-line diagnostics");
+        diagnostic.Entries[0].Translation = "Перевод"; await adapter.SaveAsync(diagnostic);
+        var persisted = await File.ReadAllTextAsync(corrupt);
+        Check(persisted.StartsWith("{broken}\n\n") && persisted.EndsWith("[]\n"), "Malformed/blank lines must survive save");
+        var utf16 = Path.Combine(folder, "utf16.ndjson");
+        await File.WriteAllTextAsync(utf16, "{\"key\":\"k\",\"source\":\"原文\",\"translation\":\"\"}\r\n", new System.Text.UnicodeEncoding(false, true, true));
+        var unicode = await adapter.LoadAsync(utf16); unicode.Entries[0].Translation = "Перевод"; await adapter.SaveAsync(unicode);
+        var rawUnicode = await File.ReadAllBytesAsync(utf16); Check(rawUnicode[0] == 255 && rawUnicode[1] == 254 && unicode.NewLine == "\r\n", "UTF-16 BOM and line ending preservation");
+        using var cancel = new CancellationTokenSource(); cancel.Cancel();
+        var canceled = false; try { await adapter.LoadAsync(corrupt, cancel.Token); } catch (OperationCanceledException) { canceled = true; }
+        Check(canceled, "Loading is cancelable");
+        AppSettingsService.Save(new EditorSettings { FontSize = 16, BackupLimit = 3 });
+        Check(AppSettingsService.Load().BackupLimit == 3, "Settings persistence"); AppSettingsService.Save(new());
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

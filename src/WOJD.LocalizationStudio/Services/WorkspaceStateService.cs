@@ -36,6 +36,8 @@ public static class WorkspaceStateService
         Environment.GetEnvironmentVariable("WOJD_WORKSPACE_DIRECTORY") ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WOJD Localization Studio");
 
+    public static string StorageDirectory => StateDirectory;
+
     private static readonly string StatePath =
         Path.Combine(StateDirectory, "workspace.json");
 

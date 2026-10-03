@@ -10,6 +10,7 @@ public sealed class LocalizationEntry : ObservableObject
     private int _validationIssueCount;
     private string _validationSummary = string.Empty;
 
+    public int LineNumber { get; init; }
     public int Index { get; init; }
     private string _namespace = "", _key = "", _original = "";
     private string _savedNamespace = "", _savedKey = "", _savedOriginal = "";

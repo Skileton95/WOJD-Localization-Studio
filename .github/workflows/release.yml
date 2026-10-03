@@ -32,6 +32,10 @@ jobs:
         shell: pwsh
         run: dotnet run --project tests/WOJD.LocalizationStudio.Tests -c Release
 
+      - name: Large file check (100k rows)
+        shell: pwsh
+        run: dotnet run --project tests/WOJD.LocalizationStudio.Tests -c Release -- --perf 100000
+
       - name: Publish application
         shell: pwsh
         run: |

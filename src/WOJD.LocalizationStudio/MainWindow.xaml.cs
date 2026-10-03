@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
+        ApplyEditorSettings();
         Closing += MainWindow_Closing;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         Loaded += MainWindow_Loaded;
@@ -440,6 +441,28 @@ public partial class MainWindow : Window
     private void PatchSync_Click(object sender, RoutedEventArgs e) => new PatchSyncWindow(_viewModel) { Owner = this }.ShowDialog();
 
     private void SaveHistory_Click(object sender, RoutedEventArgs e) => new SaveHistoryWindow(_viewModel) { Owner = this }.ShowDialog();
+
+    private void CancelOperation_Click(object sender, RoutedEventArgs e) => _viewModel.CancelOperation();
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        if (new SettingsWindow { Owner = this }.ShowDialog() == true) { _viewModel.ApplySettings(AppSettingsService.Load()); ApplyEditorSettings(); }
+    }
+    private void ApplyEditorSettings()
+    {
+        FontSize = _viewModel.Settings.FontSize; TranslationBox.FontSize = FontSize;
+        var commands = new Dictionary<string, System.Windows.Input.ICommand>
+        {
+            ["OpenFile"] = _viewModel.OpenFileCommand, ["OpenFolder"] = _viewModel.OpenFolderCommand,
+            ["Save"] = _viewModel.SaveCommand, ["SaveAll"] = _viewModel.SaveAllCommand,
+            ["Undo"] = _viewModel.UndoCommand, ["Redo"] = _viewModel.RedoCommand, ["ToggleReplace"] = _viewModel.ToggleReplaceCommand,
+            ["NextUntranslated"] = _viewModel.NextUntranslatedCommand, ["PreviousUntranslated"] = _viewModel.PreviousUntranslatedCommand, ["Apply"] = _viewModel.ApplyCommand
+        };
+        InputBindings.Clear();
+        foreach (var item in _viewModel.Settings.Shortcuts.Where(x => x.Gesture.Length > 0))
+            InputBindings.Add(new KeyBinding(commands[item.Action], (KeyGesture)new KeyGestureConverter().ConvertFromString(item.Gesture)!));
+    }
+    private void LoadIssues_Click(object sender, RoutedEventArgs e) =>
+        new ReportWindow("Повреждённые строки — сохранены без изменений", _viewModel.ActiveDocument?.LoadIssues ?? [], ("Строка файла", "Line"), ("Проблема", "Message")) { Owner = this }.ShowDialog();
 
     private void SetUpdateProgress(UpdateProgressState state)
     {
