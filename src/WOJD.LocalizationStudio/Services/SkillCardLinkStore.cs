@@ -1,3 +1,4 @@
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -152,10 +153,12 @@ public static class SkillCardLinkStore
             Path.GetFullPath(sourcePath)
                 .ToLowerInvariant();
 
+        var bytes =
+            SHA256.HashData(
+                Encoding.UTF8.GetBytes(normalized));
+
         var hash =
-            Convert.ToHexString(
-                SHA256.HashData(
-                    Encoding.UTF8.GetBytes(normalized)))
+            Convert.ToHexString(bytes)
                 .ToLowerInvariant();
 
         var root =
