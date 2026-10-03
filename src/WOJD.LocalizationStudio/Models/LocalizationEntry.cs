@@ -9,6 +9,8 @@ public sealed class LocalizationEntry : ObservableObject
     private string _savedTranslation = string.Empty;
     private int _validationIssueCount;
     private string _validationSummary = string.Empty;
+    private IReadOnlySet<TranslationIssueKind> _validationKinds =
+        new HashSet<TranslationIssueKind>();
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
@@ -58,6 +60,22 @@ public sealed class LocalizationEntry : ObservableObject
     public int ValidationIssueCount => _validationIssueCount;
     public bool HasValidationIssues => _validationIssueCount > 0;
     public string ValidationSummary => _validationSummary;
+    public IReadOnlySet<TranslationIssueKind> ValidationKinds => _validationKinds;
+
+    public bool HasPlaceholderIssues
+        => _validationKinds.Contains(TranslationIssueKind.Placeholder);
+
+    public bool HasTagIssues
+        => _validationKinds.Contains(TranslationIssueKind.Tag);
+
+    public bool HasNewLineIssues
+        => _validationKinds.Contains(TranslationIssueKind.NewLine);
+
+    public bool HasSameAsSourceIssue
+        => _validationKinds.Contains(TranslationIssueKind.SameAsSource);
+
+    public bool HasSuspiciousLengthIssue
+        => _validationKinds.Contains(TranslationIssueKind.SuspiciousLength);
 
     public void RefreshValidation()
     {
@@ -76,6 +94,14 @@ public sealed class LocalizationEntry : ObservableObject
             ref _validationSummary,
             result.Summary,
             nameof(ValidationSummary));
+
+        _validationKinds = result.Kinds;
+        OnPropertyChanged(nameof(ValidationKinds));
+        OnPropertyChanged(nameof(HasPlaceholderIssues));
+        OnPropertyChanged(nameof(HasTagIssues));
+        OnPropertyChanged(nameof(HasNewLineIssues));
+        OnPropertyChanged(nameof(HasSameAsSourceIssue));
+        OnPropertyChanged(nameof(HasSuspiciousLengthIssue));
 
         if (issueCountChanged)
             OnPropertyChanged(nameof(HasValidationIssues));
