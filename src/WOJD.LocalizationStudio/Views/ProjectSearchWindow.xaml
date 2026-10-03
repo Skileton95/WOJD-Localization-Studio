@@ -17,7 +17,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Поиск по всем открытым файлам"
+            <TextBlock Text="Поиск по всем файлам проекта"
                        FontSize="22"
                        FontWeight="SemiBold"/>
             <TextBlock Text="Ищет по Namespace, ключу, оригиналу и переводу."
@@ -131,6 +131,7 @@
                        Foreground="{StaticResource MutedTextBrush}"
                        VerticalAlignment="Center"/>
 
+            <Button Grid.Column="0" Content="Отменить поиск" Click="CancelSearch_Click" HorizontalAlignment="Right" Margin="0,0,12,0"/>
             <Button Grid.Column="1"
                     Content="Открыть результат"
                     Padding="16,8"

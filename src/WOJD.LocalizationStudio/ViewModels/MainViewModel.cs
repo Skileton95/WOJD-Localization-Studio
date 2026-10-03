@@ -88,12 +88,12 @@ public sealed partial class MainViewModel : ObservableObject
         SaveCommand =
             new RelayCommand(
                 async () => await SaveAsync(),
-                () => _activeSession?.HasUnsavedChanges == true);
+                () => !IsBusy && _activeSession?.HasUnsavedChanges == true);
 
         SaveAllCommand =
             new RelayCommand(
                 async () => await SaveAllAsync(),
-                () => _sessions.Values.Any(x => x.HasUnsavedChanges));
+                () => !IsBusy && _sessions.Values.Any(x => x.HasUnsavedChanges));
 
         CloseFileCommand =
             new RelayCommand(
@@ -102,7 +102,7 @@ public sealed partial class MainViewModel : ObservableObject
                     if (value is FileNode node)
                         await CloseFileAsync(node);
                 },
-                value => value is FileNode { IsDirectory: false });
+                value => !IsBusy && value is FileNode { IsDirectory: false });
 
         ApplyCommand =
             new RelayCommand(
@@ -323,12 +323,15 @@ public sealed partial class MainViewModel : ObservableObject
             ? string.Empty
             : $"Namespace: {NamespaceFilter}";
 
+    public bool IsNotBusy => !IsBusy;
     public bool IsBusy
     {
         get => _isBusy;
         private set
         {
             if (!SetProperty(ref _isBusy, value)) return;
+            OnPropertyChanged(nameof(IsNotBusy));
+            RaiseGlobalCommandStates();
             if (value) { _operationCancellation = new(); BusyPercent = 0; }
             else { _operationCancellation?.Dispose(); _operationCancellation = null; }
         }
@@ -759,6 +762,7 @@ public sealed partial class MainViewModel : ObservableObject
         IsBusy = true;
         BusyText =
             $"Открытие {Path.GetFileName(fullPath)}...";
+        DocumentSession? pendingSession = null;
 
         try
         {
@@ -830,8 +834,16 @@ public sealed partial class MainViewModel : ObservableObject
                     Node = node
                 };
 
+            pendingSession = session;
+            BusyText = "Подготовка таблицы…";
             foreach (var entry in document.Entries)
             {
+                if ((entry.Index & 4095) == 0)
+                {
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    _operationCancellation!.Token.ThrowIfCancellationRequested();
+                    BusyPercent = 100.0 * entry.Index / Math.Max(1, document.Entries.Count);
+                }
                 entry.PropertyChanged += Entry_PropertyChanged;
                 _entrySessions[entry] = session;
 
@@ -853,11 +865,13 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             _sessions[fullPath] = session;
+            pendingSession = null;
             OpenTabs.Add(node);
             ActivateSession(session);
             RaiseGlobalCommandStates();
             ScheduleWorkspaceSave();
         }
+        catch (OperationCanceledException) { IssueLogService.Record("Открытие отменено: " + fullPath); }
         catch (Exception ex)
         {
             AppDialog.Show(
@@ -868,6 +882,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
         finally
         {
+            if (pendingSession is not null)
+            {
+                foreach (var entry in pendingSession.Document.Entries) { entry.PropertyChanged -= Entry_PropertyChanged; _entrySessions.Remove(entry); }
+                _entrySessions.TrimExcess();
+            }
             BusyText = string.Empty;
             IsBusy = false;
         }
@@ -1038,6 +1057,7 @@ public sealed partial class MainViewModel : ObservableObject
             foreach (var dir in
                      Directory
                          .EnumerateDirectories(path)
+                         .Where(x => !File.GetAttributes(x).HasFlag(FileAttributes.ReparsePoint) && Path.GetFileName(x) != ".git" && Path.GetFileName(x) != ".localization-backups")
                          .OrderBy(x => x))
             {
                 node.Children.Add(
@@ -1055,8 +1075,7 @@ public sealed partial class MainViewModel : ObservableObject
                     {
                         Name = Path.GetFileName(file),
                         FullPath = Path.GetFullPath(file),
-                        IsDirectory = false,
-                        EntryCount = CountFileRows(file)
+                        IsDirectory = false
                     });
             }
         }
@@ -1733,6 +1752,8 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        _namespaceCache.Remove(session.Document);
+        if (editedField is EntryField.Translation or EntryField.Original) _consistencyDirty = true;
         entry.RefreshValidation();
 
         var currentValidation =

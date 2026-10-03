@@ -302,6 +302,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_viewModel.IsBusy) { if (e.Key == Key.Escape) _viewModel.CancelOperation(); e.Handled = true; return; }
         if (e.Key == Key.Tab && (Keyboard.Modifiers == ModifierKeys.Control ||
             Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)))
         {

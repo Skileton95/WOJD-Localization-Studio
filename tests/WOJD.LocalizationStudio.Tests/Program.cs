@@ -22,9 +22,10 @@ internal static class Program
         Dispatcher.Run();
         return _exit;
     }
-    private static async Task Performance(int rows)
+    private static async Task Performance(int rows, bool withVm)
     {
         var path = Path.Combine(Path.GetTempPath(), "wojd-perf-" + Guid.NewGuid() + ".ndjson");
+        Environment.SetEnvironmentVariable("WOJD_WORKSPACE_DIRECTORY", path + ".workspace");
         await using (var writer = new StreamWriter(path))
             for (var i = 0; i < rows; i++) await writer.WriteLineAsync($"{{\"namespace\":\"UI\",\"key\":\"k{i}\",\"source\":\"原文 {i}\",\"translation\":\"Перевод {i}\",\"extra\":42}}");
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -34,10 +35,16 @@ internal static class Program
         document.Entries[^1].Translation = "Проверено"; await adapter.SaveAsync(document);
         Check(document.Entries[^1].Status == TranslationStatus.Translated, "Large-file save");
         Console.WriteLine($"PERF load+save seconds={clock.Elapsed.TotalSeconds:F2}");
+        if (withVm)
+        {
+            document = null!; GC.Collect(); var vm = new MainViewModel(); clock.Restart(); await vm.LoadPathAsync(path);
+            Check(vm.TotalCount == rows && vm.Namespaces[0].Total == rows && vm.OpenTabs.Count == 1, "Large project session and namespace cache");
+            Console.WriteLine($"PERF session rows={rows:N0} seconds={clock.Elapsed.TotalSeconds:F2} managedMB={GC.GetTotalMemory(false) / 1048576.0:F1}");
+        }
     }
     private static async Task Run(string[] args)
     {
-        if (args.Length == 2 && args[0] == "--perf") { await Performance(int.Parse(args[1])); return; }
+        if (args.Length == 2 && (args[0] == "--perf" || args[0] == "--perf-vm")) { await Performance(int.Parse(args[1]), args[0] == "--perf-vm"); return; }
         var folder = Path.Combine(Path.GetTempPath(), "wojd-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(folder);
         var a = Path.Combine(folder, "a.ndjson");
@@ -135,6 +142,13 @@ internal static class Program
         AppSettingsService.Save(new EditorSettings { FontSize = 16, BackupLimit = 3 });
         Check(AppSettingsService.Load().BackupLimit == 3, "Settings persistence"); AppSettingsService.Save(new());
         Check(TokenSyntaxService.Analyze("{0} %s <b>", "{0} %d <b>").Count(x => x.Mismatch) == 1, "Inline token differences");
+        var indexPath = await ProjectSearchIndexService.EnsureAsync(b, default, null);
+        var indexed = ProjectSearchService.SearchLocations(ProjectSearchIndexService.Read(indexPath, b, default), "原文", true, true, false);
+        Check(indexed.Results.Count == 1 && indexed.Results[0].Key == "new-key", "Separate search index");
+        vm.FileTree.Add(new FileNode { Name = "corrupt.ndjson", FullPath = corrupt });
+        var streamed = await vm.SearchProjectStreamingAsync("Перевод", true, true, false, default, null);
+        Check(streamed.Results.Count == 1 && vm.OpenTabs.Count == 2, "Search must not open every project file");
+        await vm.OpenProjectSearchResultAsync(streamed.Results[0]); Check(vm.OpenTabs.Count == 3 && vm.SelectedEntry!.Key == "k", "Navigation loads only selected file");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

@@ -28,6 +28,8 @@ public sealed class ProjectReplaceWindow : WorkflowWindow
         {
             try
             {
+                if (vm.IsBusy) return;
+                candidates.Clear(); grid.ItemsSource = null;
                 await vm.EnsureProjectLoadedAsync();
                 candidates = ProjectReplaceService.Preview(vm.OpenDocuments, (EntryField)field.SelectedIndex, query.Text, replacement.Text,
                     regex.IsChecked == true, matchCase.IsChecked == true, whole.IsChecked == true);
@@ -39,6 +41,7 @@ public sealed class ProjectReplaceWindow : WorkflowWindow
         {
             try
             {
+                if (vm.IsBusy) { Status.Text = "Дождитесь завершения загрузки."; return; }
                 grid.CommitEdit(); grid.CommitEdit();
                 var chosen = candidates.Where(x => x.Include).ToList();
                 vm.ApplyBatch(chosen.Select(x => (x.Entry, x.Field, x.Before, x.After)), "Замена по проекту");

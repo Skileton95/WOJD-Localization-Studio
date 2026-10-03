@@ -6,6 +6,8 @@ namespace WOJD.LocalizationStudio.Models;
 public sealed class FileNode : ObservableObject
 {
     private int _entryCount;
+    private bool _countKnown;
+    public string EntryCountLabel => _countKnown ? $"{_entryCount:N0}" : "…";
     private bool _isModified;
     private bool _isActive;
     private bool _isPinned;
@@ -26,7 +28,7 @@ public sealed class FileNode : ObservableObject
     public int EntryCount
     {
         get => _entryCount;
-        set => SetProperty(ref _entryCount, value);
+        set { SetProperty(ref _entryCount, value); _countKnown = true; OnPropertyChanged(nameof(EntryCountLabel)); }
     }
 
     public bool IsModified

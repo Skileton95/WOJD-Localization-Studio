@@ -12,6 +12,7 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
 {
     private readonly MainViewModel _viewModel;
 
+    private CancellationTokenSource? _searchCancellation;
     private string _query = string.Empty;
     private bool _matchCase;
     private bool _exactMatch;
@@ -29,6 +30,7 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
             History.Add(query);
 
         DataContext = this;
+        Closed += (_, _) => _searchCancellation?.Cancel();
 
         Loaded += (_, _) =>
         {
@@ -133,16 +135,16 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        _searchCancellation?.Cancel();
+        var operation = new CancellationTokenSource(); _searchCancellation = operation;
         ResultStatus = "Поиск…";
 
         try
         {
             var response =
-                await _viewModel.SearchProjectAsync(
-                    Query,
-                    MatchCase,
-                    ExactMatch,
-                    UseRegex);
+                await _viewModel.SearchProjectStreamingAsync(Query, MatchCase, ExactMatch, UseRegex, operation.Token,
+                    new Progress<FileOperationProgress>(p => { if (ReferenceEquals(operation, _searchCancellation)) ResultStatus = $"{p.Stage} · {p.Percent:F0}%"; }));
+            if (!ReferenceEquals(operation, _searchCancellation)) return;
 
             Results.ReplaceAll(response.Results);
 
@@ -153,8 +155,10 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
                     ? $"Найдено: {response.Results.Count:N0}+ (показаны первые 50 000)"
                     : $"Найдено: {response.Results.Count:N0}";
         }
+        catch (OperationCanceledException) { if (ReferenceEquals(operation, _searchCancellation)) ResultStatus = "Поиск отменён."; }
         catch (Exception ex)
         {
+            if (!ReferenceEquals(operation, _searchCancellation)) return;
             Results.ReplaceAll([]);
             ResultStatus = "Ошибка поиска";
 
@@ -165,6 +169,7 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
                 MessageBoxImage.Warning,
                 this);
         }
+        finally { if (ReferenceEquals(operation, _searchCancellation)) _searchCancellation = null; operation.Dispose(); }
     }
 
     private void RefreshHistory()
@@ -189,14 +194,15 @@ public partial class ProjectSearchWindow : Window, INotifyPropertyChanged
         OpenSelected();
     }
 
-    private void OpenSelected()
+    private async void OpenSelected()
     {
         if (ResultsGrid.SelectedItem is not ProjectSearchResult result)
             return;
 
-        _viewModel.OpenProjectSearchResult(result);
-        DialogResult = true;
+        try { await _viewModel.OpenProjectSearchResultAsync(result); DialogResult = true; } catch (Exception e) { ResultStatus = e.Message; }
     }
+
+    private void CancelSearch_Click(object sender, RoutedEventArgs e) => _searchCancellation?.Cancel();
 
     private void Close_Click(
         object sender,

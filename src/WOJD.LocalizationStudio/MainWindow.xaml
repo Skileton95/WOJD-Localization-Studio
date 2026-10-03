@@ -30,7 +30,7 @@
                 Background="#FAFBFD"
                 BorderBrush="{StaticResource BorderBrushApp}"
                 BorderThickness="0,0,0,1">
-            <Menu Background="Transparent"
+            <Menu IsEnabled="{Binding IsNotBusy}" Background="Transparent"
                   HorizontalAlignment="Left"
                   VerticalAlignment="Stretch"
                   Margin="10,0,0,0">
@@ -211,7 +211,7 @@
                                     <TextBlock Text="▸" Margin="0,0,7,0" Foreground="{StaticResource MutedTextBrush}"/>
                                     <TextBlock Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="2"
-                                               Text="{Binding EntryCount, Mode=OneWay, StringFormat={}{0:N0}}"
+                                               Text="{Binding EntryCountLabel, Mode=OneWay}"
                                                Foreground="{StaticResource TextBrush}"
                                                FontWeight="SemiBold"
                                                Margin="8,0,6,0"

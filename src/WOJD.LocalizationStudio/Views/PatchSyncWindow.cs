@@ -41,6 +41,7 @@ public sealed class PatchSyncWindow : WorkflowWindow
         {
             try
             {
+                if (vm.IsBusy) { Status.Text = "Дождитесь завершения загрузки."; return; }
                 grid.CommitEdit(); grid.CommitEdit();
                 var changes = PatchSyncService.Transfers(rows, overwrite.IsChecked == true).ToList();
                 vm.ApplyBatch(changes, "Перенос переводов"); Status.Text = $"Перенесено: {changes.Count}. Коллизии и изменённый source заблокированы. Доступен общий Undo.";

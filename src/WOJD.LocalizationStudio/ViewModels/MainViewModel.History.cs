@@ -21,6 +21,7 @@ public sealed partial class MainViewModel
         session.UndoStack.Clear(); session.RedoStack.Clear();
         foreach (var row in document.Entries) { row.PropertyChanged += Entry_PropertyChanged; _entrySessions[row] = session; }
         RebuildStatusCache(session); session.Node.EntryCount = document.Entries.Count; session.Node.IsModified = false;
+        _consistencyDirty = true;
         ActivateSession(session);
     }
     public async Task RestoreBackupAsync(string backupPath)
