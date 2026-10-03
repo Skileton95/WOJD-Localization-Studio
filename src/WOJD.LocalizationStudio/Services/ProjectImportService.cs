@@ -17,7 +17,7 @@ public sealed class ImportRow
 }
 public static class ProjectImportService
 {
-    public static List<ImportRow> Preview(IEnumerable<LocalizationDocument> targets, IEnumerable<LocalizationDocument> incoming, string role, bool overwrite)
+    public static List<ImportRow> Preview(IEnumerable<LocalizationDocument> targets, IEnumerable<LocalizationDocument> incoming, string role, bool overwrite, IReadOnlyDictionary<(string Namespace, string Key), EntryLocation>? choices = null)
     {
         if (role is not ("CN" or "EN" or "RU")) throw new ArgumentException("Неизвестная роль.");
         var current = targets.SelectMany(d => d.Entries.Select(e => new EntryLocation(d.FilePath, e))).GroupBy(x => (x.Entry.Namespace, x.Entry.Key)).ToDictionary(g => g.Key, g => g.ToList());
@@ -25,6 +25,7 @@ public static class ProjectImportService
         foreach (var group in incoming.SelectMany(d => d.Entries.Select(e => new EntryLocation(d.FilePath, e))).GroupBy(x => (x.Entry.Namespace, x.Entry.Key)))
         {
             current.TryGetValue(group.Key, out var existing); existing ??= [];
+            if (existing.Count > 1 && choices?.TryGetValue(group.Key, out var selected) == true && existing.Contains(selected)) existing = [selected];
             foreach (var entry in group)
             {
                 var collision = group.Count() != 1 || existing.Count > 1;

@@ -29,7 +29,7 @@ public sealed class ImportWorkflowWindow : WorkflowWindow
             {
                 var targets = await vm.WojdTargetsAsync();
                 var incoming = new List<LocalizationDocument>(); foreach (var path in dialog.FileNames) incoming.Add(await new NdjsonLocalizationAdapter().LoadAsync(path));
-                rows = ProjectImportService.Preview(targets, incoming, role.Text, overwrite.IsChecked == true); grid.ItemsSource = rows;
+                rows = ProjectImportService.Preview(targets, incoming, role.Text, overwrite.IsChecked == true, CollisionService.Resolve(targets, ProjectMetadataService.Load<List<CollisionChoice>>(Path.Combine(vm.ProjectDataDirectory, "collisions.json"), () => []))); grid.ItemsSource = rows;
                 Status.Text = string.Join(" · ", rows.GroupBy(r => r.Kind).Select(g => $"{g.Key}: {g.Count()}"));
             } catch (Exception e) { Status.Text = e.Message; }
         }));

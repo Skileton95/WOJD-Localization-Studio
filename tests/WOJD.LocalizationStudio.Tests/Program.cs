@@ -171,6 +171,11 @@ internal static class Program
         Check(ProjectImportService.Preview([importTarget], [importOld], "RU", false).Single().Kind == "Защищена", "Import protects existing translation");
         Check(ProjectImportService.Changes(ProjectImportService.Preview([importTarget], [importOld], "RU", true)).Count() == 1, "Explicit import overwrite preview");
         importOld.Entries[0].Original = "different"; Check(!ProjectImportService.Preview([importTarget], [importOld], "RU", true).Single().Allowed, "Import changed-source guard");
+        importTarget.Entries.Add(new() { Index = 2, Namespace = "UI", Key = "x", Original = "同", Translation = "other" });
+        var choice = new CollisionChoice("UI", "x", "target", 2, CollisionService.SourceHash("同"), "Ручной выбор", DateTime.UtcNow);
+        Check(CollisionService.Resolve([importTarget], [choice])[("UI", "x")].Entry.Index == 2, "Explicit collision candidate");
+        importTarget.Entries[1].Original = "changed";
+        Check(CollisionService.Resolve([importTarget], [choice]).Count == 0, "Stale collision choice must not resolve");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

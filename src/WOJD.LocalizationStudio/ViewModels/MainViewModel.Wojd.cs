@@ -16,6 +16,7 @@ public sealed partial class MainViewModel
         var paths = Project.Sources.Where(s => s.Role == "RU" && s.Format != "locres").Select(s => WojdProjectService.Resolve(Project, s.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return OpenDocuments.Where(d => paths.Contains(d.FilePath)).ToList();
     }
+    public string ProjectDataDirectory => Project is null ? WorkspaceStateService.StorageDirectory : System.IO.Path.Combine(Project.Root, ".wojd-studio");
     public WojdProject? Project { get; private set; }
     public async Task OpenWojdProjectAsync(string path)
     {
