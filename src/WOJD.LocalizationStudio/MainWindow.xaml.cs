@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         var recovery = await Task.Run(SaveTransactionService.RecoverPending);
         if (recovery.Count > 0) AppDialog.Show($"Операций восстановления: {recovery.Count}. Подробности: Инструменты → Журнал защиты.", "Восстановление сохранения");
         await _viewModel.RestoreWorkspaceAsync();
+        await _viewModel.RestoreWojdProjectAsync();
         _externalTimer.Start();
         RestoreLayout();
         await UpdateService.StartAsync(

@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Импорт и синхронизация…" Click="ImportWorkflow_Click"/>
                     <MenuItem Header="locres / fmtstring…" Click="BinaryWorkflow_Click"/>
                     <MenuItem Header="Создать или открыть проект…" Click="WojdProject_Click"/>
                 </MenuItem>

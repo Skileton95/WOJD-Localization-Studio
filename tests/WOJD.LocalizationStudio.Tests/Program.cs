@@ -165,6 +165,12 @@ internal static class Program
         var binaryHash = FileSafetyService.Hash(binary); BinaryWorkflowService.PreserveCopy(binary, binary + ".copy");
         var ticket = await BinaryWorkflowService.RegisterExportAsync(binary, b, "fixture-converter", "test");
         Check(ticket.Rows == 1 && ticket.OriginalSha256 == binaryHash && FileSafetyService.Hash(binary) == binaryHash, "Binary workflow preserves original bytes");
+        var importTarget = new LocalizationDocument { FilePath = "target" }; var importOld = new LocalizationDocument { FilePath = "incoming" };
+        importTarget.Entries.Add(new() { Namespace = "UI", Key = "x", Original = "同", Translation = "мой" });
+        importOld.Entries.Add(new() { Namespace = "UI", Key = "x", Original = "同", Translation = "новый" });
+        Check(ProjectImportService.Preview([importTarget], [importOld], "RU", false).Single().Kind == "Защищена", "Import protects existing translation");
+        Check(ProjectImportService.Changes(ProjectImportService.Preview([importTarget], [importOld], "RU", true)).Count() == 1, "Explicit import overwrite preview");
+        importOld.Entries[0].Original = "different"; Check(!ProjectImportService.Preview([importTarget], [importOld], "RU", true).Single().Allowed, "Import changed-source guard");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
