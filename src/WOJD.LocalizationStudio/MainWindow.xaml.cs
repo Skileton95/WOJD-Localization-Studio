@@ -14,6 +14,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
     private bool _filesPanelVisible = true;
+    private double _filesPanelWidth = 300;
 
     public MainWindow()
     {
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
         Loaded -= MainWindow_Loaded;
 
         await _viewModel.RestoreWorkspaceAsync();
+        RestoreLayout();
         await UpdateService.StartAsync(
             this,
             SetUpdateProgress,
@@ -281,6 +283,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        CaptureLayout();
         if (UpdateService.IsApplyingUpdate)
         {
             _viewModel.PersistWorkspaceState(includeDrafts: true);
@@ -298,6 +301,19 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Tab && (Keyboard.Modifiers == ModifierKeys.Control ||
+            Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)))
+        {
+            _viewModel.CycleTab(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            _ = _viewModel.CloseCurrentFileAsync();
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.F &&
             Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -327,19 +343,25 @@ public partial class MainWindow : Window
 
     private void ToggleFilesPanel_Click(object sender, RoutedEventArgs e)
     {
+        if (_filesPanelVisible) _filesPanelWidth = FilesColumn.ActualWidth;
         _filesPanelVisible = !_filesPanelVisible;
+
+        ApplyFilesLayout();
+    }
+
+    private void ApplyFilesLayout()
+    {
 
         FilesPanel.Visibility = _filesPanelVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
 
         FilesColumn.Width = _filesPanelVisible
-            ? new GridLength(300)
+            ? new GridLength(Math.Clamp(_filesPanelWidth, 220, 600))
             : new GridLength(0);
 
-        FilesDividerColumn.Width = _filesPanelVisible
-            ? new GridLength(1)
-            : new GridLength(0);
+        FilesDividerColumn.Width = new GridLength(24);
+        FilesSplitter.Visibility = _filesPanelVisible ? Visibility.Visible : Visibility.Collapsed;
 
         FilesPanelToggleButton.Content =
             _filesPanelVisible ? "‹" : "›";
@@ -348,6 +370,56 @@ public partial class MainWindow : Window
             _filesPanelVisible
                 ? "Скрыть панель файлов"
                 : "Показать панель файлов";
+    }
+
+    private async void OpenTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: FileNode node } && !_viewModel.IsBusy)
+            await _viewModel.LoadPathAsync(node.FullPath);
+    }
+
+    private void PinTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: FileNode node }) _viewModel.TogglePin(node);
+    }
+
+    private void Tab_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle || _viewModel.IsBusy) return;
+        if (sender is FrameworkElement { DataContext: FileNode node })
+            _viewModel.CloseFileCommand.Execute(node);
+        e.Handled = true;
+    }
+
+    private void FilesSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        _filesPanelWidth = Math.Clamp(FilesColumn.ActualWidth, 220, 600);
+        ApplyFilesLayout();
+    }
+
+    private void CaptureLayout()
+    {
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth, ActualHeight) : RestoreBounds;
+        _viewModel.WindowLayout = new WindowLayoutState(bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+            WindowState == WindowState.Maximized, _filesPanelVisible ? FilesColumn.ActualWidth : _filesPanelWidth, _filesPanelVisible);
+    }
+
+    private void RestoreLayout()
+    {
+        if (_viewModel.WindowLayout is not { } layout) return;
+        if (double.IsFinite(layout.Width) && double.IsFinite(layout.Height) &&
+            double.IsFinite(layout.Left) && double.IsFinite(layout.Top))
+        {
+            var area = SystemParameters.WorkArea;
+            Width = Math.Clamp(layout.Width, MinWidth, Math.Max(MinWidth, area.Width));
+            Height = Math.Clamp(layout.Height, MinHeight, Math.Max(MinHeight, area.Height));
+            Left = Math.Clamp(layout.Left, area.Left, Math.Max(area.Left, area.Right - Width));
+            Top = Math.Clamp(layout.Top, area.Top, Math.Max(area.Top, area.Bottom - Height));
+            if (layout.Maximized) WindowState = WindowState.Maximized;
+        }
+        _filesPanelWidth = double.IsFinite(layout.FilesWidth) ? Math.Clamp(layout.FilesWidth, 220, 600) : 300;
+        _filesPanelVisible = layout.FilesVisible;
+        ApplyFilesLayout();
     }
 
     private void SetUpdateProgress(UpdateProgressState state)

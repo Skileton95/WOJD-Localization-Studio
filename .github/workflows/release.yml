@@ -28,6 +28,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version is missing from csproj.' }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Regression checks
+        shell: pwsh
+        run: dotnet run --project tests/WOJD.LocalizationStudio.Tests -c Release
+
       - name: Publish application
         shell: pwsh
         run: |
@@ -85,15 +89,4 @@ jobs:
               --latest
           }
 
-      - name: Remove legacy releases
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $current = "v$env:VERSION"
-          $oldTags = gh release list --limit 100 --json tagName --jq '.[].tagName'
-          foreach ($oldTag in $oldTags) {
-            if ($oldTag -and $oldTag -ne $current) {
-              gh release delete $oldTag --cleanup-tag --yes
-            }
-          }
+      # Retain earlier releases for recovery and reproducible validation.

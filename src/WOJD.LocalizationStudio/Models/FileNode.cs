@@ -8,6 +8,13 @@ public sealed class FileNode : ObservableObject
     private int _entryCount;
     private bool _isModified;
     private bool _isActive;
+    private bool _isPinned;
+
+    public bool IsPinned
+    {
+        get => _isPinned;
+        set => SetProperty(ref _isPinned, value);
+    }
 
     public string Name { get; init; } = string.Empty;
     public string FullPath { get; init; } = string.Empty;

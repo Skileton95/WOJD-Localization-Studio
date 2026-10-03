@@ -9,7 +9,12 @@ public sealed record WorkspaceState(
     string? ActiveFile,
     Dictionary<string, int> SelectedRows,
     List<DraftFileState> Drafts,
-    List<string>? SearchHistory = null);
+    List<string>? SearchHistory = null,
+    List<string>? PinnedFiles = null,
+    WindowLayoutState? Layout = null);
+
+public sealed record WindowLayoutState(double Left, double Top, double Width, double Height,
+    bool Maximized, double FilesWidth = 300, bool FilesVisible = true);
 
 public sealed record DraftFileState(
     string FilePath,

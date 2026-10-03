@@ -185,6 +185,8 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         }
 
         await writer.FlushAsync(cancellationToken);
+        await writer.DisposeAsync();
+        await stream.DisposeAsync();
 
         File.Move(
             tempPath,

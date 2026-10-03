@@ -198,6 +198,26 @@ public sealed class MainViewModel : ObservableObject
 
     public ICollectionView EntriesView { get; }
 
+    public BulkObservableCollection<FileNode> OpenTabs { get; } = new();
+    public WindowLayoutState? WindowLayout { get; set; }
+
+    public void CycleTab(int direction)
+    {
+        if (OpenTabs.Count == 0 || IsBusy) return;
+        var index = _activeSession is null ? 0 : OpenTabs.IndexOf(_activeSession.Node);
+        var node = OpenTabs[(index + direction + OpenTabs.Count) % OpenTabs.Count];
+        ActivateSession(_sessions[Path.GetFullPath(node.FullPath)]);
+    }
+
+    public void TogglePin(FileNode node)
+    {
+        node.IsPinned = !node.IsPinned;
+        ScheduleWorkspaceSave();
+    }
+
+    public Task CloseCurrentFileAsync() => _activeSession is null || IsBusy
+        ? Task.CompletedTask : CloseFileAsync(_activeSession.Node);
+
     public string AppVersion
         => $"v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"}";
 
@@ -497,6 +517,8 @@ public sealed class MainViewModel : ObservableObject
         if (state is null)
             return;
 
+        WindowLayout = state.Layout;
+
         _workspaceRestoreInProgress = true;
         _restoredDraftEntries = 0;
         _recoveryDrafts.Clear();
@@ -555,6 +577,9 @@ public sealed class MainViewModel : ObservableObject
                     await LoadPathAsync(file);
             }
 
+            foreach (var node in OpenTabs)
+                node.IsPinned = state.PinnedFiles?.Contains(node.FullPath, StringComparer.OrdinalIgnoreCase) == true;
+
             foreach (var pair in state.SelectedRows)
             {
                 var path =
@@ -606,8 +631,7 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var openFiles =
-                _sessions.Keys
-                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                OpenTabs.Select(x => x.FullPath)
                     .ToList();
 
             var openFolders =
@@ -663,7 +687,9 @@ public sealed class MainViewModel : ObservableObject
                         : Path.GetFullPath(_activeSession.Document.FilePath),
                     selectedRows,
                     drafts,
-                    _projectSearchHistory.ToList());
+                    _projectSearchHistory.ToList(),
+                    OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
+                    WindowLayout);
 
             WorkspaceStateService.Save(state);
         }
@@ -686,6 +712,7 @@ public sealed class MainViewModel : ObservableObject
         string path,
         bool confirmDiscard = true)
     {
+        if (IsBusy) return;
         if (!_adapter.CanOpen(path))
         {
             AppDialog.Show(
@@ -797,6 +824,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             _sessions[fullPath] = session;
+            OpenTabs.Add(node);
             ActivateSession(session);
             RaiseGlobalCommandStates();
             ScheduleWorkspaceSave();
@@ -1232,6 +1260,8 @@ public sealed class MainViewModel : ObservableObject
             }
 
             _sessions.Remove(path);
+            OpenTabs.Remove(node);
+            node.IsActive = false;
 
             if (ReferenceEquals(
                     session,
