@@ -43,12 +43,12 @@ public partial class FileComparisonWindow : Window, INotifyPropertyChanged
             $"Текущий: {System.IO.Path.GetFileName(current.FilePath)}  ←  старая версия: {oldFileName}";
 
         SummaryText.Text =
-            $"Добавлено: {_result.Added}    Удалено: {_result.Removed}    Изменён оригинал: {_result.OriginalChanged}    Изменён перевод: {_result.TranslationChanged}";
+            $"Новые: {_result.Added}    Удалено: {_result.Removed}    Можно перенести: {_result.Transferable}    Проверить вручную: {_result.NeedsReview}";
 
         WarningText.Text =
-            _result.OriginalChanged > 0
-                ? $"Внимание: {_result.OriginalChanged} строк с изменённым оригиналом. Их переводы не будут перенесены автоматически."
-                : "Изменений оригинального текста не обнаружено.";
+            _result.NeedsReview > 0
+                ? $"Внимание: {_result.NeedsReview} строк требуют ручной проверки и не будут перезаписаны автоматически."
+                : "Конфликтов, требующих ручной проверки, не обнаружено.";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -59,10 +59,11 @@ public partial class FileComparisonWindow : Window, INotifyPropertyChanged
     public string[] Filters { get; } =
     [
         "Все изменения",
-        "Добавлено",
-        "Удалено",
-        "Изменён оригинал",
-        "Изменён перевод"
+        "Новая строка",
+        "Перевод можно перенести",
+        "Нужно проверить вручную",
+        "Изменён перевод",
+        "Удалено"
     ];
 
     public string SelectedFilter
@@ -91,7 +92,9 @@ public partial class FileComparisonWindow : Window, INotifyPropertyChanged
                 Items);
 
         AppDialog.Show(
-            $"Перенесено переводов: {result.Transferred}.\nПропущено из-за изменённого оригинала: {result.SkippedChangedSource}.",
+            $"Безопасно перенесено переводов: {result.Transferred}.\n" +
+            $"Пропущено из-за изменённого оригинала: {result.SkippedChangedSource}.\n" +
+            $"Не перезаписано существующих переводов: {result.SkippedExistingTranslation}.",
             "Перенос переводов",
             MessageBoxButton.OK,
             MessageBoxImage.Information,
