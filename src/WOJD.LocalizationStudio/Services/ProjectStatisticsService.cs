@@ -30,9 +30,12 @@ public static class ProjectStatisticsService
     {
         static string Cell(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
         var output = new StringBuilder("Scope,File,Namespace,Total,Translated,Untranslated,Modified,QA,Progress\r\n");
-        foreach (var row in report.ByFile.Concat(report.ByNamespace))
-            output.AppendLine(string.Join(",", Cell(row.Namespace.Length == 0 ? "File" : "Namespace"), Cell(row.FilePath), Cell(row.Namespace),
+        foreach (var item in report.ByFile.Select(row => (Row: row, Scope: "File")).Concat(report.ByNamespace.Select(row => (Row: row, Scope: "Namespace"))))
+        {
+            var row = item.Row;
+            output.AppendLine(string.Join(",", Cell(item.Scope), Cell(row.FilePath), Cell(row.Namespace),
                 row.Total, row.Translated, row.Untranslated, row.Modified, row.Qa, row.Progress.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
         return output.ToString();
     }
 }

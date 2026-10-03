@@ -41,7 +41,7 @@ public sealed class ProjectReplaceWindow : WorkflowWindow
             {
                 grid.CommitEdit(); grid.CommitEdit();
                 var chosen = candidates.Where(x => x.Include).ToList();
-                vm.ApplyBatch(chosen.Select(x => (x.Entry, x.Field, x.Before, x.After)));
+                vm.ApplyBatch(chosen.Select(x => (x.Entry, x.Field, x.Before, x.After)), "Замена по проекту");
                 Status.Text = $"Изменено строк: {chosen.Count}. Ctrl+Z в участвующем файле отменит всю операцию. Сохранение выполняется отдельно.";
                 candidates.Clear(); grid.ItemsSource = null;
             }

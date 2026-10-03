@@ -483,6 +483,8 @@ public partial class MainWindow : Window
 
     private void Statistics_Click(object sender, RoutedEventArgs e) => new ProjectStatisticsWindow(_viewModel) { Owner = this }.ShowDialog();
 
+    private void EditHistory_Click(object sender, RoutedEventArgs e) => new EditHistoryWindow(_viewModel) { Owner = this }.ShowDialog();
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

@@ -94,6 +94,7 @@
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
                     <Separator/>
+                    <MenuItem Header="История правок…" Click="EditHistory_Click"/>
                     <MenuItem Header="Статистика проекта…" Click="Statistics_Click"/>
                     <MenuItem Header="Заметки и вопросы…" Click="Notes_Click"/>
                     <MenuItem Header="Умные фильтры…" Click="SmartFilters_Click"/>

@@ -91,6 +91,7 @@ internal static class Program
         Check(replacementRows.Count == 2, "Project namespace preview");
         vm.ApplyBatch(replacementRows.Select(x => (x.Entry, x.Field, x.Before, x.After)));
         Check(vm.OpenDocuments.All(d => d.Entries[0].Namespace == "HUD"), "Project replacement");
+        Check(vm.EditHistory[0].Count == 2 && vm.EditHistory[0].Rows.All(x => x.Before == "UI"), "One history record per batch");
         vm.UndoCommand.Execute(null);
         Check(vm.OpenDocuments.All(d => d.Entries[0].Namespace == "UI"), "Single Undo across files");
         vm.RedoCommand.Execute(null);

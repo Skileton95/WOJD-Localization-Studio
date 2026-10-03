@@ -1775,6 +1775,7 @@ public sealed partial class MainViewModel : ObservableObject
                     currentTranslation, editedField));
 
             session.RedoStack.Clear();
+            RecordHistory([session.UndoStack.Peek()], "Правка строки");
         }
 
         session.KnownFields[(entry, editedField)] = currentTranslation;

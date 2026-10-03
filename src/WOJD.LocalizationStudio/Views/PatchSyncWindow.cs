@@ -43,7 +43,7 @@ public sealed class PatchSyncWindow : WorkflowWindow
             {
                 grid.CommitEdit(); grid.CommitEdit();
                 var changes = PatchSyncService.Transfers(rows, overwrite.IsChecked == true).ToList();
-                vm.ApplyBatch(changes); Status.Text = $"Перенесено: {changes.Count}. Коллизии и изменённый source заблокированы. Доступен общий Undo.";
+                vm.ApplyBatch(changes, "Перенос переводов"); Status.Text = $"Перенесено: {changes.Count}. Коллизии и изменённый source заблокированы. Доступен общий Undo.";
                 foreach (var row in rows) row.Include = false;
             }
             catch (Exception e) { Status.Text = e.Message; }

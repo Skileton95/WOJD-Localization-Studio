@@ -11,7 +11,7 @@ public sealed partial class MainViewModel
         foreach (var node in Walk(FileTree).ToArray()) await LoadPathAsync(node.FullPath);
         if (active is not null) ActivateSession(active);
     }
-    public void ApplyBatch(IEnumerable<(LocalizationEntry Entry, EntryField Field, string Before, string After)> changes)
+    public void ApplyBatch(IEnumerable<(LocalizationEntry Entry, EntryField Field, string Before, string After)> changes, string label = "Массовая операция")
     {
         var edits = changes.Where(x => x.Before != x.After).Select(x => new TranslationEdit(x.Entry, x.Before, x.After, x.Field)).ToList();
         if (edits.Count == 0) return;
@@ -24,6 +24,7 @@ public sealed partial class MainViewModel
         finally { foreach (var s in sessions) s.HistoryChangeInProgress = false; }
         var operation = edits[0] with { Batch = edits };
         foreach (var s in sessions) { s.UndoStack.Push(operation); s.RedoStack.Clear(); }
+        RecordHistory(edits, label);
         RefreshNamespaces(); RefreshConsistency(); RaiseHistoryCommandStates();
     }
     private bool ReplayBatch(TranslationEdit operation, bool redo)
