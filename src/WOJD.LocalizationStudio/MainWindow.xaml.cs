@@ -481,6 +481,8 @@ public partial class MainWindow : Window
 
     private void Notes_Click(object sender, RoutedEventArgs e) { try { new NotesWindow(_viewModel) { Owner = this }.ShowDialog(); } catch (Exception ex) { AppDialog.Show(ex.Message, "Заметки"); } }
 
+    private void Statistics_Click(object sender, RoutedEventArgs e) => new ProjectStatisticsWindow(_viewModel) { Owner = this }.ShowDialog();
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

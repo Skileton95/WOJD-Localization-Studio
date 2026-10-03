@@ -84,6 +84,9 @@ internal static class Program
         vm.SaveFilter("test", new SmartFilter(Chinese: true)); Check(vm.SavedFilters.Count == 1, "Saved filter");
         vm.SetAnnotation(first, "Проверить контекст", "Контекст неизвестен");
         Check(vm.GetAnnotation(first)?.Note == "Проверить контекст" && !first.RawLine.Contains("контекст"), "Notes stay outside game files");
+        var projectStats = ProjectStatisticsService.Calculate(vm.OpenDocuments);
+        Check(projectStats.Files == 2 && projectStats.Rows == 2 && projectStats.Translated == 2, "Project statistics count modified translations");
+        Check(ProjectStatisticsService.ToCsv(projectStats).Contains("Progress"), "CSV statistics export");
         var replacementRows = ProjectReplaceService.Preview(vm.OpenDocuments, EntryField.Namespace, "UI", "HUD", false, true, true);
         Check(replacementRows.Count == 2, "Project namespace preview");
         vm.ApplyBatch(replacementRows.Select(x => (x.Entry, x.Field, x.Before, x.After)));
