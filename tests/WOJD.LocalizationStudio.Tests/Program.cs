@@ -207,6 +207,15 @@ internal static class Program
         var releaseSnapshot = await ReleasePackageService.CreateAsync(package, "test-1", "fixture", folder, [packageDoc], null, new(), [], [], [], false);
         using (var archive = System.IO.Compression.ZipFile.OpenRead(package)) Check(archive.GetEntry("manifest.json") is not null && archive.GetEntry("changed-rows.ndjson") is not null, "Release ZIP manifest and changes");
         Check(FileSafetyService.Hash(transactionFile) == beforePackageHash && ReleasePackageService.Changes(releaseSnapshot, releaseSnapshot).Count == 0, "Package creation preserves originals and baseline");
+        var gitFolder = Path.Combine(folder, "git-test"); Directory.CreateDirectory(gitFolder);
+        await GitService.RunAsync(gitFolder, "init"); await GitService.RunAsync(gitFolder, "config", "user.name", "Fixture"); await GitService.RunAsync(gitFolder, "config", "user.email", "fixture@example.invalid");
+        await File.WriteAllTextAsync(Path.Combine(gitFolder, "перевод.txt"), "first");
+        await GitService.CommitAsync(gitFolder, await GitService.StatusAsync(gitFolder), "initial");
+        await File.WriteAllTextAsync(Path.Combine(gitFolder, "other.txt"), "staged"); await GitService.RunAsync(gitFolder, "add", "--", "other.txt");
+        await File.WriteAllTextAsync(Path.Combine(gitFolder, "перевод.txt"), "second");
+        var gitRows = await GitService.StatusAsync(gitFolder);
+        await GitService.CommitAsync(gitFolder, gitRows.Where(r => r.Path == "перевод.txt"), "selected only");
+        Check((await GitService.StatusAsync(gitFolder)).Any(r => r.Path == "other.txt" && r.Status == "A "), "Git commit excludes other staged paths");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
