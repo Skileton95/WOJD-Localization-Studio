@@ -7,22 +7,22 @@ using WOJD.LocalizationStudio.ViewModels;
 
 internal static class Program
 {
-    private static int _exit;
-    public static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+    private static int _exit; private static int _checks;
+    public static void Check(bool value, string message) { if (!value) throw new Exception(message); _checks++; }
     [STAThread]
     public static int Main(string[] args)
     {
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         Dispatcher.CurrentDispatcher.BeginInvoke(new Action(async () =>
         {
-            try { await Run(args); Console.WriteLine("All regression checks passed."); }
+            try { await Run(args); Console.WriteLine($"All regression checks passed ({_checks} assertions)."); }
             catch (Exception e) { Console.Error.WriteLine(e); _exit = 1; }
             finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
         }));
         Dispatcher.Run();
         return _exit;
     }
-    private static async Task Performance(int rows, bool withVm)
+    private static async Task Performance(int rows, bool withVm, bool withIndex = false)
     {
         var path = Path.Combine(Path.GetTempPath(), "wojd-perf-" + Guid.NewGuid() + ".ndjson");
         Environment.SetEnvironmentVariable("WOJD_WORKSPACE_DIRECTORY", path + ".workspace");
@@ -35,6 +35,12 @@ internal static class Program
         document.Entries[^1].Translation = "Проверено"; await adapter.SaveAsync(document);
         Check(document.Entries[^1].Status == TranslationStatus.Translated, "Large-file save");
         Console.WriteLine($"PERF load+save seconds={clock.Elapsed.TotalSeconds:F2}");
+        if (withIndex)
+        {
+            document = null!; GC.Collect(); clock.Restart(); await SqliteProjectIndexService.EnsureAsync(path, default, null);
+            Check(SqliteProjectIndexService.Read(path, default).Count() == rows, "Large SQLite index row count");
+            Console.WriteLine($"PERF SQLite rows={rows:N0} seconds={clock.Elapsed.TotalSeconds:F2} managedMB={GC.GetTotalMemory(false) / 1048576.0:F1}");
+        }
         if (withVm)
         {
             document = null!; GC.Collect(); var vm = new MainViewModel(); clock.Restart(); await vm.LoadPathAsync(path);
@@ -44,7 +50,7 @@ internal static class Program
     }
     private static async Task Run(string[] args)
     {
-        if (args.Length == 2 && (args[0] == "--perf" || args[0] == "--perf-vm")) { await Performance(int.Parse(args[1]), args[0] == "--perf-vm"); return; }
+        if (args.Length == 2 && (args[0] == "--perf" || args[0] == "--perf-vm" || args[0] == "--perf-index")) { await Performance(int.Parse(args[1]), args[0] == "--perf-vm", args[0] == "--perf-index"); return; }
         var folder = Path.Combine(Path.GetTempPath(), "wojd-tests-" + Guid.NewGuid());
         Directory.CreateDirectory(folder);
         var a = Path.Combine(folder, "a.ndjson");
@@ -234,8 +240,11 @@ internal static class Program
         Check((await providers.LoadAsync(b)).ProviderId == "fmtstring-ndjson", "Explicit fmtstring export provider");
         var binaryRejected = false; try { await providers.LoadAsync(binary); } catch (NotSupportedException) { binaryRejected = true; }
         Check(binaryRejected && FileSafetyService.Hash(binary) == binaryHash, "Unverified binary provider preserves source");
+        await ProtectionChecks.Run(folder);
+        var projectVm = await EndToEndChecks.Run(folder);
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
-        var window = new WOJD.LocalizationStudio.MainWindow();
+        var window = new WOJD.LocalizationStudio.MainWindow(vm, false);
+        window.ShowInTaskbar = false; window.ShowActivated = false; window.WindowStartupLocation = System.Windows.WindowStartupLocation.Manual; window.Left = -10000; window.Top = -10000; window.Show();
         window.DataContext = vm;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var content = (System.Windows.FrameworkElement)window.Content;
@@ -249,6 +258,8 @@ internal static class Program
             var png = new System.Windows.Media.Imaging.PngBitmapEncoder(); png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
             using var output = File.Create(renderPath); png.Save(output);
         }
+        window.Close();
+        await WorkflowSmokeChecks.Run(projectVm);
         Console.WriteLine("PASS tabs, pinning, independent undo, UTF-8/unknown-field roundtrip, legacy workspace");
         // Leave test files in the isolated temp folder for failure diagnosis.
     }

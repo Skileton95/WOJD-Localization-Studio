@@ -16,6 +16,7 @@ public sealed partial class MainViewModel
     {
         if (_activeSession is not { } session) return;
         var document = await _adapter.LoadAsync(session.Document.FilePath);
+        ApplyProjectRole(document);
         foreach (var row in session.Document.Entries) { row.PropertyChanged -= Entry_PropertyChanged; _entrySessions.Remove(row); }
         session.Document = document; session.SelectedEntry = document.Entries.FirstOrDefault();
         session.UndoStack.Clear(); session.RedoStack.Clear();
@@ -28,18 +29,16 @@ public sealed partial class MainViewModel
     {
         if (_activeSession is not { } session) return;
         var current = session.Document;
+        if (current.IsReadOnly) throw new IOException("Исходник CN/EN открыт только для чтения.");
         if (!BackupService.List(current.FilePath).Any(x => x.Path == backupPath)) throw new IOException("Копия не относится к текущему файлу.");
-        foreach (var line in File.ReadLines(backupPath).Where(x => !string.IsNullOrWhiteSpace(x)))
-        {
-            using var parsed = JsonDocument.Parse(line);
-            if (parsed.RootElement.ValueKind != JsonValueKind.Object) throw new IOException("Повреждённая копия.");
-        }
-        var old = await _adapter.LoadAsync(backupPath);
+        var old = await new NdjsonLocalizationAdapter().LoadAsync(backupPath);
+        if (old.LoadIssues.Count > 0) throw new IOException("Повреждённая копия; восстановление заблокировано.");
         FileSafetyService.CheckUnchanged(current);
         BackupService.CreateBackup(current.FilePath);
         if (session.HasUnsavedChanges)
-            await NdjsonExportService.ExportAsync(current.Entries, BackupService.NewBackupPath(current.FilePath));
-        var restored = new LocalizationDocument { FilePath = current.FilePath, DiskHash = current.DiskHash, Encoding = old.Encoding, NewLine = old.NewLine };
+            await DocumentSnapshotService.WriteAsync(current, BackupService.NewBackupPath(current.FilePath));
+        var restored = new LocalizationDocument { FilePath = current.FilePath, DiskHash = current.DiskHash, Encoding = old.Encoding, NewLine = old.NewLine, ProviderId = current.ProviderId, HasFinalNewLine = old.HasFinalNewLine };
+        foreach (var ending in old.LineEndings) restored.LineEndings[ending.Key] = ending.Value;
         restored.Entries.AddRange(old.Entries); restored.PreservedLines.AddRange(old.PreservedLines);
         await _adapter.SaveAsync(restored);
         await ReloadActiveFromDiskAsync();

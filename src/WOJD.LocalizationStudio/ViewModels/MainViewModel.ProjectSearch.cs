@@ -9,7 +9,7 @@ public sealed partial class MainViewModel
         get
         {
             static IEnumerable<FileNode> Walk(IEnumerable<FileNode> nodes) => nodes.SelectMany(n => n.IsDirectory ? Walk(n.Children) : new[] { n });
-            return Walk(FileTree).Select(x => x.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return Walk(FileTree).Select(x => x.FullPath).Concat(Project?.Sources.Where(s => s.Format != "locres").Select(s => WojdProjectService.Resolve(Project, s.Path)).Where(p => new NdjsonLocalizationAdapter().CanOpen(p)) ?? []).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
     }
     public async Task<ProjectSearchResponse> SearchProjectStreamingAsync(string query, bool matchCase, bool exact, bool regex,

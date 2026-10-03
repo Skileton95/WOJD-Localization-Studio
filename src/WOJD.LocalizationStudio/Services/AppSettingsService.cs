@@ -23,7 +23,12 @@ public static class AppSettingsService
     public static EditorSettings Load()
     {
         try { return Validate(JsonSerializer.Deserialize<EditorSettings>(File.ReadAllText(PathName)) ?? new()); }
-        catch (Exception e) { IssueLogService.Record("Настройки: " + e.Message); return new(); }
+        catch (Exception e)
+        {
+            IssueLogService.Record("Настройки: " + e.Message);
+            try { if (File.Exists(PathName)) File.Copy(PathName, PathName + ".corrupt-" + Guid.NewGuid().ToString("N")); if (File.Exists(PathName + ".last-good.bak")) return Validate(JsonSerializer.Deserialize<EditorSettings>(File.ReadAllText(PathName + ".last-good.bak")) ?? new()); }
+            catch (Exception ex) { IssueLogService.Record(ex.Message); } return new();
+        }
     }
     public static EditorSettings Validate(EditorSettings value)
     {
@@ -37,14 +42,24 @@ public static class AppSettingsService
         var gestures = value.Shortcuts.Where(x => x.Gesture.Length > 0)
             .Select(x => (System.Windows.Input.KeyGesture)new System.Windows.Input.KeyGestureConverter().ConvertFromString(x.Gesture)!).ToList();
         if (gestures.Select(x => (x.Key, x.Modifiers)).Distinct().Count() != gestures.Count) throw new ArgumentException("Горячие клавиши повторяются.");
-        foreach (var item in EditorSettings.Defaults().Where(d => !value.Shortcuts.Any(s => s.Action == d.Action))) value.Shortcuts.Add(item);
-        value.Columns ??= []; return value;
+        foreach (var item in EditorSettings.Defaults().Where(d => !value.Shortcuts.Any(s => s.Action == d.Action)))
+        {
+            var gesture = (System.Windows.Input.KeyGesture)new System.Windows.Input.KeyGestureConverter().ConvertFromString(item.Gesture)!;
+            if (gestures.Any(g => g.Key == gesture.Key && g.Modifiers == gesture.Modifiers)) item.Gesture = "";
+            else gestures.Add(gesture); value.Shortcuts.Add(item);
+        }
+        value.Columns ??= [];
+        value.Columns = value.Columns.Where(c => double.IsFinite(c.Width) && c.Width > 0 && Enum.IsDefined(c.Unit)).ToList(); return value;
     }
     public static void Save(EditorSettings value)
     {
         Validate(value); Directory.CreateDirectory(WorkspaceStateService.StorageDirectory);
-        File.WriteAllText(PathName + ".tmp", JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(PathName + ".tmp", PathName, true);
+        if (File.Exists(PathName))
+        {
+            try { Validate(JsonSerializer.Deserialize<EditorSettings>(File.ReadAllText(PathName)) ?? throw new JsonException("Пустые настройки.")); }
+            catch (Exception e) when (e is JsonException or ArgumentException) { File.Move(PathName, PathName + ".corrupt-" + Guid.NewGuid().ToString("N")); }
+        }
+        ProjectMetadataService.Save(PathName, value);
     }
 }
 public static class IssueLogService

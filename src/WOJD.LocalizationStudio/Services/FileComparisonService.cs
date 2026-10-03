@@ -25,8 +25,9 @@ public sealed class FileComparisonItem
                OldEntry.Original,
                StringComparison.Ordinal);
 
+    public bool IsReadOnly { get; internal set; }
     public bool CanTransfer
-        => CurrentEntry is not null &&
+        => !IsReadOnly && CurrentEntry is not null &&
            OldEntry is not null &&
            !SourceChanged &&
            !string.IsNullOrWhiteSpace(OldEntry.Translation) &&
@@ -163,6 +164,7 @@ public static class FileComparisonService
             }
         }
 
+        foreach (var item in items) item.IsReadOnly = current.IsReadOnly;
         return new FileComparisonResult(
             items,
             added,

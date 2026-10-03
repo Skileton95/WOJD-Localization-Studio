@@ -12,16 +12,20 @@ namespace WOJD.LocalizationStudio;
 
 public partial class MainWindow : Window
 {
-    private readonly MainViewModel _viewModel = new();
+    private readonly MainViewModel _viewModel;
+    private readonly bool _startupServicesEnabled;
+    private readonly List<ColumnSetting> _defaultColumns;
     private bool _filesPanelVisible = true;
     private double _filesPanelWidth = 300;
     private readonly System.Windows.Threading.DispatcherTimer _externalTimer = new() { Interval = TimeSpan.FromSeconds(8) };
     private bool _checkingExternal;
     private List<string> _externalFiles = [];
 
-    public MainWindow()
+    public MainWindow(MainViewModel? viewModel = null, bool startupServicesEnabled = true)
     {
+        _viewModel = viewModel ?? new(); _startupServicesEnabled = startupServicesEnabled;
         InitializeComponent();
+        _defaultColumns = ColumnsWindow.Capture(EntriesGrid);
         DataContext = _viewModel;
         ApplyEditorSettings();
         Closing += MainWindow_Closing;
@@ -35,6 +39,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
+        if (!_startupServicesEnabled) return;
 
         var recovery = await Task.Run(SaveTransactionService.RecoverPending);
         if (recovery.Count > 0) AppDialog.Show($"Операций восстановления: {recovery.Count}. Подробности: Инструменты → Журнал защиты.", "Восстановление сохранения");
@@ -294,6 +299,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (!_startupServicesEnabled) return;
         CaptureLayout();
         if (UpdateService.IsApplyingUpdate)
         {
@@ -440,7 +446,7 @@ public partial class MainWindow : Window
             ["NextUntranslated"] = _viewModel.NextUntranslatedCommand, ["PreviousUntranslated"] = _viewModel.PreviousUntranslatedCommand, ["Apply"] = _viewModel.ApplyCommand
         };
         AddWindowShortcuts(commands);
-        ColumnsWindow.Restore(EntriesGrid, _viewModel.Settings.Columns);
+        ColumnsWindow.Restore(EntriesGrid, _viewModel.Settings.Columns.Count > 0 ? _viewModel.Settings.Columns : _defaultColumns);
         InputBindings.Clear();
         foreach (var item in _viewModel.Settings.Shortcuts.Where(x => x.Gesture.Length > 0))
             InputBindings.Add(new KeyBinding(commands[item.Action], (KeyGesture)new KeyGestureConverter().ConvertFromString(item.Gesture)!));

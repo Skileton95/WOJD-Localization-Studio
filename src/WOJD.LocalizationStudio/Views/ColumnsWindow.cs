@@ -21,7 +21,7 @@ public sealed class ColumnsWindow : WorkflowWindow
     public static List<ColumnSetting> Capture(DataGrid grid) => grid.Columns.Select(c => new ColumnSetting(c.Header?.ToString() ?? "", c.Width.Value, c.Width.UnitType, c.DisplayIndex, c.Visibility == Visibility.Visible)).ToList();
     public static void Restore(DataGrid grid, IEnumerable<ColumnSetting> state)
     {
-        foreach (var item in state)
+        foreach (var item in state.OrderBy(c => c.Order))
         {
             var column = grid.Columns.FirstOrDefault(c => c.Header?.ToString() == item.Header);
             if (column is null || !double.IsFinite(item.Width) || item.Width <= 0) continue;

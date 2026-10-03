@@ -30,8 +30,8 @@ public sealed class ProjectReplaceWindow : WorkflowWindow
             {
                 if (vm.IsBusy) return;
                 candidates.Clear(); grid.ItemsSource = null;
-                await vm.EnsureProjectLoadedAsync();
-                candidates = ProjectReplaceService.Preview(vm.OpenDocuments, (EntryField)field.SelectedIndex, query.Text, replacement.Text,
+                var documents = await vm.WojdTargetsAsync();
+                candidates = ProjectReplaceService.Preview(documents, (EntryField)field.SelectedIndex, query.Text, replacement.Text,
                     regex.IsChecked == true, matchCase.IsChecked == true, whole.IsChecked == true);
                 grid.ItemsSource = candidates; Status.Text = $"Будет изменено строк: {candidates.Count}. Снимите галочки для исключения строк.";
             }

@@ -29,10 +29,10 @@ public sealed class PatchSyncWindow : WorkflowWindow
             if (dialog.ShowDialog(this) != true) return;
             try
             {
-                await vm.EnsureProjectLoadedAsync();
+                var documents = await vm.WojdTargetsAsync();
                 var old = new List<LocalizationDocument>();
                 foreach (var file in dialog.FileNames) old.Add(await new NdjsonLocalizationAdapter().LoadAsync(file));
-                rows = PatchSyncService.Preview(vm.OpenDocuments, old); Refresh();
+                rows = PatchSyncService.Preview(documents, old); Refresh();
                 Status.Text = string.Join(" · ", rows.GroupBy(x => x.Kind).Select(g => $"{g.Key}: {g.Count()}"));
             }
             catch (Exception e) { Status.Text = e.Message; }

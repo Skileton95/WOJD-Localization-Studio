@@ -133,6 +133,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Справка">
+                    <MenuItem Header="Диагностический отчёт…" Click="Diagnostics_Click"/>
                     <MenuItem Header="О программе…" Click="About_Click"/>
                     <MenuItem Header="Проверить обновления"
                               Click="CheckUpdates_Click"/>
@@ -720,8 +721,11 @@
                         </StackPanel>
                         <Border Grid.Column="2" Grid.Row="1" Margin="16,10,0,0" Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="7" Padding="14">
                             <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Исходник CN/EN · только чтение" Foreground="#315B93" Margin="0,0,0,6">
+                                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ActiveDocument.IsReadOnly}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                            </TextBlock>
                             <TextBlock DockPanel.Dock="Top" Text="{Binding GlossaryHints}" TextWrapping="Wrap" MaxHeight="45" Foreground="#315B93" FontSize="12" ToolTip="{Binding GlossaryHints}"/>
-                            <controls:TokenTextBox Source="{Binding SelectedEntry.Original}" x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                            <controls:TokenTextBox Source="{Binding SelectedEntry.Original}" x:Name="TranslationBox" IsReadOnly="{Binding ActiveDocument.IsReadOnly}" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
                             </DockPanel>
                         </Border>
                         <Grid Grid.Column="2" Grid.Row="2" Margin="16,8,0,0">
@@ -767,7 +771,7 @@
                            FontWeight="SemiBold"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,12"/>
-                <ProgressBar Height="6" Value="{Binding BusyPercent}" Maximum="100"/>
+                <ProgressBar Height="6" Value="{Binding BusyPercent, Mode=OneWay}" Maximum="100"/>
                 <Button Content="Отменить" Click="CancelOperation_Click" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0"/>
             </StackPanel>
         </Border>

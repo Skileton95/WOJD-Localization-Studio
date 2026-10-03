@@ -12,6 +12,7 @@ public sealed class ExpandedEditorWindow : WorkflowWindow
         DataContext = vm;
         var editor = new TokenTextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(14), FontSize = vm.Settings.FontSize };
+        editor.SetBinding(TextBox.IsReadOnlyProperty, new Binding("ActiveDocument.IsReadOnly"));
         editor.SetBinding(TextBox.TextProperty, new Binding("SelectedEntry.Translation") { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
         editor.SetBinding(TokenTextBox.SourceProperty, new Binding("SelectedEntry.Original"));
         var original = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(12), FontSize = vm.Settings.FontSize };

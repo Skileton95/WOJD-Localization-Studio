@@ -9,8 +9,8 @@ public sealed class MigrationRow
     public required string Kind { get; init; }
     public double Score { get; init; }
     public string FilePath => Target.FilePath;
-    public string Namespace => Target.Entry.Namespace;
-    public string Key => Target.Entry.Key;
+    public required string Namespace { get; init; }
+    public required string Key { get; init; }
     public string OldKey => Old.Entry.Namespace + ":" + Old.Entry.Key;
     public required string Source { get; init; }
     public required string OldSource { get; init; }
@@ -45,7 +45,7 @@ public static class PatchMigrationService
             void Add(EntryLocation candidate, string kind, double score, bool safe)
             {
                 if (string.IsNullOrWhiteSpace(candidate.Entry.Translation) || candidate.Entry.Translation == target.Entry.Translation) return;
-                result.Add(new() { Target = target, Old = candidate, Kind = kind, Score = Math.Round(score, 3), Confirmed = safe, Include = safe,
+                result.Add(new() { Target = target, Namespace = target.Entry.Namespace, Key = target.Entry.Key, Old = candidate, Kind = kind, Score = Math.Round(score, 3), Confirmed = safe, Include = safe,
                     Source = target.Entry.Original, OldSource = candidate.Entry.Original, Before = target.Entry.Translation, After = candidate.Entry.Translation });
             }
         }
@@ -61,7 +61,7 @@ public static class PatchMigrationService
     {
         var selected = rows.Where(r => r.Include && r.Confirmed).ToList();
         if (selected.GroupBy(r => r.Target.Entry).Any(g => g.Count() > 1)) throw new InvalidOperationException("Для одной строки выбрано несколько вариантов.");
-        if (selected.Any(r => r.Target.Entry.Original != r.Source || r.Target.Entry.Translation != r.Before || r.Old.Entry.Original != r.OldSource || r.Old.Entry.Translation != r.After))
+        if (selected.Any(r => r.Target.Entry.Namespace != r.Namespace || r.Target.Entry.Key != r.Key || r.Target.Entry.Original != r.Source || r.Target.Entry.Translation != r.Before || r.Old.Entry.Original != r.OldSource || r.Old.Entry.Translation != r.After))
             throw new InvalidOperationException("Просмотр миграции устарел.");
         return selected.Select(r => (r.Target.Entry, EntryField.Translation, r.Before, r.After)).ToList();
     }

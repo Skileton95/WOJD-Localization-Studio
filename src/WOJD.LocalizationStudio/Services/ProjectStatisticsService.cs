@@ -18,7 +18,7 @@ public static class ProjectStatisticsService
     }
     public static ProjectStatistics Calculate(IEnumerable<LocalizationDocument> documents)
     {
-        var docs = documents.ToList(); var rows = docs.SelectMany(x => x.Entries).ToList();
+        var docs = documents.Where(d => !d.IsReadOnly).ToList(); var rows = docs.SelectMany(x => x.Entries).ToList();
         var total = Summarize("Проект", "", "", rows);
         var sources = rows.Where(x => x.Original.Length > 0).Select(x => x.Original).ToList();
         var byFile = docs.Select(d => Summarize(System.IO.Path.GetFileName(d.FilePath), d.FilePath, "", d.Entries)).ToList();

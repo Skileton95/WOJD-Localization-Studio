@@ -39,6 +39,14 @@ public static class ProjectSearchIndexService
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
+    public static void PreserveInvalidCache(string cache)
+    {
+        var root = Path.GetFullPath(Path.Combine(WorkspaceStateService.StorageDirectory, "search-index")) + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(cache);
+        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !full.EndsWith(".jsonl.gz", StringComparison.OrdinalIgnoreCase)) throw new IOException("Индекс вне папки кэша.");
+        if (File.Exists(full)) File.Move(full, full + ".corrupt-" + Guid.NewGuid().ToString("N"));
+        IssueLogService.Record("Повреждённый кэш поиска сохранён: " + cache);
+    }
     public static IEnumerable<SearchIndexRow> ReadRows(string cache, CancellationToken cancellation)
     {
         using var stream = File.OpenRead(cache); using var zip = new GZipStream(stream, CompressionMode.Decompress); using var reader = new StreamReader(zip);

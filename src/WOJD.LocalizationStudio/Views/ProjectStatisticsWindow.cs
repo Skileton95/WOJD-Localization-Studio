@@ -21,8 +21,8 @@ public sealed class ProjectStatisticsWindow : WorkflowWindow
         {
             try
             {
-                Status.Text = "Подсчёт статистики…"; await vm.EnsureProjectLoadedAsync();
-                report = await Task.Run(() => ProjectStatisticsService.Calculate(vm.OpenDocuments));
+                Status.Text = "Подсчёт статистики…"; var documents = await vm.WojdTargetsAsync();
+                report = await Task.Run(() => ProjectStatisticsService.Calculate(documents));
                 files.ItemsSource = report.ByFile; namespaces.ItemsSource = report.ByNamespace;
                 problems.ItemsSource = report.ByNamespace.Where(x => x.Qa > 0 || x.Untranslated > 0).OrderByDescending(x => x.Qa).ThenByDescending(x => x.Untranslated).ToList();
                 Status.Text = $"Файлов: {report.Files} · строк: {report.Rows:N0} · переведено: {report.Translated:N0} · без перевода: {report.Untranslated:N0} · изменено: {report.Modified:N0} · QA: {report.Qa:N0}\nУникальных source: {report.UniqueSources:N0} · уникальных китайских: {report.UniqueChineseSources:N0} · повторных использований: {report.DuplicateOccurrences:N0}";

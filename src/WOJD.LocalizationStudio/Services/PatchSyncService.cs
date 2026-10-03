@@ -53,7 +53,7 @@ public static class PatchSyncService
     {
         foreach (var row in rows.Where(x => x.Include && x.CanTransfer && x.Current is not null))
         {
-            if (row.Current!.Original != row.NewSource || row.Current.Translation != row.NewTranslation)
+            if (row.Current!.Namespace != row.Namespace || row.Current.Key != row.Key || row.Current.Original != row.NewSource || row.Current.Translation != row.NewTranslation)
                 throw new InvalidOperationException("Строка изменилась после сравнения. Повторите просмотр.");
             if (!overwrite && !string.IsNullOrWhiteSpace(row.Current.Translation)) continue;
             yield return (row.Current, EntryField.Translation, row.NewTranslation, row.OldTranslation);

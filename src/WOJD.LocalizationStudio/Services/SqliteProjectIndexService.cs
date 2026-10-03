@@ -7,13 +7,13 @@ public static class SqliteProjectIndexService
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     public static string DatabasePath => Path.Combine(WorkspaceStateService.StorageDirectory, "project-index-v1.sqlite");
-    private static SqliteConnection Open()
+    private static SqliteConnection Open(bool writable = true)
     {
         Directory.CreateDirectory(WorkspaceStateService.StorageDirectory);
-        var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = DatabasePath, Pooling = false }.ToString());
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = DatabasePath, Pooling = false, Mode = writable ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly }.ToString());
         try
         {
-            connection.Open(); using var command = connection.CreateCommand();
+            connection.Open(); if (!writable) return connection; using var command = connection.CreateCommand();
             command.CommandText = """
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS Files(Path TEXT PRIMARY KEY, DisplayPath TEXT NOT NULL, Hash TEXT NOT NULL, Rows INTEGER NOT NULL);
@@ -53,7 +53,7 @@ public static class SqliteProjectIndexService
             catch (SqliteException e) when (e.SqliteErrorCode is 11 or 26) { PreserveDatabase(); current = false; IssueLogService.Record("Повреждённый индекс сохранён; выполняется пересоздание."); }
             if (current) return;
             var cache = await ProjectSearchIndexService.EnsureAsync(file, cancellation, progress);
-            await Task.Run(() =>
+            async Task Build() => await Task.Run(() =>
             {
                 using var connection = Open(); using var transaction = connection.BeginTransaction();
                 using var clear = connection.CreateCommand(); clear.Transaction = transaction; clear.CommandText = "DELETE FROM Entries WHERE Path=$path"; clear.Parameters.AddWithValue("$path", identity); clear.ExecuteNonQuery();
@@ -72,11 +72,16 @@ public static class SqliteProjectIndexService
                 using var update = connection.CreateCommand(); update.Transaction = transaction; update.CommandText = "INSERT OR REPLACE INTO Files VALUES($path,$display,$hash,$rows)";
                 update.Parameters.AddWithValue("$path", identity); update.Parameters.AddWithValue("$display", Path.GetFullPath(file)); update.Parameters.AddWithValue("$hash", hash); update.Parameters.AddWithValue("$rows", count); update.ExecuteNonQuery(); transaction.Commit();
             }, cancellation);
+            try { await Build(); }
+            catch (Exception e) when (e is System.Text.Json.JsonException or InvalidDataException)
+            {
+                ProjectSearchIndexService.PreserveInvalidCache(cache); cache = await ProjectSearchIndexService.EnsureAsync(file, cancellation, progress); await Build();
+            }
         } finally { Gate.Release(); }
     }
     public static IEnumerable<EntryLocation> Read(string file, CancellationToken cancellation)
     {
-        using var connection = Open(); using var command = connection.CreateCommand();
+        using var connection = Open(false); using var command = connection.CreateCommand();
         command.CommandText = "SELECT RowIndex,Namespace,EntryKey,Source,Translation FROM Entries WHERE Path=$path ORDER BY RowIndex";
         command.Parameters.AddWithValue("$path", Path.GetFullPath(file).ToUpperInvariant());
         using var reader = command.ExecuteReader();

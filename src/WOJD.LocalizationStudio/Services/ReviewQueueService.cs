@@ -50,7 +50,7 @@ public static class ReviewQueueService
     public static ReviewDecision Decide(ReviewQueueRow row, string status, string comment, string author)
     {
         if (status is not ("Проверено" or "Отложено" or "Ожидает")) throw new ArgumentException("Неизвестный статус.");
-        if (status == "Проверено" && row.HasErrors) throw new InvalidOperationException("Сначала исправьте ошибки/пустой перевод или оформите разрешённое исключение терминологии.");
+        if (status == "Проверено" && (row.HasErrors || TranslationValidator.Validate(row.Source, row.Translation).IssueCount > 0 || !string.IsNullOrWhiteSpace(row.Source) && string.IsNullOrWhiteSpace(row.Translation))) throw new InvalidOperationException("Сначала исправьте ошибки/пустой перевод или оформите разрешённое исключение терминологии.");
         if (status == "Отложено" && string.IsNullOrWhiteSpace(comment)) throw new ArgumentException("Укажите причину откладывания.");
         return new(row.FilePath, row.Index, row.Namespace, row.Key, CollisionService.SourceHash(row.Source), CollisionService.SourceHash(row.Translation), status, comment, author, DateTime.UtcNow);
     }

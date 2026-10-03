@@ -7,9 +7,15 @@ namespace WOJD.LocalizationStudio;
 
 public partial class App : Application
 {
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.FirstOrDefault() == "--self-check")
+        {
+            try { await DiagnosticsService.SelfCheckAsync(); Shutdown(0); }
+            catch (Exception ex) { try { Directory.CreateDirectory(WorkspaceStateService.StorageDirectory); File.WriteAllText(Path.Combine(WorkspaceStateService.StorageDirectory, "self-check-error.log"), ex.ToString()); } catch { } Shutdown(1); }
+            return;
+        }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
@@ -40,8 +46,8 @@ public partial class App : Application
 
         try
         {
-            var logPath = Path.Combine(AppContext.BaseDirectory, "startup-error.log");
-            File.WriteAllText(logPath, details);
+            var logPath = Path.Combine(WorkspaceStateService.StorageDirectory, "startup-error.log");
+            Directory.CreateDirectory(WorkspaceStateService.StorageDirectory); File.WriteAllText(logPath, details);
         }
         catch
         {
@@ -49,7 +55,7 @@ public partial class App : Application
         }
 
         AppDialog.Show(
-            $"{exception.GetType().Name}: {exception.Message}\n\nПолные сведения записаны в startup-error.log рядом с программой.",
+            $"{exception.GetType().Name}: {exception.Message}\n\nПроверьте startup-error.log в папке workspace: {WorkspaceStateService.StorageDirectory}.",
             title,
             MessageBoxButton.OK,
             MessageBoxImage.Error);

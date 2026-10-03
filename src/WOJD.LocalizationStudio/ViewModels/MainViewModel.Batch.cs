@@ -15,6 +15,7 @@ public sealed partial class MainViewModel
     {
         var edits = changes.Where(x => x.Before != x.After).Select(x => new TranslationEdit(x.Entry, x.Before, x.After, x.Field)).ToList();
         if (edits.Count == 0) return;
+        if (edits.Any(e => _entrySessions.TryGetValue(e.Entry, out var session) && session.Document.IsReadOnly)) throw new InvalidOperationException("CN/EN-источники проекта доступны только для чтения.");
         if (edits.GroupBy(e => (e.Entry, e.Field)).Any(g => g.Count() > 1)) throw new InvalidOperationException("Несколько изменений одного поля строки в одной операции.");
         if (edits.Any(x => !_entrySessions.ContainsKey(x.Entry) || x.Entry.GetField(x.Field) != x.Before))
             throw new InvalidOperationException("Данные изменились после предварительного просмотра. Постройте его заново.");

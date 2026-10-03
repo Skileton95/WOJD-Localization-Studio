@@ -66,6 +66,21 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         }
 
         document.DiskHash = FileSafetyService.Hash(path);
+        reader.DiscardBufferedData(); stream.Position = header;
+        var buffer = new char[64 * 1024]; var endingLine = 0; var pendingCr = false; var ended = false; int size;
+        void Ending(string value) { endingLine++; if (value != document.NewLine) document.LineEndings[endingLine] = value; ended = true; }
+        while ((size = reader.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            for (var i = 0; i < size; i++)
+            {
+                var character = buffer[i];
+                if (pendingCr) { pendingCr = false; if (character == '\n') { Ending("\r\n"); continue; } Ending("\r"); }
+                if (character == '\r') { pendingCr = true; ended = true; }
+                else if (character == '\n') Ending("\n"); else ended = false;
+            }
+        }
+        if (pendingCr) Ending("\r"); document.HasFinalNewLine = ended;
         document.DiskLastWriteUtc = File.GetLastWriteTimeUtc(path); document.DiskLength = new FileInfo(path).Length;
         if (document.LoadIssues.Count > 0) IssueLogService.Record($"Открыт {path}; повреждённых строк: {document.LoadIssues.Count}");
         progress?.Report(new(100, document.Entries.Count, "Открытие"));
@@ -73,31 +88,21 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
     }
     public async Task SaveAsync(LocalizationDocument document, CancellationToken cancellationToken = default, IProgress<FileOperationProgress>? progress = null)
     {
+        if (document.IsReadOnly) throw new IOException("Исходник открыт только для чтения.");
         FileSafetyService.CheckUnchanged(document);
         var tempPath = document.FilePath + ".wojd-" + Guid.NewGuid().ToString("N") + ".tmp";
         var changes = new List<(LocalizationEntry Entry, string RawLine)>();
+        string? marker = null;
         try
         {
             await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, true))
             {
                 await using var writer = new StreamWriter(stream, document.Encoding, 1024 * 1024, leaveOpen: true) { NewLine = document.NewLine };
-                var preserved = 0; var written = 0;
-                foreach (var entry in document.Entries)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    while (preserved < document.PreservedLines.Count && document.PreservedLines[preserved].Line < entry.LineNumber)
-                        await writer.WriteLineAsync(document.PreservedLines[preserved++].Text.AsMemory(), cancellationToken);
-                    var line = entry.Status == TranslationStatus.Modified ? SerializeEntry(entry) : entry.RawLine;
-                    await writer.WriteLineAsync(line.AsMemory(), cancellationToken);
-                    if (entry.Status == TranslationStatus.Modified) changes.Add((entry, line));
-                    if ((++written & 4095) == 0) progress?.Report(new(100.0 * written / Math.Max(1, document.Entries.Count), written, "Сохранение"));
-                }
-                while (preserved < document.PreservedLines.Count)
-                    await writer.WriteLineAsync(document.PreservedLines[preserved++].Text.AsMemory(), cancellationToken);
+                changes = await DocumentLineWriter.WriteAsync(document, writer, cancellationToken, progress);
                 await writer.FlushAsync(cancellationToken); stream.Flush(true);
             }
             cancellationToken.ThrowIfCancellationRequested(); FileSafetyService.CheckUnchanged(document);
-            var marker = SaveTransactionService.Prepare(document, tempPath);
+            marker = SaveTransactionService.Prepare(document, tempPath);
             FileSafetyService.CheckUnchanged(document);
             SaveTransactionService.Commit(tempPath, document.FilePath);
             SaveTransactionService.Complete(marker, document.FilePath);
@@ -106,7 +111,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
             foreach (var (entry, line) in changes) entry.MarkSaved(line);
             progress?.Report(new(100, document.Entries.Count, "Сохранение"));
         }
-        finally { if (File.Exists(tempPath)) File.Delete(tempPath); }
+        finally { if (File.Exists(tempPath) && (marker is null || !File.Exists(marker))) File.Delete(tempPath); }
     }
     public static string SerializeEntry(LocalizationEntry entry)
     {

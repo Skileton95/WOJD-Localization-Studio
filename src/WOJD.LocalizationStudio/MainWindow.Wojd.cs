@@ -3,6 +3,7 @@ using WOJD.LocalizationStudio.Views;
 namespace WOJD.LocalizationStudio;
 public partial class MainWindow
 {
+    private void Diagnostics_Click(object sender, RoutedEventArgs e) => new DiagnosticsWindow(_viewModel) { Owner = this }.ShowDialog();
     private void FormatProviders_Click(object sender, RoutedEventArgs e) => new ReportWindow("Форматы — возможности и ограничения", new WOJD.LocalizationStudio.Services.FormatProviderRegistry().Providers, ("Id", "Id"), ("Формат", "Name"), ("Расширения", "ExtensionList"), ("Чтение", "CanRead"), ("Запись", "CanWrite"), ("Ограничение", "Limitation")) { Owner = this }.ShowDialog();
     private void SqliteIndex_Click(object sender, RoutedEventArgs e) => new SqliteIndexWindow(_viewModel) { Owner = this }.ShowDialog();
     private void Context_Click(object sender, RoutedEventArgs e) => new ContextWindow(_viewModel) { Owner = this }.ShowDialog();

@@ -746,7 +746,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!_adapter.CanOpen(path))
         {
             AppDialog.Show(
-                "Пока подключён базовый адаптер NDJSON/JSONL.",
+                "Для этого формата нет проверенного читающего провайдера. locres/fmtstring доступны через рабочий процесс внешнего конвертера.",
                 "Формат файла",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -771,6 +771,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var document =
                 await _adapter.LoadAsync(fullPath, _operationCancellation!.Token, OperationProgress());
+            ApplyProjectRole(document);
 
             if (_recoveryDrafts.TryGetValue(
                     fullPath,
@@ -801,7 +802,7 @@ public sealed partial class MainViewModel : ObservableObject
                                     draftEntry.Key,
                                     StringComparison.Ordinal));
 
-                    if (entry is null || (draftEntry.Source is not null && entry.Original != draftEntry.Source))
+                    if (document.IsReadOnly || draftEntry.Source is null || entry is null || entry.Original != draftEntry.Source || document.Entries.Count(x => x.Namespace == draftEntry.Namespace && x.Key == draftEntry.Key) > 1)
                     {
                         _blockedRecovery.Add(new DraftFileState(fullPath, [draftEntry]));
                         SaveTransactionService.Record("draft-blocked", fullPath, draftEntry.Namespace + ":" + draftEntry.Key);
@@ -1761,6 +1762,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         if (ReferenceEquals(entry, SelectedEntry)) { OnPropertyChanged(nameof(SelectedContextText)); if (editedField is EntryField.Original or EntryField.Namespace) OnPropertyChanged(nameof(GlossaryHints)); }
+        if (session.Document.IsReadOnly && session.KnownFields.TryGetValue((entry, editedField), out var protectedValue) && entry.GetField(editedField) != protectedValue)
+        {
+            var prior = session.HistoryChangeInProgress; session.HistoryChangeInProgress = true;
+            try { entry.SetField(editedField, protectedValue); } finally { session.HistoryChangeInProgress = prior; } return;
+        }
         _namespaceCache.Remove(session.Document);
         if (editedField is EntryField.Translation or EntryField.Original) _consistencyDirty = true;
         entry.RefreshValidation();

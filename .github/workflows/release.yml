@@ -26,6 +26,8 @@ jobs:
           [xml]$project = Get-Content 'src/WOJD.LocalizationStudio/WOJD.LocalizationStudio.csproj'
           $version = $project.Project.PropertyGroup.Version
           if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version is missing from csproj.' }
+          [xml]$updater = Get-Content 'src/WOJD.LocalizationStudio.Updater/WOJD.LocalizationStudio.Updater.csproj'
+          if ($updater.Project.PropertyGroup.Version -ne $version) { throw 'Application/updater versions must match.' }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Regression checks
@@ -36,12 +38,28 @@ jobs:
         shell: pwsh
         run: dotnet run --project tests/WOJD.LocalizationStudio.Tests -c Release -- --perf 100000
 
+      - name: SQLite file check (100k rows)
+        shell: pwsh
+        run: dotnet run --project tests/WOJD.LocalizationStudio.Tests -c Release -- --perf-index 100000
+
       - name: Publish application
         shell: pwsh
         run: |
           dotnet publish 'src/WOJD.LocalizationStudio/WOJD.LocalizationStudio.csproj' `
             -c Release -r win-x64 --self-contained true `
             -o 'publish/app'
+
+      - name: Published app self-check
+        shell: pwsh
+        run: |
+          $env:WOJD_WORKSPACE_DIRECTORY = Join-Path $env:RUNNER_TEMP 'wojd-published-self-check'
+          $app = Start-Process -FilePath (Resolve-Path 'publish/app/WOJD-Localization-Studio.exe') -ArgumentList '--self-check' -WindowStyle Hidden -Wait -PassThru
+          if ($app.ExitCode -ne 0) {
+            Get-Content (Join-Path $env:WOJD_WORKSPACE_DIRECTORY 'self-check-error.log') -ErrorAction SilentlyContinue
+            throw "Published application self-check failed: $($app.ExitCode)"
+          }
+          $report = Get-Content (Join-Path $env:WOJD_WORKSPACE_DIRECTORY 'self-check.json') | ConvertFrom-Json
+          if (!$report.Success -or $report.Version -ne $env:VERSION) { throw 'Published version/self-check mismatch.' }
 
       - name: Publish updater
         shell: pwsh

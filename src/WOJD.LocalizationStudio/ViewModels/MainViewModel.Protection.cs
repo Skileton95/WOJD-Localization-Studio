@@ -5,7 +5,7 @@ public sealed record RecoveryConflict(string FilePath, DraftEntryState Entry, st
 public sealed partial class MainViewModel
 {
     private readonly List<DraftFileState> _blockedRecovery = [];
-    public List<RecoveryConflict> RecoveryConflicts => _blockedRecovery.SelectMany(x => x.Entries.Select(e => new RecoveryConflict(x.FilePath, e, "Source не совпадает или строка отсутствует"))).ToList();
+    public List<RecoveryConflict> RecoveryConflicts => _blockedRecovery.SelectMany(x => x.Entries.Select(e => new RecoveryConflict(x.FilePath, e, "Source неизвестен/изменён, строка неоднозначна или источник доступен только для чтения"))).ToList();
     public void RemoveRecoveryConflict(RecoveryConflict row)
     {
         foreach (var file in _blockedRecovery.Where(x => x.FilePath == row.FilePath)) file.Entries.Remove(row.Entry);

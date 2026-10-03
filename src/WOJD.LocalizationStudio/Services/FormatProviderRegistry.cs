@@ -62,6 +62,7 @@ public sealed class FormatProviderRegistry : ILocalizationFileAdapter
     }
     public Task SaveAsync(LocalizationDocument document, CancellationToken cancellationToken = default, IProgress<FileOperationProgress>? progress = null)
     {
+        if (document.IsReadOnly) throw new IOException("Исходный CN/EN-файл проекта доступен только для чтения.");
         if (!_providers.TryGetValue(document.ProviderId, out var provider) || !provider.Info.CanWrite || !provider.CanOpen(document.FilePath)) throw new NotSupportedException("Документ не имеет проверенного пишущего провайдера.");
         return provider.SaveAsync(document, cancellationToken, progress);
     }

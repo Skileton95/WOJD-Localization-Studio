@@ -16,6 +16,10 @@ public sealed partial class MainViewModel
         var paths = Project.Sources.Where(s => s.Role == "RU" && s.Format != "locres").Select(s => WojdProjectService.Resolve(Project, s.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return OpenDocuments.Where(d => paths.Contains(d.FilePath)).ToList();
     }
+    private void ApplyProjectRole(WOJD.LocalizationStudio.Models.LocalizationDocument document)
+    {
+        document.IsReadOnly = Project?.Sources.Any(s => s.Role != "RU" && WojdProjectService.Resolve(Project, s.Path).Equals(document.FilePath, StringComparison.OrdinalIgnoreCase)) == true;
+    }
     public string ProjectDataDirectory => Project is null ? WorkspaceStateService.StorageDirectory : System.IO.Path.Combine(Project.Root, ".wojd-studio");
     public WojdProject? Project { get; private set; }
     public async Task OpenWojdProjectAsync(string path)
@@ -23,6 +27,9 @@ public sealed partial class MainViewModel
         var project = WojdProjectService.Load(path);
         Project = project;
         _adapter.DeclareProject(project);
+        foreach (var document in OpenDocuments) ApplyProjectRole(document);
+        _consistencyDirty = true;
+        OnPropertyChanged(nameof(ActiveDocument));
         RestoreEditHistory();
         System.IO.Directory.CreateDirectory(WorkspaceStateService.StorageDirectory);
         System.IO.File.WriteAllText(System.IO.Path.Combine(WorkspaceStateService.StorageDirectory, "last-project.txt"), project.ManifestPath);

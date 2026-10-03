@@ -24,7 +24,7 @@ public static class ProjectReplaceService
         var matcher = new Regex(pattern, RegexOptions.CultureInvariant | (matchCase ? RegexOptions.None : RegexOptions.IgnoreCase),
             TimeSpan.FromMilliseconds(250));
         var rows = new List<ReplaceCandidate>();
-        foreach (var doc in documents)
+        foreach (var doc in documents.Where(d => !d.IsReadOnly))
             foreach (var entry in doc.Entries)
             {
                 cancellation.ThrowIfCancellationRequested();

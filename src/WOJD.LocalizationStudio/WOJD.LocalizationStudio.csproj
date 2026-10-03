@@ -7,9 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>WOJD-Localization-Studio</AssemblyName>
     <RootNamespace>WOJD.LocalizationStudio</RootNamespace>
-    <Version>0.2.14</Version>
-    <FileVersion>0.2.14.0</FileVersion>
-    <InformationalVersion>0.2.14</InformationalVersion>
+    <Version>0.2.15</Version>
+    <FileVersion>0.2.15.0</FileVersion>
+    <InformationalVersion>0.2.15</InformationalVersion>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.30" /></ItemGroup>
 </Project>

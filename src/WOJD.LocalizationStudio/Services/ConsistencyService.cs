@@ -14,7 +14,7 @@ public static class ConsistencyService
 {
     public static ConsistencyReport Analyze(IEnumerable<LocalizationDocument> documents)
     {
-        var rows = documents.SelectMany(d => d.Entries.Select(e => new EntryLocation(d.FilePath, e))).ToList();
+        var rows = documents.Where(d => !d.IsReadOnly).SelectMany(d => d.Entries.Select(e => new EntryLocation(d.FilePath, e))).ToList();
         var sources = rows.Where(x => x.Entry.Original.Length > 0).GroupBy(x => x.Entry.Original, StringComparer.Ordinal);
         var conflicts = sources.Select(g => new ConsistencyGroup(g.Key, g.ToList(),
             g.Select(x => x.Entry.Translation).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).Order().ToList()))
