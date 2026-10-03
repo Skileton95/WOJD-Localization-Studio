@@ -191,6 +191,11 @@ internal static class Program
         Check(TerminologyQaService.Analyze([migrationTarget], [term], [termException]).Count == 0, "Reasoned term exception");
         migrationTarget.Entries[0].Translation = "Иное";
         Check(TerminologyQaService.Analyze([migrationTarget], [term], [termException]).Count == 1, "Translation change invalidates term exception");
+        var qaDoc = new LocalizationDocument { FilePath = "qa" };
+        qaDoc.Entries.Add(new() { Original = "<Em>{Name}</>", Translation = "<Em>{Other}" });
+        Check(WojdQaService.Analyze([qaDoc], new()).Count(x => x.Severity == "Ошибка") >= 2, "Unreal generic closing tags and placeholders QA");
+        qaDoc.Entries[0].Translation = "<Em>{Name}</>";
+        Check(WojdQaService.Analyze([qaDoc], new()).All(x => x.Severity != "Ошибка"), "Valid rich text preserves generic closing tag");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

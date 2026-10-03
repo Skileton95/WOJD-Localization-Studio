@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="WOJD QA…" Click="WojdQa_Click"/>
                     <MenuItem Header="Терминология QA…" Click="TerminologyQa_Click"/>
                     <MenuItem Header="Глоссарий…" Click="Glossary_Click"/>
                     <MenuItem Header="Миграция между патчами…" Click="Migration_Click"/>
