@@ -176,6 +176,12 @@ internal static class Program
         Check(CollisionService.Resolve([importTarget], [choice])[("UI", "x")].Entry.Index == 2, "Explicit collision candidate");
         importTarget.Entries[1].Original = "changed";
         Check(CollisionService.Resolve([importTarget], [choice]).Count == 0, "Stale collision choice must not resolve");
+        var migrationTarget = new LocalizationDocument { FilePath = "patch" };
+        migrationTarget.Entries.Add(new() { Namespace = "UI", Key = "moved", Original = "独特原文", Translation = "" });
+        var migrationOld = new LocalizationDocument { FilePath = "previous" };
+        migrationOld.Entries.Add(new() { Namespace = "OLD", Key = "old", Original = "独特原文", Translation = "Уникальный" });
+        Check(PatchMigrationService.Preview([migrationTarget], [migrationOld], false).Single().Confirmed, "Unique unchanged source migration across renamed keys");
+        Check(FileComparisonService.Compare(importTarget, importTarget).Items.All(x => !x.CanTransfer), "Legacy compare blocks collisions");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

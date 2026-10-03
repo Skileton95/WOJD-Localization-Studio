@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Миграция между патчами…" Click="Migration_Click"/>
                     <MenuItem Header="Коллизии Namespace + Key…" Click="Collisions_Click"/>
                     <MenuItem Header="Импорт и синхронизация…" Click="ImportWorkflow_Click"/>
                     <MenuItem Header="locres / fmtstring…" Click="BinaryWorkflow_Click"/>

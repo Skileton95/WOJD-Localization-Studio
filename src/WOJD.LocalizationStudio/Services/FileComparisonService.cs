@@ -81,6 +81,12 @@ public static class FileComparisonService
             currentItems ??= [];
             oldItems ??= [];
 
+            if (currentItems.Count > 1 || oldItems.Count > 1)
+            {
+                items.AddRange(currentItems.Select(e => CreateItem("Коллизия — перенос заблокирован", e, null)));
+                items.AddRange(oldItems.Select(e => CreateItem("Коллизия — перенос заблокирован", null, e)));
+                continue;
+            }
             var count =
                 Math.Max(
                     currentItems.Count,
@@ -210,7 +216,7 @@ public static class FileComparisonService
         foreach (var entry in entries)
         {
             var key =
-                $"{entry.Namespace}\u001F{entry.Key}";
+                System.Text.Json.JsonSerializer.Serialize(new[] { entry.Namespace, entry.Key });
 
             if (!result.TryGetValue(
                     key,
