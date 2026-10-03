@@ -48,8 +48,10 @@ public static class NdjsonExportService
                 };
             }
 
-            obj[entry.TranslationField] =
-                entry.Translation;
+            obj[entry.TranslationField] = entry.Translation;
+            if (entry.NamespaceModified) obj[new[] { "namespace", "Namespace" }.FirstOrDefault(obj.ContainsKey) ?? "namespace"] = entry.Namespace;
+            if (entry.KeyModified) obj[new[] { "key", "Key", "id", "Id", "name", "Name" }.FirstOrDefault(obj.ContainsKey) ?? "key"] = entry.Key;
+            if (entry.OriginalModified) obj[new[] { "original", "Original", "source", "Source", "cn", "CN", "zh", "ZH", "text", "Text" }.FirstOrDefault(obj.ContainsKey) ?? "source"] = entry.Original;
 
             var line =
                 obj.ToJsonString(

@@ -24,7 +24,11 @@ public sealed record DraftEntryState(
     int Index,
     string Namespace,
     string Key,
-    string Translation);
+    string Translation,
+    string? EditedNamespace = null,
+    string? EditedKey = null,
+    string? EditedOriginal = null,
+    string? Source = null);
 
 public static class WorkspaceStateService
 {

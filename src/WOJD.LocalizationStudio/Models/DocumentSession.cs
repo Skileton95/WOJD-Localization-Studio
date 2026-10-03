@@ -9,6 +9,8 @@ internal sealed class DocumentSession
     public Dictionary<LocalizationEntry, string> KnownTranslations { get; } = new();
     public Dictionary<LocalizationEntry, bool> KnownValidationStates { get; } = new();
 
+    public Dictionary<(LocalizationEntry, EntryField), string> KnownFields { get; } = new();
+
     public Stack<TranslationEdit> UndoStack { get; } = new();
     public Stack<TranslationEdit> RedoStack { get; } = new();
 
@@ -26,4 +28,6 @@ internal sealed class DocumentSession
 internal sealed record TranslationEdit(
     LocalizationEntry Entry,
     string Before,
-    string After);
+    string After,
+    EntryField Field = EntryField.Translation,
+    IReadOnlyList<TranslationEdit>? Batch = null);

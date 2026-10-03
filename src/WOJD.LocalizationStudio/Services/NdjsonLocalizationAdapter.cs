@@ -169,6 +169,9 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
                 }
 
                 obj[entry.TranslationField] = entry.Translation;
+                if (entry.NamespaceModified) obj[NamespaceFields.FirstOrDefault(obj.ContainsKey) ?? "namespace"] = entry.Namespace;
+                if (entry.KeyModified) obj[KeyFields.FirstOrDefault(obj.ContainsKey) ?? "key"] = entry.Key;
+                if (entry.OriginalModified) obj[OriginalFields.FirstOrDefault(obj.ContainsKey) ?? "source"] = entry.Original;
 
                 line = obj.ToJsonString(
                     new JsonSerializerOptions

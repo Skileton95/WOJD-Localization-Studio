@@ -11,9 +11,24 @@ public sealed class LocalizationEntry : ObservableObject
     private string _validationSummary = string.Empty;
 
     public int Index { get; init; }
-    public string Namespace { get; init; } = string.Empty;
-    public string Key { get; init; } = string.Empty;
-    public string Original { get; init; } = string.Empty;
+    private string _namespace = "", _key = "", _original = "";
+    private string _savedNamespace = "", _savedKey = "", _savedOriginal = "";
+    public string Namespace { get => _namespace; set { if (SetProperty(ref _namespace, value)) NotifyIdentity(); } }
+    public string Key { get => _key; set { if (SetProperty(ref _key, value)) NotifyIdentity(); } }
+    public string Original { get => _original; set { if (SetProperty(ref _original, value)) { NotifyIdentity(); OnPropertyChanged(nameof(OriginalDisplay)); RefreshValidation(); } } }
+    public string SavedNamespace => _savedNamespace;
+    public string SavedKey => _savedKey;
+    public string SavedOriginal => _savedOriginal;
+    public string SavedTranslation => _savedTranslation;
+    public bool NamespaceModified => Namespace != _savedNamespace;
+    public bool KeyModified => Key != _savedKey;
+    public bool OriginalModified => Original != _savedOriginal;
+    private void NotifyIdentity() { OnPropertyChanged(nameof(Status)); OnPropertyChanged(nameof(StatusText)); }
+    public string GetField(EntryField field) => field switch { EntryField.Namespace => Namespace, EntryField.Key => Key, EntryField.Original => Original, _ => Translation };
+    public void SetField(EntryField field, string value)
+    {
+        switch (field) { case EntryField.Namespace: Namespace = value; break; case EntryField.Key: Key = value; break; case EntryField.Original: Original = value; break; default: Translation = value; break; }
+    }
     public string OriginalDisplay
         => string.IsNullOrEmpty(Original)
             ? "— нет исходного текста —"
@@ -40,7 +55,7 @@ public sealed class LocalizationEntry : ObservableObject
     }
 
     public TranslationStatus Status
-        => Translation != _savedTranslation
+        => Translation != _savedTranslation || NamespaceModified || KeyModified || OriginalModified
             ? TranslationStatus.Modified
             : string.IsNullOrWhiteSpace(Translation)
                 ? TranslationStatus.Untranslated
@@ -85,6 +100,7 @@ public sealed class LocalizationEntry : ObservableObject
     {
         _translation = value;
         _savedTranslation = value;
+        _savedNamespace = Namespace; _savedKey = Key; _savedOriginal = Original;
 
         OnPropertyChanged(nameof(Translation));
         OnPropertyChanged(nameof(Status));
@@ -99,6 +115,7 @@ public sealed class LocalizationEntry : ObservableObject
             RawLine = rawLine;
 
         _savedTranslation = Translation;
+        _savedNamespace = Namespace; _savedKey = Key; _savedOriginal = Original;
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(StatusText));
     }

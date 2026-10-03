@@ -435,6 +435,8 @@ public partial class MainWindow : Window
 
     private void Consistency_Click(object sender, RoutedEventArgs e) => new ConsistencyWindow(_viewModel) { Owner = this }.ShowDialog();
 
+    private void ProjectReplace_Click(object sender, RoutedEventArgs e) => new ProjectReplaceWindow(_viewModel) { Owner = this }.ShowDialog();
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

@@ -665,9 +665,13 @@ public sealed partial class MainViewModel : ObservableObject
                                 x =>
                                     new DraftEntryState(
                                         x.Index,
-                                        x.Namespace,
-                                        x.Key,
-                                        x.Translation))
+                                        x.SavedNamespace,
+                                        x.SavedKey,
+                                        x.Translation,
+                                        x.NamespaceModified ? x.Namespace : null,
+                                        x.KeyModified ? x.Key : null,
+                                        x.OriginalModified ? x.Original : null,
+                                        x.SavedOriginal))
                             .ToList();
 
                     if (entries.Count > 0)
@@ -772,8 +776,12 @@ public sealed partial class MainViewModel : ObservableObject
                                     draftEntry.Key,
                                     StringComparison.Ordinal));
 
-                    if (entry is null)
+                    if (entry is null || (draftEntry.Source is not null && entry.Original != draftEntry.Source))
                         continue;
+
+                    if (draftEntry.EditedNamespace is not null) entry.Namespace = draftEntry.EditedNamespace;
+                    if (draftEntry.EditedKey is not null) entry.Key = draftEntry.EditedKey;
+                    if (draftEntry.EditedOriginal is not null) entry.Original = draftEntry.EditedOriginal;
 
                     entry.Translation =
                         draftEntry.Translation;
@@ -814,6 +822,7 @@ public sealed partial class MainViewModel : ObservableObject
                 var status = entry.Status;
                 session.KnownStatuses[entry] = status;
                 session.KnownTranslations[entry] = entry.Translation;
+                foreach (var field in Enum.GetValues<EntryField>()) session.KnownFields[(entry, field)] = entry.GetField(field);
                 session.KnownValidationStates[entry] = entry.HasValidationIssues;
 
                 if (entry.HasValidationIssues)
@@ -1624,15 +1633,20 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var edit =
-            session.UndoStack.Pop();
+        var pending = session.UndoStack.Peek();
+        if (pending.Batch is not null)
+        {
+            try { ReplayBatch(pending, false); } catch (Exception e) { AppDialog.Show(e.Message, "Отмена операции"); }
+            return;
+        }
+        var edit = session.UndoStack.Pop();
 
         session.HistoryChangeInProgress = true;
 
         try
         {
             SelectedEntry = edit.Entry;
-            edit.Entry.Translation = edit.Before;
+            edit.Entry.SetField(edit.Field, edit.Before);
         }
         finally
         {
@@ -1654,15 +1668,20 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var edit =
-            session.RedoStack.Pop();
+        var pending = session.RedoStack.Peek();
+        if (pending.Batch is not null)
+        {
+            try { ReplayBatch(pending, true); } catch (Exception e) { AppDialog.Show(e.Message, "Повтор операции"); }
+            return;
+        }
+        var edit = session.RedoStack.Pop();
 
         session.HistoryChangeInProgress = true;
 
         try
         {
             SelectedEntry = edit.Entry;
-            edit.Entry.Translation = edit.After;
+            edit.Entry.SetField(edit.Field, edit.After);
         }
         finally
         {
@@ -1683,8 +1702,7 @@ public sealed partial class MainViewModel : ObservableObject
         object? sender,
         PropertyChangedEventArgs e)
     {
-        if (e.PropertyName !=
-                nameof(LocalizationEntry.Translation) ||
+        if (!Enum.TryParse<EntryField>(e.PropertyName, out var editedField) ||
             sender is not LocalizationEntry entry ||
             !_entrySessions.TryGetValue(
                 entry,
@@ -1714,12 +1732,9 @@ public sealed partial class MainViewModel : ObservableObject
                 currentValidation;
         }
 
-        var currentTranslation =
-            entry.Translation;
+        var currentTranslation = entry.GetField(editedField);
 
-        if (!session.KnownTranslations.TryGetValue(
-                entry,
-                out var previousTranslation))
+        if (!session.KnownFields.TryGetValue((entry, editedField), out var previousTranslation))
         {
             previousTranslation =
                 currentTranslation;
@@ -1735,13 +1750,13 @@ public sealed partial class MainViewModel : ObservableObject
                 new TranslationEdit(
                     entry,
                     previousTranslation,
-                    currentTranslation));
+                    currentTranslation, editedField));
 
             session.RedoStack.Clear();
         }
 
-        session.KnownTranslations[entry] =
-            currentTranslation;
+        session.KnownFields[(entry, editedField)] = currentTranslation;
+        session.KnownTranslations[entry] = entry.Translation;
 
         var current =
             entry.Status;
@@ -1798,6 +1813,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         session.KnownStatuses.Clear();
         session.KnownTranslations.Clear();
+        session.KnownFields.Clear();
         session.KnownValidationStates.Clear();
         session.TranslatedCount = 0;
         session.UntranslatedCount = 0;
@@ -1815,8 +1831,8 @@ public sealed partial class MainViewModel : ObservableObject
             session.KnownStatuses[entry] =
                 status;
 
-            session.KnownTranslations[entry] =
-                entry.Translation;
+            session.KnownTranslations[entry] = entry.Translation;
+            foreach (var field in Enum.GetValues<EntryField>()) session.KnownFields[(entry, field)] = entry.GetField(field);
 
             session.KnownValidationStates[entry] =
                 entry.HasValidationIssues;

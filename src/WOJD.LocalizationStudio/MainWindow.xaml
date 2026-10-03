@@ -93,6 +93,7 @@
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
                     <Separator/>
+                    <MenuItem Header="Замена по проекту…" Click="ProjectReplace_Click"/>
                     <MenuItem Header="Единообразие перевода…" Click="Consistency_Click"/>
                     <MenuItem Header="Сравнить со старой версией…"
                               Click="CompareFile_Click"/>
