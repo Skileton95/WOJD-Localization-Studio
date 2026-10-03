@@ -161,6 +161,10 @@ internal static class Program
         Check((await WojdProjectService.ReadAsync(loadedProject)).Rows.Count == 2, "WOJD project roles and unified rows");
         var escaped = false; try { WojdProjectService.Resolve(project, "../escape.ndjson"); } catch (IOException) { escaped = true; }
         Check(escaped, "Project paths must stay inside root");
+        var binary = Path.Combine(folder, "sample.locres"); await File.WriteAllBytesAsync(binary, [0, 255, 42]);
+        var binaryHash = FileSafetyService.Hash(binary); BinaryWorkflowService.PreserveCopy(binary, binary + ".copy");
+        var ticket = await BinaryWorkflowService.RegisterExportAsync(binary, b, "fixture-converter", "test");
+        Check(ticket.Rows == 1 && ticket.OriginalSha256 == binaryHash && FileSafetyService.Hash(binary) == binaryHash, "Binary workflow preserves original bytes");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
