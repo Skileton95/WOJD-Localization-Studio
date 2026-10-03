@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Контекст строки…" Click="Context_Click"/>
                     <MenuItem Header="Совместная работа…" Click="Collaboration_Click"/>
                     <MenuItem Header="Git…" Click="Git_Click"/>
                     <MenuItem Header="Пакет перевода…" Click="ReleasePackage_Click"/>
@@ -207,6 +208,9 @@
                                 </DataTemplate></TreeView.Resources>
                             </TreeView>
                         </StackPanel>
+                    </Expander>
+                    <Expander DockPanel.Dock="Bottom" Header="Контекст строки" Margin="0,8" IsExpanded="False">
+                        <StackPanel><TextBlock Text="{Binding SelectedContextText}" TextWrapping="Wrap" MaxHeight="160" FontSize="12" Foreground="#111111"/><Button Content="Подробный контекст…" Click="Context_Click" Margin="0,6"/></StackPanel>
                     </Expander>
                     <TextBlock DockPanel.Dock="Top" Text="Файлы" FontSize="18" FontWeight="SemiBold" Margin="4,0,0,14"/>
                     <TreeView ItemsSource="{Binding FileTree, Mode=OneWay}" BorderThickness="0" Background="Transparent" SelectedItemChanged="FileTree_SelectedItemChanged">

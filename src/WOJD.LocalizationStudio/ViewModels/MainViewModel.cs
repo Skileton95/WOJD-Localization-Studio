@@ -255,6 +255,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (!SetProperty(ref _selectedEntry, value))
                 return;
             OnPropertyChanged(nameof(GlossaryHints));
+            OnPropertyChanged(nameof(SelectedContextText));
 
             if (value is not null) _lastSelectedIndex = value.Index;
             if (_activeSession is not null)
@@ -1759,6 +1760,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (ReferenceEquals(entry, SelectedEntry)) { OnPropertyChanged(nameof(SelectedContextText)); if (editedField is EntryField.Original or EntryField.Namespace) OnPropertyChanged(nameof(GlossaryHints)); }
         _namespaceCache.Remove(session.Document);
         if (editedField is EntryField.Translation or EntryField.Original) _consistencyDirty = true;
         entry.RefreshValidation();

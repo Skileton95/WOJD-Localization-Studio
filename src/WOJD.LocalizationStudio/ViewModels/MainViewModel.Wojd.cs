@@ -11,7 +11,7 @@ public sealed partial class MainViewModel
     }
     public async Task<IReadOnlyList<WOJD.LocalizationStudio.Models.LocalizationDocument>> WojdTargetsAsync()
     {
-        if (Project is null) return OpenDocuments.ToList();
+        if (Project is null) { await EnsureProjectLoadedAsync(); return OpenDocuments.ToList(); }
         await OpenWojdProjectAsync(Project.ManifestPath);
         var paths = Project.Sources.Where(s => s.Role == "RU" && s.Format != "locres").Select(s => WojdProjectService.Resolve(Project, s.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return OpenDocuments.Where(d => paths.Contains(d.FilePath)).ToList();

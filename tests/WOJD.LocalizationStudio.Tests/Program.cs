@@ -220,6 +220,8 @@ internal static class Program
         Check(CollaborationService.Changes(CollaborationService.Preview(folder, [packageDoc], bundle)).Count == 1, "Collaboration proposals match source and base");
         packageDoc.Entries[0].Original = "new source";
         Check(CollaborationService.Changes(CollaborationService.Preview(folder, [packageDoc], bundle)).Count == 0, "Collaboration source changes must block import");
+        var context = ContextService.Analyze([importTarget], "target", importTarget.Entries[0]);
+        Check(context.Any(r => r.Kind == "Соседняя строка" && r.Index == 2), "Neighbor context uses physical document rows");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
