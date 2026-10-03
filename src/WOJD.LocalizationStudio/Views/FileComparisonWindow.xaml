@@ -47,7 +47,7 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="250"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock x:Name="SummaryText"
@@ -80,9 +80,9 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Изменение"
+                    <DataGridTextColumn Header="Статус"
                                         Binding="{Binding ChangeType}"
-                                        Width="155"/>
+                                        Width="210"/>
                     <DataGridTextColumn Header="Namespace"
                                         Binding="{Binding Namespace}"
                                         Width="210"/>
@@ -111,11 +111,13 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Перенос выполняется только для совпадающих Namespace + Key с неизменённым оригиналом."
+            <TextBlock Text="Автоперенос заполняет только пустой перевод при неизменённом оригинале. Существующий перевод никогда не перезаписывается."
                        Foreground="{StaticResource MutedTextBrush}"
-                       VerticalAlignment="Center"/>
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,0,16,0"/>
             <Button Grid.Column="1"
-                    Content="Перенести переводы"
+                    Content="Перенести безопасные"
                     Style="{StaticResource PrimaryButton}"
                     Padding="18,9"
                     Click="Transfer_Click"/>
