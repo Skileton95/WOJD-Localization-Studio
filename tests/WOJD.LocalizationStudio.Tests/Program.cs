@@ -74,6 +74,15 @@ internal static class Program
         await adapter.SaveAsync(identityDoc);
         var reread = await adapter.LoadAsync(b);
         Check(reread.Entries[0].Namespace == "测试" && reread.Entries[0].Key == "new-key" && reread.Entries[0].Original == "原文", "Identity/source roundtrip");
+        var newPatch = new LocalizationDocument { FilePath = "new" };
+        var patchEntry = new LocalizationEntry { Namespace = first.Namespace, Key = first.Key, Original = first.Original };
+        patchEntry.InitializeSavedTranslation(""); newPatch.Entries.Add(patchEntry);
+        var sync = PatchSyncService.Preview(new[] { newPatch }, new[] { vm.ActiveDocument! });
+        Check(sync.Single().CanTransfer && PatchSyncService.Transfers(sync, false).Count() == 1, "Exact patch migration");
+        patchEntry.Original = "changed";
+        Check(PatchSyncService.Preview(new[] { newPatch }, new[] { vm.ActiveDocument! }).Single().Kind == "Оригинал изменён", "Changed source blocks transfer");
+        newPatch.Entries.Add(new LocalizationEntry { Namespace = first.Namespace, Key = first.Key, Original = first.Original });
+        Check(PatchSyncService.Preview(new[] { newPatch }, new[] { vm.ActiveDocument! }).All(x => !x.CanTransfer), "Collisions must block automatic migration");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
