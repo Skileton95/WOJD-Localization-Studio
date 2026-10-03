@@ -216,6 +216,10 @@ internal static class Program
         var gitRows = await GitService.StatusAsync(gitFolder);
         await GitService.CommitAsync(gitFolder, gitRows.Where(r => r.Path == "перевод.txt"), "selected only");
         Check((await GitService.StatusAsync(gitFolder)).Any(r => r.Path == "other.txt" && r.Status == "A "), "Git commit excludes other staged paths");
+        var bundle = new TaskBundle(1, "test", "1", new(), "tester", DateTime.UtcNow, [new("transaction.ndjson", 1, packageDoc.Entries[0].Namespace, packageDoc.Entries[0].Key, packageDoc.Entries[0].Original, packageDoc.Entries[0].Translation, "Предложение")]);
+        Check(CollaborationService.Changes(CollaborationService.Preview(folder, [packageDoc], bundle)).Count == 1, "Collaboration proposals match source and base");
+        packageDoc.Entries[0].Original = "new source";
+        Check(CollaborationService.Changes(CollaborationService.Preview(folder, [packageDoc], bundle)).Count == 0, "Collaboration source changes must block import");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

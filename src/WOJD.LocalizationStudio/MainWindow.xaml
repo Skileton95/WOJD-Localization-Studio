@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Совместная работа…" Click="Collaboration_Click"/>
                     <MenuItem Header="Git…" Click="Git_Click"/>
                     <MenuItem Header="Пакет перевода…" Click="ReleasePackage_Click"/>
                     <MenuItem Header="Очередь проверки…" Click="ReviewQueue_Click"/>

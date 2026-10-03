@@ -10,7 +10,7 @@ public sealed partial class MainViewModel
         var id = Guid.NewGuid();
         var rows = edits.Select(e => new EditHistoryRow(_entrySessions[e.Entry].Document.FilePath, e.Entry.Namespace, e.Entry.Key,
             e.Field switch { EntryField.Original => "Оригинал", EntryField.Translation => "Перевод", EntryField.Key => "Ключ", _ => "Namespace" }, e.Before, e.After)).ToList();
-        EditHistory.Insert(0, new(id, DateTime.UtcNow, Environment.UserName, label, rows)); _historyEdits[id] = edits;
+        EditHistory.Insert(0, new(id, DateTime.UtcNow, CurrentAuthor, label, rows)); _historyEdits[id] = edits;
         while (EditHistory.Count > 2000) { _historyEdits.Remove(EditHistory[^1].Id); EditHistory.RemoveAt(EditHistory.Count - 1); }
     }
     public void RevertHistory(EditHistoryItem record)

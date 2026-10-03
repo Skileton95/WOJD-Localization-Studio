@@ -28,7 +28,7 @@ public sealed class ReviewQueueWindow : WorkflowWindow
             if (grid.SelectedItem is not ReviewQueueRow row) return;
             var comment = "";
             if (status == "Отложено") { var input = new TextInputDialog("Отложить", "Причина/вопрос для следующей проверки.") { Owner = this }; if (input.ShowDialog() != true) return; comment = input.Value; }
-            var decision = ReviewQueueService.Decide(row, status, comment, Environment.UserName);
+            var decision = ReviewQueueService.Decide(row, status, comment, vm.CurrentAuthor);
             decisions.RemoveAll(d => d.FilePath == row.FilePath && d.Index == row.Index && d.Namespace == row.Namespace && d.Key == row.Key);
             decisions.Add(decision); ProjectMetadataService.Save(path, decisions); await Refresh();
         }

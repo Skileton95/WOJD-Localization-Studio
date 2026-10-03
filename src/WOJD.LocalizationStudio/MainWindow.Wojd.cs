@@ -3,6 +3,7 @@ using WOJD.LocalizationStudio.Views;
 namespace WOJD.LocalizationStudio;
 public partial class MainWindow
 {
+    private void Collaboration_Click(object sender, RoutedEventArgs e) { try { new CollaborationWindow(_viewModel) { Owner = this }.ShowDialog(); } catch (Exception ex) { WOJD.LocalizationStudio.Services.AppDialog.Show(ex.Message, "Совместная работа"); } }
     private void Git_Click(object sender, RoutedEventArgs e) => new GitWindow(_viewModel) { Owner = this }.ShowDialog();
     private void ReleasePackage_Click(object sender, RoutedEventArgs e) { try { new ReleasePackageWindow(_viewModel) { Owner = this }.ShowDialog(); } catch (Exception ex) { WOJD.LocalizationStudio.Services.AppDialog.Show(ex.Message, "Пакет перевода"); } }
     private void ReviewQueue_Click(object sender, RoutedEventArgs e) { try { new ReviewQueueWindow(_viewModel) { Owner = this }.ShowDialog(); } catch (Exception ex) { WOJD.LocalizationStudio.Services.AppDialog.Show(ex.Message, "Очередь проверки"); } }
