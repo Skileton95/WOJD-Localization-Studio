@@ -5,7 +5,7 @@ using WOJD.LocalizationStudio.ViewModels;
 namespace WOJD.LocalizationStudio.Views;
 public sealed class EditHistoryWindow : WorkflowWindow
 {
-    public EditHistoryWindow(MainViewModel vm) : base("История правок сессии")
+    public EditHistoryWindow(MainViewModel vm) : base("История правок")
     {
         var history = Table(vm.EditHistory, ("Дата UTC", "AtUtc"), ("Автор", "Author"), ("Операция", "Operation"), ("Строк", "Count"));
         var changes = Table(null!, ("Файл", "FilePath"), ("Namespace", "Namespace"), ("Ключ", "Key"), ("Поле", "Field"), ("До", "Before"), ("После", "After"));
@@ -18,6 +18,6 @@ public sealed class EditHistoryWindow : WorkflowWindow
         }));
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition()); grid.RowDefinitions.Add(new RowDefinition());
         grid.Children.Add(history); Grid.SetRow(changes, 1); grid.Children.Add(changes); Body.Children.Add(grid);
-        Status.Text = "Последние 2000 операций текущей сессии. Несколько файлов одной массовой операции отображаются одной записью.";
+        Status.Text = "Последние 2000 операций проекта, включая сохранённую историю. Несколько файлов одной массовой операции отображаются одной записью.";
     }
 }

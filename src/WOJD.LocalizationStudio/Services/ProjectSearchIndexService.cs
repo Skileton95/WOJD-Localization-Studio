@@ -39,6 +39,12 @@ public static class ProjectSearchIndexService
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
     }
+    public static IEnumerable<SearchIndexRow> ReadRows(string cache, CancellationToken cancellation)
+    {
+        using var stream = File.OpenRead(cache); using var zip = new GZipStream(stream, CompressionMode.Decompress); using var reader = new StreamReader(zip);
+        _ = reader.ReadLine();
+        while (reader.ReadLine() is { } line) { cancellation.ThrowIfCancellationRequested(); yield return JsonSerializer.Deserialize<SearchIndexRow>(line) ?? throw new InvalidDataException("Повреждён индекс."); }
+    }
     public static IEnumerable<EntryLocation> Read(string cache, string file, CancellationToken cancellation)
     {
         using var stream = File.OpenRead(cache); using var zip = new GZipStream(stream, CompressionMode.Decompress); using var reader = new StreamReader(zip);

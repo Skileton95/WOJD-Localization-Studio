@@ -27,8 +27,8 @@ public sealed partial class MainViewModel
                 response = await Task.Run(() => ProjectSearchService.SearchLocations(document.Entries.Select(e => new EntryLocation(file, e)), query, matchCase, exact, regex, cancellation), cancellation);
             else
             {
-                var cache = await ProjectSearchIndexService.EnsureAsync(file, cancellation, progress);
-                response = await Task.Run(() => ProjectSearchService.SearchLocations(ProjectSearchIndexService.Read(cache, file, cancellation), query, matchCase, exact, regex, cancellation), cancellation);
+                await SqliteProjectIndexService.EnsureAsync(file, cancellation, progress);
+                response = await Task.Run(() => ProjectSearchService.SearchLocations(SqliteProjectIndexService.Read(file, cancellation), query, matchCase, exact, regex, cancellation), cancellation);
             }
             results.AddRange(response.Results.Take(50000 - results.Count));
             if (response.IsTruncated || results.Count >= 50000) return new(results, true);

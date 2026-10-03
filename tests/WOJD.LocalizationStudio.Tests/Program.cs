@@ -222,6 +222,12 @@ internal static class Program
         Check(CollaborationService.Changes(CollaborationService.Preview(folder, [packageDoc], bundle)).Count == 0, "Collaboration source changes must block import");
         var context = ContextService.Analyze([importTarget], "target", importTarget.Entries[0]);
         Check(context.Any(r => r.Kind == "Соседняя строка" && r.Index == 2), "Neighbor context uses physical document rows");
+        await SqliteProjectIndexService.EnsureAsync(transactionFile, default, null);
+        Check(SqliteProjectIndexService.Read(transactionFile, default).Single().Entry.Translation == "new", "SQLite projection matches saved NDJSON");
+        await File.WriteAllTextAsync(transactionFile, "{\"key\":\"a\",\"translation\":\"updated\"}\n");
+        await SqliteProjectIndexService.EnsureAsync(transactionFile, default, null);
+        Check(SqliteProjectIndexService.Read(transactionFile, default).Single().Entry.Translation == "updated", "SQLite rebuild after source hash change");
+        var historyReader = new MainViewModel(); Check(historyReader.EditHistory.Count > 0, "Persistent edit history restored");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

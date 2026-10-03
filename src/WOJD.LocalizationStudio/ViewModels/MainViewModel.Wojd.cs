@@ -22,6 +22,7 @@ public sealed partial class MainViewModel
     {
         var project = WojdProjectService.Load(path);
         Project = project;
+        RestoreEditHistory();
         System.IO.Directory.CreateDirectory(WorkspaceStateService.StorageDirectory);
         System.IO.File.WriteAllText(System.IO.Path.Combine(WorkspaceStateService.StorageDirectory, "last-project.txt"), project.ManifestPath);
         foreach (var source in project.Sources.Where(s => s.Role == "RU" && s.Format != "locres"))

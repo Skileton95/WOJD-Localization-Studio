@@ -46,6 +46,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel()
     {
+        RestoreEditHistory();
         EntriesView =
             CollectionViewSource.GetDefaultView(Entries);
 
