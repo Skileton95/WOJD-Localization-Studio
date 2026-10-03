@@ -67,6 +67,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v$env:VERSION"
+          $title = "WOJD Localization Studio $env:VERSION"
+          $notes = "Стабильная версия WOJD Localization Studio $env:VERSION."
+
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag `
@@ -74,14 +77,19 @@ jobs:
               'dist/WOJD-Localization-Studio-win-x64.zip.sha256' `
               'dist/update.json' `
               --clobber
+
+            gh release edit $tag `
+              --title $title `
+              --notes $notes `
+              --latest
           }
           else {
             gh release create $tag `
               'dist/WOJD-Localization-Studio-win-x64.zip' `
               'dist/WOJD-Localization-Studio-win-x64.zip.sha256' `
               'dist/update.json' `
-              --title "WOJD Localization Studio $env:VERSION" `
-              --generate-notes `
+              --title $title `
+              --notes $notes `
               --latest
           }
 
