@@ -82,6 +82,8 @@ internal static class Program
         Check(new SmartFilter(Untranslated: true, Chinese: true, Placeholders: true).Matches(smartRow), "Combined smart filters");
         Check(!new SmartFilter(Untranslated: true, Latin: true).Matches(smartRow), "Conditions must combine with AND");
         vm.SaveFilter("test", new SmartFilter(Chinese: true)); Check(vm.SavedFilters.Count == 1, "Saved filter");
+        vm.SetAnnotation(first, "Проверить контекст", "Контекст неизвестен");
+        Check(vm.GetAnnotation(first)?.Note == "Проверить контекст" && !first.RawLine.Contains("контекст"), "Notes stay outside game files");
         var replacementRows = ProjectReplaceService.Preview(vm.OpenDocuments, EntryField.Namespace, "UI", "HUD", false, true, true);
         Check(replacementRows.Count == 2, "Project namespace preview");
         vm.ApplyBatch(replacementRows.Select(x => (x.Entry, x.Field, x.Before, x.After)));

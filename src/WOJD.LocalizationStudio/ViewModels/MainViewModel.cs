@@ -530,6 +530,7 @@ public sealed partial class MainViewModel : ObservableObject
         WindowLayout = state.Layout;
         _namespaceFavorites = (state.NamespaceFavorites ?? []).Select(x => (x.FilePath, x.Namespace)).ToHashSet();
         NamespacePanelExpanded = state.NamespacePanelExpanded;
+        NotesOnly = state.NotesOnly;
         _consistencyExceptions = (state.ConsistencyExceptions ?? []).ToHashSet(StringComparer.Ordinal);
         SavedFilters = state.SavedFilters ?? []; SetSmartFilters(state.SmartFilters ?? new());
 
@@ -712,7 +713,7 @@ public sealed partial class MainViewModel : ObservableObject
                     OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
                     WindowLayout,
                     _namespaceFavorites.Select(x => new NamespaceBookmark(x.FilePath, x.Namespace)).ToList(),
-                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters, _consistencyExceptions.ToList());
+                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters, _consistencyExceptions.ToList(), NotesOnly);
 
             WorkspaceStateService.Save(state);
         }
@@ -1238,6 +1239,7 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task SaveSessionAsync(
         DocumentSession session)
     {
+        var annotations = Annotations.Capture(session.Document);
         FileSafetyService.CheckUnchanged(session.Document);
         BackupService.CreateBackup(
             session.Document.FilePath);
@@ -1245,6 +1247,7 @@ public sealed partial class MainViewModel : ObservableObject
         await _adapter.SaveAsync(
             session.Document, _operationCancellation?.Token ?? default, OperationProgress());
 
+        Annotations.Migrate(session.Document.FilePath, annotations);
         BackupService.Prune(session.Document.FilePath, Settings.BackupLimit);
         RebuildStatusCache(
             session);
@@ -1585,6 +1588,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (obj is not LocalizationEntry entry)
             return false;
 
+        if (NotesOnly && GetAnnotation(entry) is null) return false;
         if (!SmartFilters.Matches(entry)) return false;
 
         if (StatusFilter == "Несогласованные")

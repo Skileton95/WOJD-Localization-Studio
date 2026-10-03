@@ -471,13 +471,15 @@ public partial class MainWindow : Window
 
     private void SmartFilters_Click(object sender, RoutedEventArgs e) => new SmartFiltersWindow(_viewModel) { Owner = this }.ShowDialog();
     private void ResetFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ResetAllFilters();
-    private void RemoveFilter_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { DataContext: FilterChip chip }) _viewModel.SetSmartFilters(_viewModel.SmartFilters.Remove(chip.Id)); }
+    private void RemoveFilter_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { DataContext: FilterChip chip }) { if (chip.Id == "Notes") _viewModel.NotesOnly = false; else _viewModel.SetSmartFilters(_viewModel.SmartFilters.Remove(chip.Id)); } }
 
     private void ExpandedEditor_Click(object sender, RoutedEventArgs e) => new ExpandedEditorWindow(_viewModel) { Owner = this }.ShowDialog();
     private void WrapTranslation_Click(object sender, RoutedEventArgs e)
     {
         if (TranslationBox is not null && sender is CheckBox check) TranslationBox.TextWrapping = check.IsChecked == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
     }
+
+    private void Notes_Click(object sender, RoutedEventArgs e) { try { new NotesWindow(_viewModel) { Owner = this }.ShowDialog(); } catch (Exception ex) { AppDialog.Show(ex.Message, "Заметки"); } }
 
     private void SetUpdateProgress(UpdateProgressState state)
     {
