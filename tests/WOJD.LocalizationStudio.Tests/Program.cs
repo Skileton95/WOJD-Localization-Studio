@@ -201,6 +201,12 @@ internal static class Program
         Check(ReviewQueueService.Build([migrationTarget], [], [], new(), [accepted], []).Single().Status == "Проверено", "Review decision persists");
         migrationTarget.Entries[0].Translation = "Изменено";
         Check(ReviewQueueService.Build([migrationTarget], [], [], new(), [accepted], []).Single().Status == "Ожидает", "Review invalidation after editing");
+        var packageDoc = await adapter.LoadAsync(transactionFile);
+        packageDoc.Entries[0].Original = "原文"; packageDoc.Entries[0].Translation = "Перевод";
+        var package = Path.Combine(folder, "release.zip"); var beforePackageHash = FileSafetyService.Hash(transactionFile);
+        var releaseSnapshot = await ReleasePackageService.CreateAsync(package, "test-1", "fixture", folder, [packageDoc], null, new(), [], [], [], false);
+        using (var archive = System.IO.Compression.ZipFile.OpenRead(package)) Check(archive.GetEntry("manifest.json") is not null && archive.GetEntry("changed-rows.ndjson") is not null, "Release ZIP manifest and changes");
+        Check(FileSafetyService.Hash(transactionFile) == beforePackageHash && ReleasePackageService.Changes(releaseSnapshot, releaseSnapshot).Count == 0, "Package creation preserves originals and baseline");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
