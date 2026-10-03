@@ -15,6 +15,9 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel = new();
     private bool _filesPanelVisible = true;
     private double _filesPanelWidth = 300;
+    private readonly System.Windows.Threading.DispatcherTimer _externalTimer = new() { Interval = TimeSpan.FromSeconds(8) };
+    private bool _checkingExternal;
+    private List<string> _externalFiles = [];
 
     public MainWindow()
     {
@@ -24,13 +27,19 @@ public partial class MainWindow : Window
         Closing += MainWindow_Closing;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         Loaded += MainWindow_Loaded;
+        _externalTimer.Tick += async (_, _) => await CheckExternalAsync();
+        Activated += async (_, _) => await CheckExternalAsync();
+        Closed += (_, _) => _externalTimer.Stop();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
 
+        var recovery = await Task.Run(SaveTransactionService.RecoverPending);
+        if (recovery.Count > 0) AppDialog.Show($"Операций восстановления: {recovery.Count}. Подробности: Инструменты → Журнал защиты.", "Восстановление сохранения");
         await _viewModel.RestoreWorkspaceAsync();
+        _externalTimer.Start();
         RestoreLayout();
         await UpdateService.StartAsync(
             this,
@@ -485,6 +494,22 @@ public partial class MainWindow : Window
     private void Statistics_Click(object sender, RoutedEventArgs e) => new ProjectStatisticsWindow(_viewModel) { Owner = this }.ShowDialog();
 
     private void EditHistory_Click(object sender, RoutedEventArgs e) => new EditHistoryWindow(_viewModel) { Owner = this }.ShowDialog();
+
+    private async Task CheckExternalAsync()
+    {
+        if (_checkingExternal || _viewModel.IsBusy || !IsActive || OwnedWindows.Count > 0) return;
+        _checkingExternal = true;
+        try { _externalFiles = await _viewModel.DetectExternalChangesAsync(); ExternalPanel.Visibility = _externalFiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed; ExternalText.Text = $"Файлы изменены вне редактора: {_externalFiles.Count}. Сохранение защищено."; }
+        catch (Exception e) { IssueLogService.Record("Внешние изменения: " + e.Message); }
+        finally { _checkingExternal = false; }
+    }
+    private async void ExternalChanges_Click(object sender, RoutedEventArgs e)
+    {
+        try { var files = await _viewModel.DetectExternalChangesAsync(); if (files.Count == 0) { AppDialog.Show("Внешних изменений нет.", "Внешние изменения"); return; } new ExternalChangesWindow(_viewModel, files) { Owner = this }.ShowDialog(); await CheckExternalAsync(); }
+        catch (Exception ex) { AppDialog.Show(ex.Message, "Внешние изменения"); }
+    }
+    private void RecoveryConflicts_Click(object sender, RoutedEventArgs e) => new RecoveryConflictsWindow(_viewModel) { Owner = this }.ShowDialog();
+    private void SafetyJournal_Click(object sender, RoutedEventArgs e) => new ReportWindow("Журнал защиты", SaveTransactionService.ReadJournal(), ("Дата UTC", "AtUtc"), ("Операция", "Operation"), ("Файл", "FilePath"), ("Сведения", "Detail")) { Owner = this }.ShowDialog();
 
     private void SetUpdateProgress(UpdateProgressState state)
     {

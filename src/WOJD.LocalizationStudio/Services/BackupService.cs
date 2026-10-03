@@ -15,6 +15,7 @@ public static class BackupService
         if (!File.Exists(filePath)) return;
         var path = NewBackupPath(filePath);
         File.Copy(filePath, path, false); File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+        SaveTransactionService.Record("backup", filePath, path);
     }
     public static IReadOnlyList<BackupVersion> List(string filePath)
     {
@@ -27,6 +28,6 @@ public static class BackupService
     public static void Prune(string filePath, int keep = 50)
     {
         if (keep < 1) return;
-        foreach (var old in List(filePath).Skip(keep)) File.Delete(old.Path);
+        foreach (var old in List(filePath).Skip(keep)) { File.Delete(old.Path); SaveTransactionService.Record("backup-pruned", filePath, old.Path); }
     }
 }

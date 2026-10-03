@@ -149,6 +149,13 @@ internal static class Program
         var streamed = await vm.SearchProjectStreamingAsync("Перевод", true, true, false, default, null);
         Check(streamed.Results.Count == 1 && vm.OpenTabs.Count == 2, "Search must not open every project file");
         await vm.OpenProjectSearchResultAsync(streamed.Results[0]); Check(vm.OpenTabs.Count == 3 && vm.SelectedEntry!.Key == "k", "Navigation loads only selected file");
+        var transactionFile = Path.Combine(folder, "transaction.ndjson");
+        await File.WriteAllTextAsync(transactionFile, "{\"key\":\"a\",\"translation\":\"old\"}\n");
+        var txDoc = await adapter.LoadAsync(transactionFile); var txTemp = transactionFile + ".wojd-test.tmp";
+        await File.WriteAllTextAsync(txTemp, "{\"key\":\"a\",\"translation\":\"new\"}\n");
+        _ = SaveTransactionService.Prepare(txDoc, txTemp);
+        Check(SaveTransactionService.RecoverPending().Any(x => x.Operation == "save-recovered"), "Interrupted save recovery");
+        Check((await adapter.LoadAsync(transactionFile)).Entries[0].Translation == "new", "Recovered save content");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

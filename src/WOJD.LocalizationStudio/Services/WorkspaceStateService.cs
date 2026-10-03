@@ -19,7 +19,8 @@ public sealed record WorkspaceState(
     List<SavedFilter>? SavedFilters = null,
     SmartFilter? SmartFilters = null,
     List<string>? ConsistencyExceptions = null,
-    bool NotesOnly = false);
+    bool NotesOnly = false,
+    List<DraftFileState>? BlockedRecovery = null);
 
 public sealed record WindowLayoutState(double Left, double Top, double Width, double Height,
     bool Maximized, double FilesWidth = 300, bool FilesVisible = true);
@@ -64,9 +65,8 @@ public static class WorkspaceStateService
                 return null;
 
             var json = File.ReadAllText(StatePath);
-            return JsonSerializer.Deserialize<WorkspaceState>(
-                json,
-                JsonOptions);
+            var state = JsonSerializer.Deserialize<WorkspaceState>(json, JsonOptions);
+            return state is null ? null : state with { OpenFiles = state.OpenFiles ?? [], OpenFolders = state.OpenFolders ?? [], SelectedRows = state.SelectedRows ?? [], Drafts = state.Drafts ?? [] };
         }
         catch
         {

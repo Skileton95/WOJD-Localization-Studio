@@ -22,6 +22,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="32"/>
             <RowDefinition Height="72"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -94,6 +95,9 @@
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
                     <Separator/>
+                    <MenuItem Header="Внешние изменения…" Click="ExternalChanges_Click"/>
+                    <MenuItem Header="Несовпавшие черновики…" Click="RecoveryConflicts_Click"/>
+                    <MenuItem Header="Журнал защиты…" Click="SafetyJournal_Click"/>
                     <MenuItem Header="История правок…" Click="EditHistory_Click"/>
                     <MenuItem Header="Статистика проекта…" Click="Statistics_Click"/>
                     <MenuItem Header="Заметки и вопросы…" Click="Notes_Click"/>
@@ -147,7 +151,10 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2">
+        <Border x:Name="ExternalPanel" Grid.Row="2" Background="#FFF3D6" Padding="12,6" Visibility="Collapsed">
+            <DockPanel><Button DockPanel.Dock="Right" Content="Сравнить и выбрать версию…" Click="ExternalChanges_Click"/><TextBlock x:Name="ExternalText" TextWrapping="Wrap"/></DockPanel>
+        </Border>
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="FilesColumn" Width="300"/>
                 <ColumnDefinition x:Name="FilesDividerColumn" Width="24"/>
@@ -714,7 +721,7 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Panel.ZIndex="50"
                 Background="#CCFFFFFF">
             <Border.Style>
@@ -741,7 +748,7 @@
         </Border>
 
         <Border x:Name="UpdatePanel"
-                Grid.Row="3"
+                Grid.Row="4"
                 Visibility="Collapsed"
                 Background="White"
                 BorderBrush="{StaticResource BorderBrushApp}"

@@ -5,6 +5,8 @@ public sealed record LoadIssue(int Line, string Message);
 public sealed class LocalizationDocument
 {
     public string FilePath { get; init; } = "";
+    public DateTime DiskLastWriteUtc { get; set; }
+    public long DiskLength { get; set; }
     public string? DiskHash { get; set; }
     public Encoding Encoding { get; set; } = new UTF8Encoding(false, true);
     public string NewLine { get; set; } = Environment.NewLine;

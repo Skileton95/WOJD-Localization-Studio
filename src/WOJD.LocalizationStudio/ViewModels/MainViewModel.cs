@@ -533,6 +533,7 @@ public sealed partial class MainViewModel : ObservableObject
         WindowLayout = state.Layout;
         _namespaceFavorites = (state.NamespaceFavorites ?? []).Select(x => (x.FilePath, x.Namespace)).ToHashSet();
         NamespacePanelExpanded = state.NamespacePanelExpanded;
+        _blockedRecovery.Clear(); _blockedRecovery.AddRange(state.BlockedRecovery ?? []);
         NotesOnly = state.NotesOnly;
         _consistencyExceptions = (state.ConsistencyExceptions ?? []).ToHashSet(StringComparer.Ordinal);
         SavedFilters = state.SavedFilters ?? []; SetSmartFilters(state.SmartFilters ?? new());
@@ -716,7 +717,7 @@ public sealed partial class MainViewModel : ObservableObject
                     OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
                     WindowLayout,
                     _namespaceFavorites.Select(x => new NamespaceBookmark(x.FilePath, x.Namespace)).ToList(),
-                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters, _consistencyExceptions.ToList(), NotesOnly);
+                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters, _consistencyExceptions.ToList(), NotesOnly, _blockedRecovery.ToList());
 
             WorkspaceStateService.Save(state);
         }
@@ -799,7 +800,11 @@ public sealed partial class MainViewModel : ObservableObject
                                     StringComparison.Ordinal));
 
                     if (entry is null || (draftEntry.Source is not null && entry.Original != draftEntry.Source))
+                    {
+                        _blockedRecovery.Add(new DraftFileState(fullPath, [draftEntry]));
+                        SaveTransactionService.Record("draft-blocked", fullPath, draftEntry.Namespace + ":" + draftEntry.Key);
                         continue;
+                    }
 
                     if (draftEntry.EditedNamespace is not null) entry.Namespace = draftEntry.EditedNamespace;
                     if (draftEntry.EditedKey is not null) entry.Key = draftEntry.EditedKey;
@@ -809,6 +814,7 @@ public sealed partial class MainViewModel : ObservableObject
                         draftEntry.Translation;
 
                     _restoredDraftEntries++;
+                    SaveTransactionService.Record("draft-recovered", fullPath, draftEntry.Namespace + ":" + draftEntry.Key);
                 }
             }
 

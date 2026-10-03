@@ -66,6 +66,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         }
 
         document.DiskHash = FileSafetyService.Hash(path);
+        document.DiskLastWriteUtc = File.GetLastWriteTimeUtc(path); document.DiskLength = new FileInfo(path).Length;
         if (document.LoadIssues.Count > 0) IssueLogService.Record($"Открыт {path}; повреждённых строк: {document.LoadIssues.Count}");
         progress?.Report(new(100, document.Entries.Count, "Открытие"));
         return document;
@@ -96,8 +97,12 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
                 await writer.FlushAsync(cancellationToken); stream.Flush(true);
             }
             cancellationToken.ThrowIfCancellationRequested(); FileSafetyService.CheckUnchanged(document);
-            File.Move(tempPath, document.FilePath, true);
+            var marker = SaveTransactionService.Prepare(document, tempPath);
+            FileSafetyService.CheckUnchanged(document);
+            SaveTransactionService.Commit(tempPath, document.FilePath);
+            SaveTransactionService.Complete(marker, document.FilePath);
             document.DiskHash = FileSafetyService.Hash(document.FilePath);
+            document.DiskLastWriteUtc = File.GetLastWriteTimeUtc(document.FilePath); document.DiskLength = new FileInfo(document.FilePath).Length;
             foreach (var (entry, line) in changes) entry.MarkSaved(line);
             progress?.Report(new(100, document.Entries.Count, "Сохранение"));
         }
