@@ -9,7 +9,7 @@ public sealed record ConsistencyGroup(string Text, List<EntryLocation> Locations
     public string VariantText => string.Join(" | ", Variants);
 }
 public sealed record ConsistencyReport(List<ConsistencyGroup> Conflicts, List<ConsistencyGroup> SharedTranslations,
-    List<ConsistencyGroup> FrequentTerms);
+    List<ConsistencyGroup> FrequentTerms, List<ConsistencyGroup> Duplicates);
 public static class ConsistencyService
 {
     public static ConsistencyReport Analyze(IEnumerable<LocalizationDocument> documents)
@@ -29,6 +29,8 @@ public static class ConsistencyService
             .Where(g => g.Count() > 1).Select(g => new ConsistencyGroup(g.Key, g.Select(x => x.Row).ToList(),
                 g.Select(x => x.Row.Entry.Translation).Distinct(StringComparer.Ordinal).ToList()))
             .OrderByDescending(g => g.Count).Take(500).ToList();
-        return new(conflicts, shared, terms);
+        var duplicates = sources.Where(g => g.Count() > 1).Select(g => new ConsistencyGroup(g.Key, g.ToList(),
+            g.Select(x => x.Entry.Translation).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).Order().ToList())).OrderByDescending(g => g.Count).ToList();
+        return new(conflicts, shared, terms, duplicates);
     }
 }

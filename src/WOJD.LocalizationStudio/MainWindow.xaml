@@ -100,6 +100,7 @@
                     <MenuItem Header="История сохранений…" Click="SaveHistory_Click"/>
                     <MenuItem Header="Синхронизация патча…" Click="PatchSync_Click"/>
                     <MenuItem Header="Замена по проекту…" Click="ProjectReplace_Click"/>
+                    <MenuItem Header="Повторяющиеся строки…" Click="Consistency_Click"/>
                     <MenuItem Header="Единообразие перевода…" Click="Consistency_Click"/>
                     <MenuItem Header="Сравнить со старой версией…"
                               Click="CompareFile_Click"/>

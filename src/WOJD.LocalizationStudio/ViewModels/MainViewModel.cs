@@ -485,6 +485,7 @@ public sealed partial class MainViewModel : ObservableObject
         SearchText = string.Empty;
         EntriesView.Refresh();
 
+        ResetAllFilters();
         SelectedEntry = result.Entry;
         EntriesView.MoveCurrentTo(result.Entry);
     }
@@ -527,6 +528,7 @@ public sealed partial class MainViewModel : ObservableObject
         WindowLayout = state.Layout;
         _namespaceFavorites = (state.NamespaceFavorites ?? []).Select(x => (x.FilePath, x.Namespace)).ToHashSet();
         NamespacePanelExpanded = state.NamespacePanelExpanded;
+        _consistencyExceptions = (state.ConsistencyExceptions ?? []).ToHashSet(StringComparer.Ordinal);
         SavedFilters = state.SavedFilters ?? []; SetSmartFilters(state.SmartFilters ?? new());
 
         _workspaceRestoreInProgress = true;
@@ -708,7 +710,7 @@ public sealed partial class MainViewModel : ObservableObject
                     OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
                     WindowLayout,
                     _namespaceFavorites.Select(x => new NamespaceBookmark(x.FilePath, x.Namespace)).ToList(),
-                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters);
+                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters, _consistencyExceptions.ToList());
 
             WorkspaceStateService.Save(state);
         }
