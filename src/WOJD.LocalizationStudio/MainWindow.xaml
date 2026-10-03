@@ -91,6 +91,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Очередь проверки…" Click="ReviewQueue_Click"/>
                     <MenuItem Header="WOJD QA…" Click="WojdQa_Click"/>
                     <MenuItem Header="Терминология QA…" Click="TerminologyQa_Click"/>
                     <MenuItem Header="Глоссарий…" Click="Glossary_Click"/>

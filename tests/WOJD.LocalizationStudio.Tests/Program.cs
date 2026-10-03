@@ -196,6 +196,11 @@ internal static class Program
         Check(WojdQaService.Analyze([qaDoc], new()).Count(x => x.Severity == "Ошибка") >= 2, "Unreal generic closing tags and placeholders QA");
         qaDoc.Entries[0].Translation = "<Em>{Name}</>";
         Check(WojdQaService.Analyze([qaDoc], new()).All(x => x.Severity != "Ошибка"), "Valid rich text preserves generic closing tag");
+        var reviewRows = ReviewQueueService.Build([migrationTarget], [], [], new(), [], []);
+        var accepted = ReviewQueueService.Decide(reviewRows.Single(), "Проверено", "", "tester");
+        Check(ReviewQueueService.Build([migrationTarget], [], [], new(), [accepted], []).Single().Status == "Проверено", "Review decision persists");
+        migrationTarget.Entries[0].Translation = "Изменено";
+        Check(ReviewQueueService.Build([migrationTarget], [], [], new(), [accepted], []).Single().Status == "Ожидает", "Review invalidation after editing");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

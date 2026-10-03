@@ -2,6 +2,7 @@ using WOJD.LocalizationStudio.Services;
 namespace WOJD.LocalizationStudio.ViewModels;
 public sealed partial class MainViewModel
 {
+    public IReadOnlyCollection<string> IntentionalConsistency => _consistencyExceptions;
     private bool _consistencyDirty = true;
     private HashSet<WOJD.LocalizationStudio.Models.LocalizationDocument> _consistencyDocuments = [];
     private HashSet<string> _consistencyExceptions = new(StringComparer.Ordinal);
