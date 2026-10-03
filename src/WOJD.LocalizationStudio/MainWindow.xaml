@@ -90,6 +90,9 @@
                               InputGestureText="Shift+F6"/>
                 </MenuItem>
 
+                <MenuItem Header="Проект WOJD">
+                    <MenuItem Header="Создать или открыть проект…" Click="WojdProject_Click"/>
+                </MenuItem>
                 <MenuItem Header="Инструменты">
                     <MenuItem Header="Поиск по проекту…"
                               Click="ProjectSearch_Click"

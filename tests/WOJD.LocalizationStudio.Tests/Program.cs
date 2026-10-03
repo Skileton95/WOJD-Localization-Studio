@@ -156,6 +156,11 @@ internal static class Program
         _ = SaveTransactionService.Prepare(txDoc, txTemp);
         Check(SaveTransactionService.RecoverPending().Any(x => x.Operation == "save-recovered"), "Interrupted save recovery");
         Check((await adapter.LoadAsync(transactionFile)).Entries[0].Translation == "new", "Recovered save content");
+        var project = new WojdProject { ManifestPath = Path.Combine(folder, "test.wojd-project.json"), Sources = [new() { Path = "a.ndjson", Role = "CN" }, new() { Path = "b.ndjson", Role = "RU" }] };
+        WojdProjectService.Save(project); var loadedProject = WojdProjectService.Load(project.ManifestPath);
+        Check((await WojdProjectService.ReadAsync(loadedProject)).Rows.Count == 2, "WOJD project roles and unified rows");
+        var escaped = false; try { WojdProjectService.Resolve(project, "../escape.ndjson"); } catch (IOException) { escaped = true; }
+        Check(escaped, "Project paths must stay inside root");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
