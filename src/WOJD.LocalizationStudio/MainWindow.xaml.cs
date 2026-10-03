@@ -298,6 +298,19 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F7 &&
+            (Keyboard.Modifiers == ModifierKeys.None ||
+             Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            NavigateQaError(
+                Keyboard.Modifiers == ModifierKeys.Shift
+                    ? -1
+                    : 1);
+
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F &&
             Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -323,6 +336,47 @@ public partial class MainWindow : Window
             ShowGoToDialog();
             e.Handled = true;
         }
+    }
+
+    private void NavigateQaError(int direction)
+    {
+        if (_viewModel.FilterAllCommand.CanExecute(null))
+            _viewModel.FilterAllCommand.Execute(null);
+
+        _viewModel.SearchText = string.Empty;
+
+        var errors =
+            _viewModel.GetErrorEntries().ToList();
+
+        if (errors.Count == 0)
+        {
+            AppDialog.Show(
+                "QA-ошибок в текущем файле нет.",
+                "QA",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                this);
+
+            return;
+        }
+
+        var currentIndex =
+            _viewModel.SelectedEntry is null
+                ? -1
+                : errors.IndexOf(_viewModel.SelectedEntry);
+
+        var nextIndex =
+            direction > 0
+                ? (currentIndex + 1 + errors.Count) % errors.Count
+                : (currentIndex <= 0 ? errors.Count - 1 : currentIndex - 1);
+
+        var target = errors[nextIndex];
+        _viewModel.SelectedEntry = target;
+
+        EntriesGrid.UpdateLayout();
+        EntriesGrid.SelectedItem = target;
+        EntriesGrid.ScrollIntoView(target);
+        EntriesGrid.Focus();
     }
 
     private void ToggleFilesPanel_Click(object sender, RoutedEventArgs e)
