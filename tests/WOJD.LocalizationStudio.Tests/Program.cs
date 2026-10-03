@@ -185,6 +185,12 @@ internal static class Program
         var term = new GlossaryTerm { Chinese = "独特", Russian = "Уникальный", Namespace = "UI" };
         GlossaryService.Save(Path.Combine(folder, "glossary.json"), [term]);
         Check(GlossaryService.Hints(GlossaryService.Load(Path.Combine(folder, "glossary.json")), migrationTarget.Entries[0]).Contains("Уникальный"), "Glossary Unicode persistence and namespace hints");
+        migrationTarget.Entries[0].Translation = "Неуникальный";
+        Check(TerminologyQaService.Analyze([migrationTarget], [term], []).Count == 1, "Term QA respects word boundaries");
+        var termIssue = TerminologyQaService.Analyze([migrationTarget], [term], []).Single(); var termException = TerminologyQaService.Except(termIssue, "Контекст");
+        Check(TerminologyQaService.Analyze([migrationTarget], [term], [termException]).Count == 0, "Reasoned term exception");
+        migrationTarget.Entries[0].Translation = "Иное";
+        Check(TerminologyQaService.Analyze([migrationTarget], [term], [termException]).Count == 1, "Translation change invalidates term exception");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
