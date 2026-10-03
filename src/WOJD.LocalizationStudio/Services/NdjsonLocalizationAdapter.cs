@@ -122,6 +122,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
             }
         }
 
+        document.DiskHash = FileSafetyService.Hash(path);
         return document;
     }
 
@@ -129,6 +130,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         LocalizationDocument document,
         CancellationToken cancellationToken = default)
     {
+        FileSafetyService.CheckUnchanged(document);
         var tempPath = document.FilePath + ".tmp";
 
         await using var stream = new FileStream(
@@ -191,11 +193,13 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         await writer.DisposeAsync();
         await stream.DisposeAsync();
 
+        FileSafetyService.CheckUnchanged(document);
         File.Move(
             tempPath,
             document.FilePath,
             overwrite: true);
 
+        document.DiskHash = FileSafetyService.Hash(document.FilePath);
         foreach (var (entry, rawLine) in changedEntries)
             entry.MarkSaved(rawLine);
     }

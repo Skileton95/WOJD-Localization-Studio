@@ -439,6 +439,8 @@ public partial class MainWindow : Window
 
     private void PatchSync_Click(object sender, RoutedEventArgs e) => new PatchSyncWindow(_viewModel) { Owner = this }.ShowDialog();
 
+    private void SaveHistory_Click(object sender, RoutedEventArgs e) => new SaveHistoryWindow(_viewModel) { Owner = this }.ShowDialog();
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

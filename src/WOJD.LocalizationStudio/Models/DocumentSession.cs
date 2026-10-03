@@ -2,7 +2,7 @@ namespace WOJD.LocalizationStudio.Models;
 
 internal sealed class DocumentSession
 {
-    public required LocalizationDocument Document { get; init; }
+    public required LocalizationDocument Document { get; set; }
     public required FileNode Node { get; init; }
 
     public Dictionary<LocalizationEntry, TranslationStatus> KnownStatuses { get; } = new();

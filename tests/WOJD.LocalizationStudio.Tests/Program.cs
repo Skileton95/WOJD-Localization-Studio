@@ -83,6 +83,13 @@ internal static class Program
         Check(PatchSyncService.Preview(new[] { newPatch }, new[] { vm.ActiveDocument! }).Single().Kind == "Оригинал изменён", "Changed source blocks transfer");
         newPatch.Entries.Add(new LocalizationEntry { Namespace = first.Namespace, Key = first.Key, Original = first.Original });
         Check(PatchSyncService.Preview(new[] { newPatch }, new[] { vm.ActiveDocument! }).All(x => !x.CanTransfer), "Collisions must block automatic migration");
+        BackupService.CreateBackup(a); BackupService.CreateBackup(a);
+        Check(BackupService.List(a).Count == 2, "Backups in the same second must be distinct");
+        BackupService.Prune(a, 1); Check(BackupService.List(a).Count == 1, "Backup retention");
+        var stale = await adapter.LoadAsync(a); stale.Entries[0].Translation = "Локально";
+        await File.AppendAllTextAsync(a, "\n");
+        var rejected = false; try { await adapter.SaveAsync(stale); } catch (IOException) { rejected = true; }
+        Check(rejected && (await adapter.LoadAsync(a)).Entries[0].Translation == "Здравствуйте {0}", "External edits must block overwrite");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;

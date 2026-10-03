@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>WOJD-Localization-Studio</AssemblyName>
     <RootNamespace>WOJD.LocalizationStudio</RootNamespace>
-    <Version>0.1.28</Version>
-    <FileVersion>0.1.28.0</FileVersion>
-    <InformationalVersion>0.1.28</InformationalVersion>
+    <Version>0.1.29</Version>
+    <FileVersion>0.1.29.0</FileVersion>
+    <InformationalVersion>0.1.29</InformationalVersion>
   </PropertyGroup>
 </Project>

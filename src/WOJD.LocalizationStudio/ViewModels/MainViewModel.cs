@@ -1221,12 +1221,14 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task SaveSessionAsync(
         DocumentSession session)
     {
+        FileSafetyService.CheckUnchanged(session.Document);
         BackupService.CreateBackup(
             session.Document.FilePath);
 
         await _adapter.SaveAsync(
             session.Document);
 
+        BackupService.Prune(session.Document.FilePath);
         RebuildStatusCache(
             session);
 
