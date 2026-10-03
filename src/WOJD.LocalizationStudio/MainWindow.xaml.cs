@@ -306,50 +306,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        try { var settings = AppSettingsService.Load(); settings.Columns = ColumnsWindow.Capture(EntriesGrid); AppSettingsService.Save(settings); } catch (Exception ex) { IssueLogService.Record(ex.Message); }
         _viewModel.PersistWorkspaceState(includeDrafts: false);
     }
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_viewModel.IsBusy) { if (e.Key == Key.Escape) _viewModel.CancelOperation(); e.Handled = true; return; }
-        if (e.Key == Key.Tab && (Keyboard.Modifiers == ModifierKeys.Control ||
-            Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)))
-        {
-            _viewModel.CycleTab(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            _ = _viewModel.CloseCurrentFileAsync();
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.F &&
-            Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            SearchBox.Focus();
-            Keyboard.Focus(SearchBox);
-            SearchBox.SelectAll();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.F &&
-            Keyboard.Modifiers ==
-                (ModifierKeys.Control | ModifierKeys.Shift))
-        {
-            ShowProjectSearchWindow();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.G &&
-            Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            ShowGoToDialog();
-            e.Handled = true;
-        }
+        foreach (var binding in InputBindings.OfType<KeyBinding>())
+            if (binding.Gesture.Matches(this, e) && binding.Command.CanExecute(null))
+            { binding.Command.Execute(null); e.Handled = true; return; }
     }
 
     private void ToggleFilesPanel_Click(object sender, RoutedEventArgs e)
@@ -472,9 +438,12 @@ public partial class MainWindow : Window
             ["Undo"] = _viewModel.UndoCommand, ["Redo"] = _viewModel.RedoCommand, ["ToggleReplace"] = _viewModel.ToggleReplaceCommand,
             ["NextUntranslated"] = _viewModel.NextUntranslatedCommand, ["PreviousUntranslated"] = _viewModel.PreviousUntranslatedCommand, ["Apply"] = _viewModel.ApplyCommand
         };
+        AddWindowShortcuts(commands);
+        ColumnsWindow.Restore(EntriesGrid, _viewModel.Settings.Columns);
         InputBindings.Clear();
         foreach (var item in _viewModel.Settings.Shortcuts.Where(x => x.Gesture.Length > 0))
             InputBindings.Add(new KeyBinding(commands[item.Action], (KeyGesture)new KeyGestureConverter().ConvertFromString(item.Gesture)!));
+        UpdateMenuGestures(MainMenu);
     }
     private void LoadIssues_Click(object sender, RoutedEventArgs e) =>
         new ReportWindow("Повреждённые строки — сохранены без изменений", _viewModel.ActiveDocument?.LoadIssues ?? [], ("Строка файла", "Line"), ("Проблема", "Message")) { Owner = this }.ShowDialog();

@@ -31,7 +31,7 @@
                 Background="#FAFBFD"
                 BorderBrush="{StaticResource BorderBrushApp}"
                 BorderThickness="0,0,0,1">
-            <Menu IsEnabled="{Binding IsNotBusy}" Background="Transparent"
+            <Menu x:Name="MainMenu" IsEnabled="{Binding IsNotBusy}" Background="Transparent"
                   HorizontalAlignment="Left"
                   VerticalAlignment="Stretch"
                   Margin="10,0,0,0">
@@ -103,6 +103,7 @@
                     <MenuItem Header="Заметки и вопросы…" Click="Notes_Click"/>
                     <MenuItem Header="Умные фильтры…" Click="SmartFilters_Click"/>
                     <MenuItem Header="Сбросить все фильтры" Click="ResetFilters_Click"/>
+                    <MenuItem Header="Столбцы таблицы…" Click="Columns_Click"/>
                     <MenuItem Header="Настройки…" Click="Settings_Click"/>
                     <MenuItem Header="Проблемы загрузки…" Click="LoadIssues_Click"/>
                     <MenuItem Header="История сохранений…" Click="SaveHistory_Click"/>
@@ -115,6 +116,7 @@
                 </MenuItem>
 
                 <MenuItem Header="Справка">
+                    <MenuItem Header="О программе…" Click="About_Click"/>
                     <MenuItem Header="Проверить обновления"
                               Click="CheckUpdates_Click"/>
                 </MenuItem>

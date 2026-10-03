@@ -29,7 +29,7 @@ public sealed class SettingsWindow : WorkflowWindow
         }));
         actions.Children.Add(ActionButton("Сбросить настройки", (_, _) => { AppSettingsService.Save(new()); DialogResult = true; }));
         AddToolbar(actions); Body.Children.Add(grid);
-        Status.Text = "Пустая комбинация отключает команду. Пример: Ctrl+Shift+S. Ctrl+Tab, Ctrl+W и команды поиска пока сохраняют фиксированные комбинации.";
+        Status.Text = "Пустая комбинация отключает команду. Пример: Ctrl+Shift+S. Поиск, вкладки и закрытие также настраиваются здесь.";
     }
 }
 public sealed class ReportWindow : WorkflowWindow

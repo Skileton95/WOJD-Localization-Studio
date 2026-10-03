@@ -6,13 +6,15 @@ public sealed class ShortcutSetting
     public string Action { get; set; } = "";
     public string Gesture { get; set; } = "";
 }
+public sealed record ColumnSetting(string Header, double Width, System.Windows.Controls.DataGridLengthUnitType Unit, int Order, bool Visible);
 public sealed class EditorSettings
 {
+    public List<ColumnSetting> Columns { get; set; } = [];
     public double FontSize { get; set; } = 14;
     public int SearchDebounceMs { get; set; } = 220;
     public int BackupLimit { get; set; } = 50;
     public List<ShortcutSetting> Shortcuts { get; set; } = Defaults();
-    public static List<ShortcutSetting> Defaults() => new[] { ("OpenFile", "Ctrl+O"), ("OpenFolder", "Ctrl+Shift+O"), ("Save", "Ctrl+S"), ("SaveAll", "Ctrl+Shift+S"), ("Undo", "Ctrl+Z"), ("Redo", "Ctrl+Y"), ("ToggleReplace", "Ctrl+H"), ("NextUntranslated", "F6"), ("PreviousUntranslated", "Shift+F6"), ("Apply", "Ctrl+Enter") }
+    public static List<ShortcutSetting> Defaults() => new[] { ("OpenFile", "Ctrl+O"), ("OpenFolder", "Ctrl+Shift+O"), ("Save", "Ctrl+S"), ("SaveAll", "Ctrl+Shift+S"), ("Undo", "Ctrl+Z"), ("Redo", "Ctrl+Y"), ("ToggleReplace", "Ctrl+H"), ("NextUntranslated", "F6"), ("PreviousUntranslated", "Shift+F6"), ("Apply", "Ctrl+Enter"), ("Search", "Ctrl+F"), ("ProjectSearch", "Ctrl+Shift+F"), ("GoTo", "Ctrl+G"), ("NextTab", "Ctrl+Tab"), ("PreviousTab", "Ctrl+Shift+Tab"), ("CloseTab", "Ctrl+W") }
         .Select(x => new ShortcutSetting { Action = x.Item1, Gesture = x.Item2 }).ToList();
 }
 public static class AppSettingsService
@@ -35,7 +37,8 @@ public static class AppSettingsService
         var gestures = value.Shortcuts.Where(x => x.Gesture.Length > 0)
             .Select(x => (System.Windows.Input.KeyGesture)new System.Windows.Input.KeyGestureConverter().ConvertFromString(x.Gesture)!).ToList();
         if (gestures.Select(x => (x.Key, x.Modifiers)).Distinct().Count() != gestures.Count) throw new ArgumentException("Горячие клавиши повторяются.");
-        return value;
+        foreach (var item in EditorSettings.Defaults().Where(d => !value.Shortcuts.Any(s => s.Action == d.Action))) value.Shortcuts.Add(item);
+        value.Columns ??= []; return value;
     }
     public static void Save(EditorSettings value)
     {
