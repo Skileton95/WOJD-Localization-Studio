@@ -74,6 +74,8 @@ internal static class Program
         Check(consistency.Conflicts.Count == 1 && consistency.Conflicts[0].Count == 2, "Conflicting translations across files");
         other.Translation = first.Translation;
         Check(ConsistencyService.Analyze(new[] { vm.ActiveDocument!, duplicate }).Conflicts.Count == 0, "Resolved consistency");
+        Check(vm.NamespaceTree.Count == 2, "Namespace tree must include both files");
+        vm.ToggleNamespaceFavorite(vm.Namespaces[0]); Check(vm.Namespaces[0].Favorite, "Namespace favorites");
         var replacementRows = ProjectReplaceService.Preview(vm.OpenDocuments, EntryField.Namespace, "UI", "HUD", false, true, true);
         Check(replacementRows.Count == 2, "Project namespace preview");
         vm.ApplyBatch(replacementRows.Select(x => (x.Entry, x.Field, x.Before, x.After)));

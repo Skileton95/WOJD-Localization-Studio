@@ -423,15 +423,20 @@ public partial class MainWindow : Window
         ApplyFilesLayout();
     }
 
-    private void NamespaceSelect_Click(object sender, RoutedEventArgs e)
+    private async void NamespaceSelect_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: NamespaceSummary summary }) _viewModel.SelectNamespace(summary.Name);
+        if (sender is not FrameworkElement { DataContext: NamespaceSummary summary }) return;
+        if (summary.FilePath.Length > 0) await _viewModel.LoadPathAsync(summary.FilePath);
+        _viewModel.SelectNamespace(summary.Name);
     }
+    private void NamespaceFavorite_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { DataContext: NamespaceSummary row }) _viewModel.ToggleNamespaceFavorite(row); }
+    private void PreviousNamespace_Click(object sender, RoutedEventArgs e) => _viewModel.MoveNamespace(-1);
+    private void NextNamespace_Click(object sender, RoutedEventArgs e) => _viewModel.MoveNamespace(1);
     private void NamespaceReset_Click(object sender, RoutedEventArgs e) => _viewModel.ClearNamespaceFilterCommand.Execute(null);
     private async void NamespaceExport_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: NamespaceSummary summary })
-            await _viewModel.ExportEntriesAsync(_viewModel.Entries.Where(x => x.Namespace == summary.Name).ToList(), "namespace");
+            await _viewModel.ExportEntriesAsync((_viewModel.OpenDocuments.FirstOrDefault(x => x.FilePath == summary.FilePath) ?? _viewModel.ActiveDocument)?.Entries.Where(x => x.Namespace == summary.Name).ToList() ?? [], "namespace");
     }
 
     private void Consistency_Click(object sender, RoutedEventArgs e) => new ConsistencyWindow(_viewModel) { Owner = this }.ShowDialog();

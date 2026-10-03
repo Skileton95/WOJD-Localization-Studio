@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Services;
 
@@ -11,7 +12,10 @@ public sealed record WorkspaceState(
     List<DraftFileState> Drafts,
     List<string>? SearchHistory = null,
     List<string>? PinnedFiles = null,
-    WindowLayoutState? Layout = null);
+    WindowLayoutState? Layout = null,
+    List<NamespaceBookmark>? NamespaceFavorites = null,
+    List<string>? ExpandedNamespaceFiles = null,
+    bool NamespacePanelExpanded = true);
 
 public sealed record WindowLayoutState(double Left, double Top, double Width, double Height,
     bool Maximized, double FilesWidth = 300, bool FilesVisible = true);

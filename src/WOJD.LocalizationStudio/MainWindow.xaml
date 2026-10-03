@@ -149,23 +149,33 @@
 
             <Border x:Name="FilesPanel" Grid.Column="0" Background="White" Padding="14,16">
                 <DockPanel>
-                    <Expander DockPanel.Dock="Bottom" Header="Namespace" IsExpanded="True" Margin="0,12,0,0">
+                    <Expander DockPanel.Dock="Bottom" Header="Namespace" IsExpanded="{Binding NamespacePanelExpanded, Mode=TwoWay}" Margin="0,12,0,0">
                         <StackPanel>
                             <TextBox Text="{Binding NamespaceSearch, UpdateSourceTrigger=PropertyChanged}" Padding="6" ToolTip="Поиск Namespace"/>
                             <TextBlock Text="Всего / Переведено / Без перевода / QA" FontSize="11" Foreground="#111111" Margin="0,6"/>
-                            <ListBox ItemsSource="{Binding Namespaces}" MaxHeight="250" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                <ListBox.ItemTemplate><DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="‹" Click="PreviousNamespace_Click" ToolTip="Предыдущий Namespace"/>
+                                <Button Content="›" Click="NextNamespace_Click" ToolTip="Следующий Namespace" Margin="6,0"/>
+                            </StackPanel>
+                            <TreeView ItemsSource="{Binding NamespaceTree}" MaxHeight="280" BorderThickness="0">
+                                <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
+                                <TreeView.Resources>
+                                    <HierarchicalDataTemplate DataType="{x:Type models:NamespaceFileGroup}" ItemsSource="{Binding Children}"><TextBlock Text="{Binding Label}" Foreground="#111111"/></HierarchicalDataTemplate>
+                                    <DataTemplate DataType="{x:Type models:NamespaceSummary}">
                                     <StackPanel ToolTip="{Binding Name}">
                                         <StackPanel.ContextMenu><ContextMenu>
                                             <MenuItem Header="Показать только этот Namespace" Click="NamespaceSelect_Click"/>
                                             <MenuItem Header="Сбросить фильтр" Click="NamespaceReset_Click"/>
                                             <MenuItem Header="Экспортировать…" Click="NamespaceExport_Click"/>
                                         </ContextMenu></StackPanel.ContextMenu>
-                                        <Button Content="{Binding DisplayName}" Click="NamespaceSelect_Click" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AccentBrush}" Padding="0,3"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="{Binding Star}" Click="NamespaceFavorite_Click" Background="Transparent" BorderThickness="0" Padding="0,3" ToolTip="Избранный Namespace"/>
+                                            <Button Content="{Binding DisplayName}" Click="NamespaceSelect_Click" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AccentBrush}" Padding="0,3"/>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Counts}" FontSize="11" Foreground="#111111"/>
                                     </StackPanel>
-                                </DataTemplate></ListBox.ItemTemplate>
-                            </ListBox>
+                                </DataTemplate></TreeView.Resources>
+                            </TreeView>
                         </StackPanel>
                     </Expander>
                     <TextBlock DockPanel.Dock="Top" Text="Файлы" FontSize="18" FontWeight="SemiBold" Margin="4,0,0,14"/>

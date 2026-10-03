@@ -525,6 +525,8 @@ public sealed partial class MainViewModel : ObservableObject
             return;
 
         WindowLayout = state.Layout;
+        _namespaceFavorites = (state.NamespaceFavorites ?? []).Select(x => (x.FilePath, x.Namespace)).ToHashSet();
+        NamespacePanelExpanded = state.NamespacePanelExpanded;
 
         _workspaceRestoreInProgress = true;
         _restoredDraftEntries = 0;
@@ -586,6 +588,9 @@ public sealed partial class MainViewModel : ObservableObject
 
             foreach (var node in OpenTabs)
                 node.IsPinned = state.PinnedFiles?.Contains(node.FullPath, StringComparer.OrdinalIgnoreCase) == true;
+
+            if (state.ExpandedNamespaceFiles is not null)
+                foreach (var group in NamespaceTree) group.IsExpanded = state.ExpandedNamespaceFiles.Contains(group.FilePath, StringComparer.OrdinalIgnoreCase);
 
             foreach (var pair in state.SelectedRows)
             {
@@ -700,7 +705,9 @@ public sealed partial class MainViewModel : ObservableObject
                     drafts,
                     _projectSearchHistory.ToList(),
                     OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
-                    WindowLayout);
+                    WindowLayout,
+                    _namespaceFavorites.Select(x => new NamespaceBookmark(x.FilePath, x.Namespace)).ToList(),
+                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded);
 
             WorkspaceStateService.Save(state);
         }
