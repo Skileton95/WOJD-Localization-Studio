@@ -76,6 +76,10 @@ internal static class Program
         Check(ConsistencyService.Analyze(new[] { vm.ActiveDocument!, duplicate }).Conflicts.Count == 0, "Resolved consistency");
         Check(vm.NamespaceTree.Count == 2, "Namespace tree must include both files");
         vm.ToggleNamespaceFavorite(vm.Namespaces[0]); Check(vm.Namespaces[0].Favorite, "Namespace favorites");
+        var smartRow = new LocalizationEntry { Original = "中文 {0}", Translation = "" };
+        Check(new SmartFilter(Untranslated: true, Chinese: true, Placeholders: true).Matches(smartRow), "Combined smart filters");
+        Check(!new SmartFilter(Untranslated: true, Latin: true).Matches(smartRow), "Conditions must combine with AND");
+        vm.SaveFilter("test", new SmartFilter(Chinese: true)); Check(vm.SavedFilters.Count == 1, "Saved filter");
         var replacementRows = ProjectReplaceService.Preview(vm.OpenDocuments, EntryField.Namespace, "UI", "HUD", false, true, true);
         Check(replacementRows.Count == 2, "Project namespace preview");
         vm.ApplyBatch(replacementRows.Select(x => (x.Entry, x.Field, x.Before, x.After)));

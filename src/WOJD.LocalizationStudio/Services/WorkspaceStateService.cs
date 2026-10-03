@@ -15,7 +15,9 @@ public sealed record WorkspaceState(
     WindowLayoutState? Layout = null,
     List<NamespaceBookmark>? NamespaceFavorites = null,
     List<string>? ExpandedNamespaceFiles = null,
-    bool NamespacePanelExpanded = true);
+    bool NamespacePanelExpanded = true,
+    List<SavedFilter>? SavedFilters = null,
+    SmartFilter? SmartFilters = null);
 
 public sealed record WindowLayoutState(double Left, double Top, double Width, double Height,
     bool Maximized, double FilesWidth = 300, bool FilesVisible = true);

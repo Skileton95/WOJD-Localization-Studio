@@ -527,6 +527,7 @@ public sealed partial class MainViewModel : ObservableObject
         WindowLayout = state.Layout;
         _namespaceFavorites = (state.NamespaceFavorites ?? []).Select(x => (x.FilePath, x.Namespace)).ToHashSet();
         NamespacePanelExpanded = state.NamespacePanelExpanded;
+        SavedFilters = state.SavedFilters ?? []; SetSmartFilters(state.SmartFilters ?? new());
 
         _workspaceRestoreInProgress = true;
         _restoredDraftEntries = 0;
@@ -707,7 +708,7 @@ public sealed partial class MainViewModel : ObservableObject
                     OpenTabs.Where(x => x.IsPinned).Select(x => x.FullPath).ToList(),
                     WindowLayout,
                     _namespaceFavorites.Select(x => new NamespaceBookmark(x.FilePath, x.Namespace)).ToList(),
-                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded);
+                    NamespaceTree.Where(x => x.IsExpanded).Select(x => x.FilePath).ToList(), NamespacePanelExpanded, SavedFilters.ToList(), SmartFilters);
 
             WorkspaceStateService.Save(state);
         }
@@ -1582,6 +1583,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (obj is not LocalizationEntry entry)
             return false;
+
+        if (!SmartFilters.Matches(entry)) return false;
 
         if (StatusFilter == "Несогласованные")
         {

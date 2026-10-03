@@ -469,6 +469,10 @@ public partial class MainWindow : Window
     private void LoadIssues_Click(object sender, RoutedEventArgs e) =>
         new ReportWindow("Повреждённые строки — сохранены без изменений", _viewModel.ActiveDocument?.LoadIssues ?? [], ("Строка файла", "Line"), ("Проблема", "Message")) { Owner = this }.ShowDialog();
 
+    private void SmartFilters_Click(object sender, RoutedEventArgs e) => new SmartFiltersWindow(_viewModel) { Owner = this }.ShowDialog();
+    private void ResetFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ResetAllFilters();
+    private void RemoveFilter_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { DataContext: FilterChip chip }) _viewModel.SetSmartFilters(_viewModel.SmartFilters.Remove(chip.Id)); }
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

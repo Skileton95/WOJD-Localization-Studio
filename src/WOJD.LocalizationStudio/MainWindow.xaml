@@ -93,6 +93,8 @@
                               Click="ProjectSearch_Click"
                               InputGestureText="Ctrl+Shift+F"/>
                     <Separator/>
+                    <MenuItem Header="Умные фильтры…" Click="SmartFilters_Click"/>
+                    <MenuItem Header="Сбросить все фильтры" Click="ResetFilters_Click"/>
                     <MenuItem Header="Настройки…" Click="Settings_Click"/>
                     <MenuItem Header="Проблемы загрузки…" Click="LoadIssues_Click"/>
                     <MenuItem Header="История сохранений…" Click="SaveHistory_Click"/>
@@ -513,6 +515,14 @@
                             </Button>
                         </StackPanel>
                     </Border>
+                    <ItemsControl ItemsSource="{Binding ActiveFilterChips}" Margin="6,0">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="5" Padding="6" Margin="3,0">
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Label}"/><Button Content="×" Foreground="#D94C4C" Click="RemoveFilter_Click" Background="Transparent" BorderThickness="0" Padding="4,0"/></StackPanel>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
 
                 <Border Grid.Row="4" Background="White" BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
