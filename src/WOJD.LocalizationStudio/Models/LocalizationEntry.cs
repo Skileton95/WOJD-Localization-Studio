@@ -16,7 +16,7 @@ public sealed class LocalizationEntry : ObservableObject
     private string _savedNamespace = "", _savedKey = "", _savedOriginal = "";
     public string Namespace { get => _namespace; set { if (SetProperty(ref _namespace, value)) NotifyIdentity(); } }
     public string Key { get => _key; set { if (SetProperty(ref _key, value)) NotifyIdentity(); } }
-    public string Original { get => _original; set { if (SetProperty(ref _original, value)) { NotifyIdentity(); OnPropertyChanged(nameof(OriginalDisplay)); RefreshValidation(); } } }
+    public string Original { get => _original; set { if (SetProperty(ref _original, value)) { NotifyIdentity(); OnPropertyChanged(nameof(OriginalDisplay)); OnPropertyChanged(nameof(LengthHint)); RefreshValidation(); } } }
     public string SavedNamespace => _savedNamespace;
     public string SavedKey => _savedKey;
     public string SavedOriginal => _savedOriginal;
@@ -50,6 +50,7 @@ public sealed class LocalizationEntry : ObservableObject
                 OnPropertyChanged(nameof(Status));
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(CharacterCount));
+                OnPropertyChanged(nameof(LengthHint));
                 RefreshValidation();
             }
         }
@@ -70,6 +71,7 @@ public sealed class LocalizationEntry : ObservableObject
     };
 
     public int CharacterCount => Translation.Length;
+    public string LengthHint => Translation.Length > Math.Max(100, Original.Length * 2.5) ? $"Длинный перевод: {Translation.Length} символов" : "";
 
     public int ValidationIssueCount => _validationIssueCount;
     public bool HasValidationIssues => _validationIssueCount > 0;

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>WOJD-Localization-Studio.Updater</AssemblyName>
     <RootNamespace>WOJD.LocalizationStudio.Updater</RootNamespace>
-    <Version>0.1.33</Version>
+    <Version>0.1.34</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

@@ -33,6 +33,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private DocumentSession? _activeSession;
     private LocalizationEntry? _selectedEntry;
+    private int _lastSelectedIndex;
     private string _searchText = string.Empty;
     private string _replaceText = string.Empty;
     private bool _isReplacePanelVisible;
@@ -254,6 +255,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (!SetProperty(ref _selectedEntry, value))
                 return;
 
+            if (value is not null) _lastSelectedIndex = value.Index;
             if (_activeSession is not null)
                 _activeSession.SelectedEntry = value;
 
@@ -1550,13 +1552,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void ApplyCurrent()
     {
-        if (StatusFilter != "Все" ||
-            !string.IsNullOrWhiteSpace(SearchText))
-        {
-            EntriesView.Refresh();
-        }
-
-        MoveSelection(1);
+        var index = SelectedEntry?.Index ?? _lastSelectedIndex;
+        EntriesView.Refresh();
+        SelectedEntry = EntriesView.Cast<LocalizationEntry>().FirstOrDefault(x => x.Index > index)
+            ?? EntriesView.Cast<LocalizationEntry>().LastOrDefault();
     }
 
     private void MoveSelection(

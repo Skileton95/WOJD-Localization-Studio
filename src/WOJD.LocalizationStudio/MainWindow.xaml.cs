@@ -473,6 +473,12 @@ public partial class MainWindow : Window
     private void ResetFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ResetAllFilters();
     private void RemoveFilter_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { DataContext: FilterChip chip }) _viewModel.SetSmartFilters(_viewModel.SmartFilters.Remove(chip.Id)); }
 
+    private void ExpandedEditor_Click(object sender, RoutedEventArgs e) => new ExpandedEditorWindow(_viewModel) { Owner = this }.ShowDialog();
+    private void WrapTranslation_Click(object sender, RoutedEventArgs e)
+    {
+        if (TranslationBox is not null && sender is CheckBox check) TranslationBox.TextWrapping = check.IsChecked == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
+    }
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

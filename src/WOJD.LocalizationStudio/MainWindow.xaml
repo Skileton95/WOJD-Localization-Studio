@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:WOJD.LocalizationStudio.Models"
+        xmlns:controls="clr-namespace:WOJD.LocalizationStudio.Controls"
         Title="WOJD Localization Studio" Width="1540" Height="980" MinWidth="1100" MinHeight="720"
         WindowStartupLocation="CenterScreen">
     <Window.InputBindings>
@@ -679,9 +680,14 @@
 
                         <Border Grid.Column="1" Grid.RowSpan="3" Background="{StaticResource BorderBrushApp}"/>
 
-                        <TextBlock Grid.Column="2" Text="Перевод" FontWeight="SemiBold" FontSize="16" Margin="16,0,0,0"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                            <TextBlock Text="Перевод" FontWeight="SemiBold" FontSize="16"/>
+                            <CheckBox Content="Переносы" IsChecked="True" Checked="WrapTranslation_Click" Unchecked="WrapTranslation_Click" Margin="14,0,8,0"/>
+                            <Button Content="Развернуть…" Click="ExpandedEditor_Click" Background="Transparent" BorderThickness="0" Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text="{Binding SelectedEntry.LengthHint}" Foreground="#B76A00" Margin="10,0" FontSize="12"/>
+                        </StackPanel>
                         <Border Grid.Column="2" Grid.Row="1" Margin="16,10,0,0" Background="White" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="7" Padding="14">
-                            <TextBox x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+                            <controls:TokenTextBox Source="{Binding SelectedEntry.Original}" x:Name="TranslationBox" Text="{Binding SelectedEntry.Translation, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
                         </Border>
                         <Grid Grid.Column="2" Grid.Row="2" Margin="16,8,0,0">
                             <Grid.ColumnDefinitions>

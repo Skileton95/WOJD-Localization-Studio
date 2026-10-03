@@ -128,6 +128,7 @@ internal static class Program
         Check(canceled, "Loading is cancelable");
         AppSettingsService.Save(new EditorSettings { FontSize = 16, BackupLimit = 3 });
         Check(AppSettingsService.Load().BackupLimit == 3, "Settings persistence"); AppSettingsService.Save(new());
+        Check(TokenSyntaxService.Analyze("{0} %s <b>", "{0} %d <b>").Count(x => x.Mismatch) == 1, "Inline token differences");
         var app = new WOJD.LocalizationStudio.App(); app.InitializeComponent();
         var window = new WOJD.LocalizationStudio.MainWindow();
         window.DataContext = vm;
