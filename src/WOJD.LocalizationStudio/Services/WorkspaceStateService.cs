@@ -29,9 +29,8 @@ public sealed record DraftEntryState(
 public static class WorkspaceStateService
 {
     private static readonly string StateDirectory =
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "WOJD Localization Studio");
+        Environment.GetEnvironmentVariable("WOJD_WORKSPACE_DIRECTORY") ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WOJD Localization Studio");
 
     private static readonly string StatePath =
         Path.Combine(StateDirectory, "workspace.json");

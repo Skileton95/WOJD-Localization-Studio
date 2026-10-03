@@ -422,6 +422,17 @@ public partial class MainWindow : Window
         ApplyFilesLayout();
     }
 
+    private void NamespaceSelect_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: NamespaceSummary summary }) _viewModel.SelectNamespace(summary.Name);
+    }
+    private void NamespaceReset_Click(object sender, RoutedEventArgs e) => _viewModel.ClearNamespaceFilterCommand.Execute(null);
+    private async void NamespaceExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: NamespaceSummary summary })
+            await _viewModel.ExportEntriesAsync(_viewModel.Entries.Where(x => x.Namespace == summary.Name).ToList(), "namespace");
+    }
+
     private void SetUpdateProgress(UpdateProgressState state)
     {
         if (!Dispatcher.CheckAccess())

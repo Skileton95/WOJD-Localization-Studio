@@ -30,8 +30,10 @@ internal static class Program
         var b = Path.Combine(folder, "b.ndjson");
         await File.WriteAllTextAsync(a, "{\"namespace\":\"UI\",\"key\":\"a\",\"source\":\"你好 {0}\",\"translated\":\"Привет {0}\",\"unknown\":42}\n");
         await File.WriteAllTextAsync(b, "{\"namespace\":\"UI\",\"key\":\"b\",\"source\":\"再见\",\"translation\":\"До свидания\"}\n");
+        Environment.SetEnvironmentVariable("WOJD_WORKSPACE_DIRECTORY", folder);
         var vm = new MainViewModel();
         await vm.LoadPathAsync(a);
+        Check(vm.Namespaces.Single().Total == 1 && vm.Namespaces.Single().Translated == 1, "Namespace statistics");
         vm.SelectedEntry!.Translation = "Здравствуйте {0}";
         var first = vm.SelectedEntry;
         vm.TogglePin(vm.OpenTabs[0]);

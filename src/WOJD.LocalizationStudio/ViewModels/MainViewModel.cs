@@ -12,7 +12,7 @@ using WOJD.LocalizationStudio.Services;
 
 namespace WOJD.LocalizationStudio.ViewModels;
 
-public sealed class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ILocalizationFileAdapter _adapter =
         new NdjsonLocalizationAdapter();
@@ -59,6 +59,7 @@ public sealed class MainViewModel : ObservableObject
         {
             _searchDebounceTimer.Stop();
             EntriesView.Refresh();
+            RefreshNamespaces();
         };
 
         _workspaceSaveTimer = new DispatcherTimer
@@ -141,7 +142,7 @@ public sealed class MainViewModel : ObservableObject
                 value =>
                 {
                     var ns = value as string;
-                    if (string.IsNullOrWhiteSpace(ns))
+                    if (ns is null)
                         return;
 
                     StatusFilter = "Все";
@@ -151,7 +152,7 @@ public sealed class MainViewModel : ObservableObject
         ClearNamespaceFilterCommand =
             new RelayCommand(
                 () => NamespaceFilter = null,
-                () => !string.IsNullOrWhiteSpace(NamespaceFilter));
+                () => NamespaceFilter is not null);
 
         UndoCommand =
             new RelayCommand(
@@ -891,6 +892,7 @@ public sealed class MainViewModel : ObservableObject
                 .Cast<LocalizationEntry>()
                 .FirstOrDefault();
 
+        RefreshNamespaces();
         RaiseStatsChanged();
         RaiseHistoryCommandStates();
         RaiseGlobalCommandStates();
@@ -1437,7 +1439,7 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (var entry in session.Document.Entries)
         {
-            if (!string.IsNullOrWhiteSpace(NamespaceFilter) &&
+            if (NamespaceFilter is not null &&
                 !string.Equals(
                     entry.Namespace,
                     NamespaceFilter,
@@ -1779,6 +1781,8 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
         RaiseGlobalCommandStates();
         ScheduleWorkspaceSave();
     }
