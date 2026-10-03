@@ -25,15 +25,21 @@ public sealed class FileComparisonItem
                OldEntry.Original,
                StringComparison.Ordinal);
 
+    public bool HasExistingCurrentTranslation
+        => CurrentEntry is not null &&
+           !string.IsNullOrWhiteSpace(CurrentEntry.Translation);
+
+    public bool HasOldTranslation
+        => OldEntry is not null &&
+           !string.IsNullOrWhiteSpace(OldEntry.Translation);
+
+    // Безопасный перенос не перезаписывает уже существующий перевод.
     public bool CanTransfer
         => CurrentEntry is not null &&
            OldEntry is not null &&
            !SourceChanged &&
-           !string.IsNullOrWhiteSpace(OldEntry.Translation) &&
-           !string.Equals(
-               CurrentEntry.Translation,
-               OldEntry.Translation,
-               StringComparison.Ordinal);
+           !HasExistingCurrentTranslation &&
+           HasOldTranslation;
 }
 
 public sealed record FileComparisonResult(
@@ -41,7 +47,9 @@ public sealed record FileComparisonResult(
     int Added,
     int Removed,
     int OriginalChanged,
-    int TranslationChanged);
+    int TranslationChanged,
+    int Transferable,
+    int NeedsReview);
 
 public static class FileComparisonService
 {
@@ -54,6 +62,8 @@ public static class FileComparisonService
         var removed = 0;
         var originalChanged = 0;
         var translationChanged = 0;
+        var transferable = 0;
+        var needsReview = 0;
 
         var currentGroups =
             GroupByIdentity(current.Entries);
@@ -104,7 +114,7 @@ public static class FileComparisonService
                     added++;
                     items.Add(
                         CreateItem(
-                            "Добавлено",
+                            "Новая строка",
                             currentEntry,
                             null));
                     continue;
@@ -134,26 +144,54 @@ public static class FileComparisonService
                         StringComparison.Ordinal))
                 {
                     originalChanged++;
+                    needsReview++;
                     items.Add(
                         CreateItem(
-                            "Изменён оригинал",
+                            "Нужно проверить вручную",
                             currentEntry,
                             oldEntry));
                     continue;
                 }
 
-                if (!string.Equals(
+                if (string.Equals(
                         currentEntry.Translation,
                         oldEntry.Translation,
                         StringComparison.Ordinal))
                 {
-                    translationChanged++;
+                    continue;
+                }
+
+                translationChanged++;
+
+                if (string.IsNullOrWhiteSpace(currentEntry.Translation) &&
+                    !string.IsNullOrWhiteSpace(oldEntry.Translation))
+                {
+                    transferable++;
                     items.Add(
                         CreateItem(
-                            "Изменён перевод",
+                            "Перевод можно перенести",
                             currentEntry,
                             oldEntry));
+                    continue;
                 }
+
+                if (!string.IsNullOrWhiteSpace(currentEntry.Translation) &&
+                    !string.IsNullOrWhiteSpace(oldEntry.Translation))
+                {
+                    needsReview++;
+                    items.Add(
+                        CreateItem(
+                            "Нужно проверить вручную",
+                            currentEntry,
+                            oldEntry));
+                    continue;
+                }
+
+                items.Add(
+                    CreateItem(
+                        "Изменён перевод",
+                        currentEntry,
+                        oldEntry));
             }
         }
 
@@ -162,24 +200,41 @@ public static class FileComparisonService
             added,
             removed,
             originalChanged,
-            translationChanged);
+            translationChanged,
+            transferable,
+            needsReview);
     }
 
-    public static (int Transferred, int SkippedChangedSource)
+    public static (
+        int Transferred,
+        int SkippedChangedSource,
+        int SkippedExistingTranslation)
         TransferTranslations(
             IEnumerable<FileComparisonItem> items)
     {
         var transferred = 0;
-        var skipped = 0;
+        var skippedChangedSource = 0;
+        var skippedExistingTranslation = 0;
 
         foreach (var item in items)
         {
-            if (item.SourceChanged &&
-                item.OldEntry is not null &&
-                !string.IsNullOrWhiteSpace(
-                    item.OldEntry.Translation))
+            if (item.SourceChanged && item.HasOldTranslation)
             {
-                skipped++;
+                skippedChangedSource++;
+                continue;
+            }
+
+            if (!item.SourceChanged &&
+                item.HasOldTranslation &&
+                item.HasExistingCurrentTranslation &&
+                item.CurrentEntry is not null &&
+                item.OldEntry is not null &&
+                !string.Equals(
+                    item.CurrentEntry.Translation,
+                    item.OldEntry.Translation,
+                    StringComparison.Ordinal))
+            {
+                skippedExistingTranslation++;
                 continue;
             }
 
@@ -196,7 +251,10 @@ public static class FileComparisonService
             transferred++;
         }
 
-        return (transferred, skipped);
+        return (
+            transferred,
+            skippedChangedSource,
+            skippedExistingTranslation);
     }
 
     private static Dictionary<string, List<LocalizationEntry>>
