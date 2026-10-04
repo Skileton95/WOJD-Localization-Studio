@@ -8,6 +8,7 @@ public sealed class OperationProgressWindow : Window
     private readonly ProgressBar _progress;
     private readonly TextBlock _status;
     private readonly CancellationTokenSource _cts = new();
+    private bool _allowClose;
 
     public CancellationToken CancellationToken => _cts.Token;
 
@@ -62,12 +63,14 @@ public sealed class OperationProgressWindow : Window
         Content = root;
         Closing += (_, e) =>
         {
-            if (!_cts.IsCancellationRequested && DialogResult is null)
-            {
+            if (_allowClose)
+                return;
+
+            if (!_cts.IsCancellationRequested)
                 _cts.Cancel();
-                e.Cancel = true;
-                _status.Text = "Отмена операции…";
-            }
+
+            e.Cancel = true;
+            _status.Text = "Отмена операции…";
         };
     }
 
@@ -99,7 +102,7 @@ public sealed class OperationProgressWindow : Window
             return;
         }
 
-        DialogResult = true;
+        _allowClose = true;
         Close();
     }
 }
