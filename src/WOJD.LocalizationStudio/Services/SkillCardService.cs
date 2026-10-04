@@ -5,16 +5,28 @@ namespace WOJD.LocalizationStudio.Services;
 
 public static class SkillCardService
 {
-    private static readonly Regex SkillIdRegex =
+    private static readonly Regex WojdSkillKeyRegex =
         new(
-            @"(?i)skill[^0-9]{0,40}(?<id>\d{3,})",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+            @"^(?<id>\d+_\d+)-Skill(?<field>[A-Za-z0-9_]+)$",
+            RegexOptions.Compiled |
+            RegexOptions.CultureInvariant |
+            RegexOptions.IgnoreCase);
+
+    // Оставляем поддержку старого эвристического формата для совместимости
+    // с пользовательскими/тестовыми файлами, но WOJD-ключи проверяются первыми.
+    private static readonly Regex LegacySkillIdRegex =
+        new(
+            @"skill[^0-9]{0,40}(?<id>\d{3,})",
+            RegexOptions.Compiled |
+            RegexOptions.CultureInvariant |
+            RegexOptions.IgnoreCase);
 
     private static readonly string[] SharedRoleTokens =
     [
         "cost",
         "range",
         "radius",
+        "distance",
         "casttime",
         "cast_time",
         "cooldown",
@@ -42,7 +54,8 @@ public static class SkillCardService
                 .GroupBy(
                     x => x.SkillId!,
                     StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => ParseId(x.Key))
+                .OrderBy(x => ParseBaseId(x.Key))
+                .ThenBy(x => ParseVariantId(x.Key))
                 .ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -77,11 +90,8 @@ public static class SkillCardService
 
             foreach (var shared in sharedEntries)
             {
-                if (views.Any(x =>
-                        SameEntry(x.Entry, shared)))
-                {
+                if (views.Any(x => SameEntry(x.Entry, shared)))
                     continue;
-                }
 
                 views.Add(
                     new SkillCardEntryView
@@ -137,8 +147,8 @@ public static class SkillCardService
             var nameEntry =
                 views.FirstOrDefault(x => x.Role == "Название навыка")
                 ?? views.FirstOrDefault(x =>
-                    x.Entry.Key.Contains(
-                        "name",
+                    x.Entry.Key.EndsWith(
+                        "SkillName",
                         StringComparison.OrdinalIgnoreCase));
 
             var displayName =
@@ -167,10 +177,15 @@ public static class SkillCardService
         if (string.IsNullOrWhiteSpace(key))
             return null;
 
-        var match = SkillIdRegex.Match(key);
+        var wojdMatch = WojdSkillKeyRegex.Match(key);
 
-        return match.Success
-            ? match.Groups["id"].Value
+        if (wojdMatch.Success)
+            return wojdMatch.Groups["id"].Value;
+
+        var legacyMatch = LegacySkillIdRegex.Match(key);
+
+        return legacyMatch.Success
+            ? legacyMatch.Groups["id"].Value
             : null;
     }
 
@@ -183,8 +198,61 @@ public static class SkillCardService
                .Replace("-", string.Empty)
                .ToLowerInvariant();
 
-        if (normalized.Contains("shortdesc"))
+        // WOJD: NNNN_N-SkillComplexDesc — подробная карточка.
+        if (normalized.Contains("skillcomplexdesc") ||
+            normalized.Contains("complexdesc"))
+        {
+            return "Подробное описание";
+        }
+
+        // WOJD: NNNN_N-SkillDesc — краткая карточка.
+        if (normalized.Contains("skilldesc") ||
+            normalized.Contains("shortdesc"))
+        {
             return "Краткое описание";
+        }
+
+        if (normalized.Contains("skillname"))
+            return "Название навыка";
+
+        if (normalized.Contains("skillcasttime") ||
+            normalized.Contains("casttime"))
+        {
+            return "Время применения";
+        }
+
+        if (normalized.Contains("skillcooldown") ||
+            normalized.Contains("cooldown") ||
+            normalized.EndsWith("cd", StringComparison.Ordinal))
+        {
+            return "Перезарядка";
+        }
+
+        if (normalized.Contains("skillcost") ||
+            normalized.Contains("cost"))
+        {
+            return "Стоимость";
+        }
+
+        if (normalized.Contains("skilldistance") ||
+            normalized.Contains("distance"))
+        {
+            return "Дальность применения";
+        }
+
+        if (normalized.Contains("skillrange") ||
+            normalized.Contains("range") ||
+            normalized.Contains("radius"))
+        {
+            return "Радиус / зона действия";
+        }
+
+        if (normalized.Contains("skilltag") ||
+            normalized.Contains("tag1") ||
+            normalized.Contains("tag2"))
+        {
+            return "Тег";
+        }
 
         if (normalized.Contains("extradesc"))
             return "Доп. информация";
@@ -198,43 +266,7 @@ public static class SkillCardService
         if (normalized.Contains("description") ||
             normalized.EndsWith("desc", StringComparison.Ordinal))
         {
-            return "Полное описание";
-        }
-
-        if (normalized.Contains("cooldown") ||
-            normalized.EndsWith("cd", StringComparison.Ordinal))
-        {
-            return isShared
-                ? "Перезарядка"
-                : "Значение перезарядки";
-        }
-
-        if (normalized.Contains("casttime"))
-        {
-            return isShared
-                ? "Применение"
-                : "Значение применения";
-        }
-
-        if (normalized.Contains("radius"))
-        {
-            return isShared
-                ? "Радиус"
-                : "Значение радиуса";
-        }
-
-        if (normalized.Contains("range"))
-        {
-            return isShared
-                ? "Дистанция"
-                : "Значение дистанции";
-        }
-
-        if (normalized.Contains("cost"))
-        {
-            return isShared
-                ? "Расход"
-                : "Значение расхода";
+            return "Подробное описание";
         }
 
         if (normalized.Contains("level"))
@@ -293,28 +325,41 @@ public static class SkillCardService
         {
             "Название навыка" => 10,
             "Краткое описание" => 20,
-            "Расход" => 30,
-            "Значение расхода" => 31,
-            "Дистанция" => 40,
-            "Значение дистанции" => 41,
-            "Радиус" => 50,
-            "Значение радиуса" => 51,
-            "Применение" => 60,
-            "Значение применения" => 61,
-            "Перезарядка" => 70,
-            "Значение перезарядки" => 71,
-            "Полное описание" => 80,
-            "Доп. информация" => 90,
-            "Предупреждение" => 100,
-            "Краткая информация" => 110,
-            "Эффект" => 120,
-            "Подсказка" => 130,
-            "Уровень навыка" => 140,
+            "Подробное описание" => 30,
+            "Время применения" => 40,
+            "Перезарядка" => 50,
+            "Стоимость" => 60,
+            "Дальность применения" => 70,
+            "Радиус / зона действия" => 80,
+            "Тег" => 90,
+            "Доп. информация" => 100,
+            "Предупреждение" => 110,
+            "Краткая информация" => 120,
+            "Эффект" => 130,
+            "Подсказка" => 140,
+            "Уровень навыка" => 150,
             _ => 500
         };
 
-    private static long ParseId(string id)
-        => long.TryParse(id, out var value)
-            ? value
+    private static long ParseBaseId(string id)
+    {
+        var separator = id.IndexOf('_');
+        var value = separator >= 0 ? id[..separator] : id;
+
+        return long.TryParse(value, out var parsed)
+            ? parsed
             : long.MaxValue;
+    }
+
+    private static long ParseVariantId(string id)
+    {
+        var separator = id.IndexOf('_');
+
+        if (separator < 0 || separator + 1 >= id.Length)
+            return 0;
+
+        return long.TryParse(id[(separator + 1)..], out var parsed)
+            ? parsed
+            : long.MaxValue;
+    }
 }

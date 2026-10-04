@@ -43,8 +43,13 @@
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="#172B3D"/></Trigger>
-                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="Root" Property="Background" Value="#174A76"/><Setter TargetName="Root" Property="BorderBrush" Value="#2F8CFF"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#172B3D"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#174A76"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#2F8CFF"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -81,7 +86,8 @@
                 <TextBox x:Name="SkillSearchBox" Grid.Column="2" Style="{StaticResource DarkTextBox}" VerticalAlignment="Center"
                          TextChanged="SkillSearchBox_TextChanged" ToolTip="Поиск по названию или ID навыка"/>
                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="＋ Добавить связь" Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="AddLink_Click"/>
+                    <Button Content="＋ Навык по ID" Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="AddSkillById_Click"/>
+                    <Button Content="＋ Добавить связь" Style="{StaticResource DarkButton}" Margin="0,0,8,0" Click="AddLink_Click"/>
                     <Button Content="− Удалить связь" Style="{StaticResource DarkButton}" Margin="0,0,8,0" Click="RemoveLink_Click"/>
                     <Button Content="↗ Открыть в файле" Style="{StaticResource DarkButton}" Click="OpenInFile_Click"/>
                 </StackPanel>
@@ -99,7 +105,11 @@
 
             <Border Grid.Column="0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12">
                 <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     <TextBlock Text="Навыки" FontSize="17" FontWeight="SemiBold" Margin="2,0,0,8"/>
                     <DockPanel Grid.Row="1" Margin="0,0,0,10">
                         <Button DockPanel.Dock="Right" Content="⟳" Style="{StaticResource DarkButton}" Padding="8,4" Click="RefreshCards_Click" ToolTip="Пересобрать карточки"/>
@@ -110,7 +120,10 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="42"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
                                     <Border Width="34" Height="34" CornerRadius="7" Background="#173A59" VerticalAlignment="Center">
                                         <TextBlock Text="✦" Foreground="#58B7FF" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
@@ -132,10 +145,17 @@
             </Border>
 
             <Grid Grid.Column="2">
-                <Grid.RowDefinitions><RowDefinition Height="104"/><RowDefinition Height="12"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="104"/>
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
                 <Border Background="{StaticResource Panel}" BorderBrush="#2B4E69" BorderThickness="1" CornerRadius="10" Padding="18">
                     <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock x:Name="SkillTitleText" Text="Выберите навык" FontSize="26" FontWeight="SemiBold"/>
                             <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
@@ -156,7 +176,10 @@
 
                 <Border Grid.Row="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12">
                     <Grid>
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
                         <DockPanel Margin="2,0,2,10">
                             <TextBlock Text="Связанные ключи" FontSize="17" FontWeight="SemiBold"/>
                             <TextBlock x:Name="EntryCountText" DockPanel.Dock="Right" Foreground="{StaticResource Muted}"/>
@@ -166,14 +189,22 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="100"/>
+                                        </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="{Binding Role}" FontWeight="SemiBold"/>
                                             <Border HorizontalAlignment="Left" Margin="0,4,0,0" CornerRadius="9" Padding="7,2">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Background" Value="#4B2B75"/>
-                                                        <Style.Triggers><DataTrigger Binding="{Binding IsShared}" Value="True"><Setter Property="Background" Value="#174A76"/></DataTrigger></Style.Triggers>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsShared}" Value="True">
+                                                                <Setter Property="Background" Value="#174A76"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
                                                 <TextBlock Text="{Binding LinkTypeShort}" FontSize="10"/>
@@ -185,7 +216,14 @@
                                         </StackPanel>
                                         <Border Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="10" Padding="8,3">
                                             <Border.Style>
-                                                <Style TargetType="Border"><Setter Property="Background" Value="#174F39"/><Style.Triggers><DataTrigger Binding="{Binding Entry.HasValidationIssues}" Value="True"><Setter Property="Background" Value="#6C4D14"/></DataTrigger></Style.Triggers></Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#174F39"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Entry.HasValidationIssues}" Value="True">
+                                                            <Setter Property="Background" Value="#6C4D14"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
                                             </Border.Style>
                                             <TextBlock Text="{Binding QaText}" FontSize="11"/>
                                         </Border>
@@ -220,7 +258,10 @@
                                  TextChanged="TranslationBox_TextChanged"/>
 
                         <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="QA" Foreground="{StaticResource Muted}" FontSize="11"/>
                                 <TextBlock x:Name="QaText" Margin="0,3,0,0" TextWrapping="Wrap"/>
@@ -231,7 +272,7 @@
                         <Separator Background="#263B4D" Margin="0,4,0,12"/>
                         <TextBlock Text="Как работает карточка" FontWeight="SemiBold" Margin="0,0,0,7"/>
                         <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap"
-                                   Text="Уникальные ключи собираются по ID навыка. Общие ключи показываются как ссылки на реальные строки файла. Изменение перевода здесь изменяет ту же строку NDJSON — копии не создаются."/>
+                                   Text="Ключи WOJD группируются по полному префиксу перед -Skill: например, 3326_0. SkillDesc показывается как краткое описание, SkillComplexDesc — как подробное. Редактирование меняет реальную строку NDJSON — копии не создаются."/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -240,7 +281,7 @@
         <Border Grid.Row="2" Background="#0D1924" BorderBrush="#23394A" BorderThickness="0,1,0,0">
             <Grid Margin="16,0">
                 <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
-                <TextBlock Text="0.1.27 · Skill Context View" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+                <TextBlock Text="0.1.29 · Skill Context View" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
             </Grid>
         </Border>
     </Grid>

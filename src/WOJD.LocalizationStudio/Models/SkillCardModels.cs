@@ -34,8 +34,12 @@ public sealed class SkillCardModel
            ?? Entries.FirstOrDefault();
 
     public SkillCardEntryView? DescriptionEntry
-        => Entries.FirstOrDefault(x => x.Role == "Полное описание")
-           ?? Entries.FirstOrDefault(x => x.Role.Contains("описание", StringComparison.OrdinalIgnoreCase));
+        => Entries.FirstOrDefault(x => x.Role == "Подробное описание")
+           ?? Entries.FirstOrDefault(x => x.Role == "Краткое описание")
+           ?? Entries.FirstOrDefault(x =>
+               x.Role.Contains(
+                   "описание",
+                   StringComparison.OrdinalIgnoreCase));
 
     public string DescriptionPreview
         => DescriptionEntry?.Preview ?? "Описание не найдено";

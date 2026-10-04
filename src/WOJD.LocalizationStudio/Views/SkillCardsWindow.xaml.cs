@@ -225,6 +225,67 @@ public partial class SkillCardsWindow : Window
         SkillList.Items.Refresh();
     }
 
+    private void AddSkillById_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var dialog =
+            new TextInputDialog(
+                "Открыть навык по ID",
+                "Введите полный ID навыка, например 3326_0. Можно ввести только 3326, чтобы показать все варианты.")
+            {
+                Owner = this
+            };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var value = dialog.Value.Trim();
+
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        RebuildCards();
+
+        var exact =
+            _allCards.FirstOrDefault(x =>
+                string.Equals(
+                    x.Id,
+                    value,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (exact is not null)
+        {
+            SkillSearchBox.Text = string.Empty;
+            _preferredSkillId = exact.Id;
+            ApplySearch();
+            return;
+        }
+
+        var variants =
+            _allCards
+                .Where(x =>
+                    x.Id.StartsWith(
+                        value + "_",
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        if (variants.Count > 0)
+        {
+            _preferredSkillId = variants[0].Id;
+            SkillSearchBox.Text = value;
+            ApplySearch();
+            return;
+        }
+
+        AppDialog.Show(
+            $"Навык с ID «{value}» не найден в текущем файле.\n\nОжидаются ключи вида {value}-SkillName или NNNN_N-SkillName.",
+            "Карточки навыков",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information,
+            this);
+    }
+
     private void AddLink_Click(
         object sender,
         RoutedEventArgs e)
@@ -416,7 +477,7 @@ public partial class SkillCardsWindow : Window
         LinkedCountText.Text = "0 связанных ключей";
         EntryCountText.Text = "0 строк";
         SkillDescriptionText.Text =
-            "Карточка создаётся автоматически для ключей, содержащих Skill и числовой ID.";
+            "Карточка создаётся автоматически для ключей вида 3326_0-SkillName, 3326_0-SkillDesc и других полей с тем же префиксом.";
         EntryList.ItemsSource = null;
         UpdateEditor();
     }
