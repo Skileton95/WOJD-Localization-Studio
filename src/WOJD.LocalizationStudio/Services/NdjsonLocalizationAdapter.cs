@@ -124,6 +124,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
             }
         }
 
+        ExternalFileGuardService.TrackLoaded(document);
         return document;
     }
 
@@ -140,10 +141,20 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
 
         try
         {
+            var guardResult =
+                await ExternalFileGuardService.ResolveBeforeSaveAsync(
+                    document,
+                    cancellationToken);
+
+            if (guardResult == ExternalFileGuardResult.ReloadedFromDisk)
+                return;
+
             await SaveCoreAsync(
                 document,
                 targetPath,
                 cancellationToken);
+
+            ExternalFileGuardService.MarkSaved(document);
         }
         finally
         {
