@@ -37,8 +37,6 @@ internal static class EditorQaEnhancements
 
         InstalledWindows.Add(window, new object());
 
-        // EditorEnhancements создаёт кнопки автоисправления в Loaded.
-        // Устанавливаем структурный QA после завершения текущего прохода Loaded.
         window.Dispatcher.BeginInvoke(
             () => Install(window),
             DispatcherPriority.ContextIdle);
@@ -171,7 +169,17 @@ internal static class EditorQaEnhancements
             if (entry is null)
             {
                 qaText.Text = "Структура: выберите строку для проверки.";
+                qaText.ToolTip = null;
                 SetOkAppearance(qaBorder, qaText);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Original))
+            {
+                qaText.Text = "— Исходный текст отсутствует — структура не проверяется.";
+                qaText.ToolTip =
+                    "Без Original невозможно подтвердить теги, плейсхолдеры, переносы и точность перевода.";
+                SetUnavailableAppearance(qaBorder, qaText);
                 return;
             }
 
@@ -331,6 +339,9 @@ internal static class EditorQaEnhancements
 
             var candidate = entries[index];
 
+            if (string.IsNullOrWhiteSpace(candidate.Original))
+                continue;
+
             if (candidate.HasTagIssues ||
                 candidate.HasPlaceholderIssues ||
                 StructuralQaService
@@ -394,5 +405,18 @@ internal static class EditorQaEnhancements
         text.Foreground =
             new SolidColorBrush(Color.FromRgb(94, 104, 119));
         text.FontWeight = FontWeights.Normal;
+    }
+
+    private static void SetUnavailableAppearance(
+        Border border,
+        TextBlock text)
+    {
+        border.Background =
+            new SolidColorBrush(Color.FromRgb(255, 249, 235));
+        border.BorderBrush =
+            new SolidColorBrush(Color.FromRgb(238, 203, 126));
+        text.Foreground =
+            new SolidColorBrush(Color.FromRgb(145, 102, 17));
+        text.FontWeight = FontWeights.SemiBold;
     }
 }
