@@ -17,6 +17,9 @@ public static class GlossaryService
 {
     private static readonly object Sync = new();
     private static IReadOnlyList<GlossaryEntry>? _entries;
+    private static long _version = 1;
+
+    public static long Version => Interlocked.Read(ref _version);
 
     public static string SettingsPath
         => Path.Combine(
@@ -40,6 +43,8 @@ public static class GlossaryService
     {
         lock (Sync)
             _entries = null;
+
+        Interlocked.Increment(ref _version);
     }
 
     public static void Save(IEnumerable<GlossaryEntry> entries)
@@ -72,6 +77,8 @@ public static class GlossaryService
                 new UTF8Encoding(false));
             _entries = normalized;
         }
+
+        Interlocked.Increment(ref _version);
     }
 
     public static IReadOnlyList<string> Validate(
