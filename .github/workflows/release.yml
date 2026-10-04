@@ -2,7 +2,7 @@ name: Build Windows release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, editor-roadmap-0.1.58-all ]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +47,7 @@ jobs:
           Set-Content -Path 'publish/app/version.txt' -Value $env:VERSION -NoNewline
 
       - name: Pack release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
@@ -62,6 +63,7 @@ jobs:
           Set-Content -Path 'dist/update.json' -Value $manifest -NoNewline
 
       - name: Create or update release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,6 +96,7 @@ jobs:
           }
 
       - name: Remove legacy releases
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
