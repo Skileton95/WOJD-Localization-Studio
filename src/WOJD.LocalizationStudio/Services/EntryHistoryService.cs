@@ -34,6 +34,11 @@ public static class EntryHistoryService
         if (string.Equals(before, after, StringComparison.Ordinal))
             return;
 
+        var resolvedReason =
+            reason
+            ?? CurrentReasonState.Value
+            ?? "Изменение перевода";
+
         var bucket = Buckets.GetOrCreateValue(entry);
 
         lock (bucket.Sync)
@@ -41,9 +46,7 @@ public static class EntryHistoryService
             bucket.Items.Add(
                 new EntryHistoryItem(
                     DateTimeOffset.Now,
-                    reason
-                    ?? CurrentReasonState.Value
-                    ?? "Изменение перевода",
+                    resolvedReason,
                     before,
                     after));
 
@@ -54,6 +57,12 @@ public static class EntryHistoryService
                     bucket.Items.Count - MaxItemsPerEntry);
             }
         }
+
+        OperationJournalService.Record(
+            entry,
+            before,
+            after,
+            resolvedReason);
     }
 
     public static IReadOnlyList<EntryHistoryItem> GetHistory(
