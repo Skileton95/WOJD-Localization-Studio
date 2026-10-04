@@ -81,6 +81,9 @@ public sealed class LocalizationEntry : ObservableObject
     public bool HasProfileRuleIssue
         => _validationKinds.Contains(TranslationIssueKind.ProfileRule);
 
+    public bool HasGlossaryIssue
+        => _validationKinds.Contains(TranslationIssueKind.Glossary);
+
     public bool HasStructuralValidationIssues
         => HasPlaceholderIssues || HasTagIssues || HasNewLineIssues;
 
@@ -135,6 +138,7 @@ public sealed class LocalizationEntry : ObservableObject
         OnPropertyChanged(nameof(HasSuspiciousLengthIssue));
         OnPropertyChanged(nameof(HasSourceMissingIssue));
         OnPropertyChanged(nameof(HasProfileRuleIssue));
+        OnPropertyChanged(nameof(HasGlossaryIssue));
         OnPropertyChanged(nameof(HasStructuralValidationIssues));
         OnPropertyChanged(nameof(QaIndicator));
         OnPropertyChanged(nameof(QaStateText));
