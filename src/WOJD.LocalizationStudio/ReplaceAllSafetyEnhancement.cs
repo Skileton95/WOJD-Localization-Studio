@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
@@ -32,40 +33,64 @@ internal static class ReplaceAllSafetyEnhancement
         var replaceAll = FindVisualChildren<Button>(window)
             .FirstOrDefault(x => string.Equals(x.Content?.ToString(), "Заменить всё", StringComparison.Ordinal));
 
-        if (replaceAll is null)
+        if (replaceAll?.Command is not ICommand originalCommand)
             return;
 
         Installed.Add(window, new object());
+        replaceAll.Command =
+            new SnapshotGuardCommand(
+                window,
+                viewModel,
+                originalCommand,
+                replaceAll.CommandParameter);
+    }
 
-        replaceAll.Click += (_, _) =>
+    private sealed class SnapshotGuardCommand(
+        MainWindow window,
+        MainViewModel viewModel,
+        ICommand inner,
+        object? parameter)
+        : ICommand
+    {
+        public event EventHandler? CanExecuteChanged
+        {
+            add => inner.CanExecuteChanged += value;
+            remove => inner.CanExecuteChanged -= value;
+        }
+
+        public bool CanExecute(object? value)
+            => inner.CanExecute(parameter ?? value);
+
+        public void Execute(object? value)
         {
             var document = viewModel.ActiveDocument;
-            if (document is null || string.IsNullOrEmpty(viewModel.SearchText))
-                return;
 
-            try
+            if (document is not null &&
+                !string.IsNullOrEmpty(viewModel.SearchText))
             {
-                SnapshotService.CreateSnapshot(document, "before-replace-all");
-                ProjectHistoryService.Record(
-                    document.FilePath,
-                    "Подготовка массовой замены",
-                    0,
-                    $"Поиск: «{viewModel.SearchText}» → «{viewModel.ReplaceText}»");
+                try
+                {
+                    SnapshotService.CreateSnapshot(document, "before-replace-all");
+                    ProjectHistoryService.Record(
+                        document.FilePath,
+                        "Подготовка массовой замены",
+                        0,
+                        $"Поиск: «{viewModel.SearchText}» → «{viewModel.ReplaceText}»");
+                }
+                catch (Exception ex)
+                {
+                    AppDialog.Show(
+                        "Массовая замена отменена: не удалось создать защитный снимок.\n\n" + ex.Message,
+                        "Защита массовой замены",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error,
+                        window);
+                    return;
+                }
             }
-            catch (Exception ex)
-            {
-                AppDialog.Show(
-                    "Не удалось создать защитный снимок перед «Заменить всё». Операция будет продолжена только после исправления проблемы со снимком.\n\n" + ex.Message,
-                    "Защита массовой замены",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error,
-                    window);
 
-                // Не даём команде выполниться: временно отключаем кнопку до следующего UI-цикла.
-                replaceAll.IsEnabled = false;
-                window.Dispatcher.BeginInvoke(() => replaceAll.IsEnabled = true);
-            }
-        };
+            inner.Execute(parameter ?? value);
+        }
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent)
