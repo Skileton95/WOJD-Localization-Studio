@@ -10,7 +10,8 @@ public enum TranslationIssueKind
     SameAsSource,
     SuspiciousLength,
     SourceMissing,
-    ProfileRule
+    ProfileRule,
+    Glossary
 }
 
 public sealed record TranslationValidationResult(
@@ -120,8 +121,7 @@ public static partial class TranslationValidator
 
             if (sourceLength >= 8 && translationLength > 0)
             {
-                var ratio =
-                    (double)translationLength / sourceLength;
+                var ratio = (double)translationLength / sourceLength;
 
                 if (ratio < 0.35)
                 {
@@ -136,15 +136,21 @@ public static partial class TranslationValidator
                         $"Подозрительно длинный перевод: {sourceLength} → {translationLength} символов"));
                 }
             }
+
+            if (applyProfiles)
+            {
+                foreach (var glossaryIssue in GlossaryService.Validate(source, translation))
+                {
+                    issues.Add((
+                        TranslationIssueKind.Glossary,
+                        glossaryIssue.Message));
+                }
+            }
         }
 
         if (applyProfiles)
         {
-            foreach (var profileIssue in
-                     QaProfileService.Validate(
-                         nameSpace,
-                         key,
-                         translation))
+            foreach (var profileIssue in QaProfileService.Validate(nameSpace, key, translation))
             {
                 issues.Add((
                     TranslationIssueKind.ProfileRule,
@@ -169,18 +175,11 @@ public static partial class TranslationValidator
         var sourceSignature = BuildSignature(source, regex);
         var targetSignature = BuildSignature(translation, regex);
 
-        if (!string.Equals(
-                sourceSignature,
-                targetSignature,
-                StringComparison.Ordinal))
-        {
+        if (!string.Equals(sourceSignature, targetSignature, StringComparison.Ordinal))
             issues.Add((kind, message));
-        }
     }
 
-    private static string BuildSignature(
-        string text,
-        Regex regex)
+    private static string BuildSignature(string text, Regex regex)
         => string.Join(
             "\u001F",
             regex.Matches(text)
@@ -212,11 +211,8 @@ public static partial class TranslationValidator
             {
                 count++;
 
-                if (i + 1 < text.Length &&
-                    text[i + 1] == '\n')
-                {
+                if (i + 1 < text.Length && text[i + 1] == '\n')
                     i++;
-                }
 
                 continue;
             }
@@ -227,9 +223,7 @@ public static partial class TranslationValidator
                 continue;
             }
 
-            if (text[i] == '\\' &&
-                i + 1 < text.Length &&
-                text[i + 1] == 'n')
+            if (text[i] == '\\' && i + 1 < text.Length && text[i + 1] == 'n')
             {
                 count++;
                 i++;
@@ -239,19 +233,15 @@ public static partial class TranslationValidator
         return count;
     }
 
-    [GeneratedRegex(@"\{[A-Za-z0-9_]+(?:[^{}]*)?\}",
-        RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\{[A-Za-z0-9_]+(?:[^{}]*)?\}", RegexOptions.CultureInvariant)]
     private static partial Regex BracePlaceholderRegex();
 
-    [GeneratedRegex(@"%(?:\d+\$)?[-+#0 ]*(?:\d+|\*)?(?:\.\d+)?[sdifouxXeEgGc]",
-        RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"%(?:\d+\$)?[-+#0 ]*(?:\d+|\*)?(?:\.\d+)?[sdifouxXeEgGc]", RegexOptions.CultureInvariant)]
     private static partial Regex PercentPlaceholderRegex();
 
-    [GeneratedRegex(@"<\/?[^<>]+?>",
-        RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"<\/?[^<>]+?>", RegexOptions.CultureInvariant)]
     private static partial Regex TagRegex();
 
-    [GeneratedRegex(@"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]",
-        RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]", RegexOptions.CultureInvariant)]
     private static partial Regex CjkRegex();
 }
