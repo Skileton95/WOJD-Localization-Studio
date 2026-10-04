@@ -12,6 +12,10 @@ public sealed class EditorSettings
     public bool WordWrap { get; set; } = true;
     public bool ShowQaPanel { get; set; } = true;
     public bool ShowOriginalPane { get; set; } = true;
+    public bool ShowNamespaceColumn { get; set; } = true;
+    public bool ShowKeyColumn { get; set; } = true;
+    public bool ShowStatusColumn { get; set; } = true;
+    public bool CompactTable { get; set; }
     public double NamespaceColumnWidth { get; set; } = 250;
     public double KeyColumnWidth { get; set; } = 150;
     public double StatusColumnWidth { get; set; } = 150;
