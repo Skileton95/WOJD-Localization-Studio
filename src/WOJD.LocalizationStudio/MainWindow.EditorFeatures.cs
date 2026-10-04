@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.Views;
@@ -197,7 +198,7 @@ public partial class MainWindow
         if (_viewModel.ActiveDocument is not LocalizationDocument document)
             return;
 
-        Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+        Mouse.OverrideCursor = Cursors.Wait;
         try
         {
             foreach (var entry in document.Entries)
