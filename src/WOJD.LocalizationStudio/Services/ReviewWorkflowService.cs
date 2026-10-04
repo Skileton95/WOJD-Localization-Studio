@@ -84,7 +84,7 @@ public static class ReviewWorkflowService
                     StringComparison.Ordinal))
             {
                 store.Entries.Remove(id);
-                SaveStore(store);
+                store.Dirty = true;
                 return ReviewState.Unreviewed;
             }
 
@@ -204,8 +204,11 @@ public static class ReviewWorkflowService
                 foreach (var id in staleReviewed)
                     store.Entries.Remove(id);
 
-                SaveStore(store);
+                store.Dirty = true;
             }
+
+            if (store.Dirty)
+                SaveStore(store);
 
             var unreviewed =
                 Math.Max(0, entries.Count - reviewed - needsFix - skipped);
@@ -259,6 +262,7 @@ public static class ReviewWorkflowService
         }
 
         store.FilePath = fullPath;
+        store.Dirty = false;
         Stores[fullPath] = store;
         return store;
     }
@@ -276,6 +280,7 @@ public static class ReviewWorkflowService
 
         File.WriteAllText(temp, json, new UTF8Encoding(false));
         File.Move(temp, path, true);
+        store.Dirty = false;
     }
 
     private static string GetStoragePath(string fullPath)
@@ -315,6 +320,9 @@ public static class ReviewWorkflowService
         public string FilePath { get; set; } = string.Empty;
         public Dictionary<string, ReviewRecord> Entries { get; set; } =
             new(StringComparer.Ordinal);
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool Dirty { get; set; }
     }
 
     private sealed class ReviewRecord
