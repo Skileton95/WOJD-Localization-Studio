@@ -35,8 +35,6 @@ internal static class StructureProtectionEnhancements
 
         InstalledWindows.Add(window, new object());
 
-        // EditorQaEnhancements формирует QA-панель через ContextIdle.
-        // Ставим защиту следом, когда эта панель уже существует.
         window.Dispatcher.BeginInvoke(
             () => Install(window),
             DispatcherPriority.ApplicationIdle);
@@ -116,9 +114,25 @@ internal static class StructureProtectionEnhancements
             {
                 qaText.Text = "Структура: выберите строку для проверки.";
                 qaText.ToolTip = null;
+                restoreButton.IsEnabled = false;
+                protectionToggle.IsEnabled = false;
                 SetOkAppearance(qaBorder, qaText);
                 return;
             }
+
+            if (string.IsNullOrWhiteSpace(entry.Original))
+            {
+                qaText.Text = "— Исходный текст отсутствует — структура не проверяется.";
+                qaText.ToolTip =
+                    "Защита и восстановление структуры отключены: в строке нет Original.";
+                restoreButton.IsEnabled = false;
+                protectionToggle.IsEnabled = false;
+                SetUnavailableAppearance(qaBorder, qaText);
+                return;
+            }
+
+            restoreButton.IsEnabled = true;
+            protectionToggle.IsEnabled = true;
 
             var status = StructureProtectionService.Analyze(
                 entry.Original,
@@ -176,7 +190,9 @@ internal static class StructureProtectionEnhancements
 
         bool ProtectionEnabled()
             => protectionToggle.IsChecked == true &&
-               viewModel.SelectedEntry is not null;
+               protectionToggle.IsEnabled &&
+               viewModel.SelectedEntry is not null &&
+               !string.IsNullOrWhiteSpace(viewModel.SelectedEntry.Original);
 
         bool ShouldBlock(string proposedText)
         {
@@ -194,7 +210,7 @@ internal static class StructureProtectionEnhancements
         restoreButton.Click += (_, _) =>
         {
             var entry = viewModel.SelectedEntry;
-            if (entry is null)
+            if (entry is null || string.IsNullOrWhiteSpace(entry.Original))
                 return;
 
             var result = StructureProtectionService.RestoreStructure(
@@ -498,6 +514,19 @@ internal static class StructureProtectionEnhancements
         text.Foreground =
             new SolidColorBrush(Color.FromRgb(94, 104, 119));
         text.FontWeight = FontWeights.Normal;
+    }
+
+    private static void SetUnavailableAppearance(
+        Border border,
+        TextBlock text)
+    {
+        border.Background =
+            new SolidColorBrush(Color.FromRgb(255, 249, 235));
+        border.BorderBrush =
+            new SolidColorBrush(Color.FromRgb(238, 203, 126));
+        text.Foreground =
+            new SolidColorBrush(Color.FromRgb(145, 102, 17));
+        text.FontWeight = FontWeights.SemiBold;
     }
 
     private static void SetProtectionAppearance(
