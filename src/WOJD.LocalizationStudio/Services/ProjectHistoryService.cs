@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -16,7 +17,7 @@ public static class ProjectHistoryService
 {
     private const int MaxItemsPerFile = 1000;
     private static readonly object Sync = new();
-    private static readonly Dictionary<LocalizationEntry, string> EntryFiles = new();
+    private static readonly ConditionalWeakTable<LocalizationEntry, FileHolder> EntryFiles = new();
 
     private static string RootFolder
         => Path.Combine(
@@ -31,7 +32,10 @@ public static class ProjectHistoryService
         lock (Sync)
         {
             foreach (var entry in document.Entries)
-                EntryFiles[entry] = path;
+            {
+                EntryFiles.Remove(entry);
+                EntryFiles.Add(entry, new FileHolder(path));
+            }
         }
     }
 
@@ -50,10 +54,13 @@ public static class ProjectHistoryService
         string before,
         string after)
     {
-        string? filePath;
+        string? filePath = null;
 
         lock (Sync)
-            EntryFiles.TryGetValue(entry, out filePath);
+        {
+            if (EntryFiles.TryGetValue(entry, out var holder))
+                filePath = holder.FilePath;
+        }
 
         if (string.IsNullOrWhiteSpace(filePath) ||
             string.Equals(before, after, StringComparison.Ordinal))
@@ -165,4 +172,6 @@ public static class ProjectHistoryService
             WriteIndented = false,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+
+    private sealed record FileHolder(string FilePath);
 }
