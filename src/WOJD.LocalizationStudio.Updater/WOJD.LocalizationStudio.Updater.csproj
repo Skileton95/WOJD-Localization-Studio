@@ -4,9 +4,9 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>WOJD-Localization-Studio.Updater</AssemblyName>
+    <AssemblyName>WOJD.LocalizationStudio.Updater</AssemblyName>
     <RootNamespace>WOJD.LocalizationStudio.Updater</RootNamespace>
-    <Version>0.1.37</Version>
+    <Version>0.1.38</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
