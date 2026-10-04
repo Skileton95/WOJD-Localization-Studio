@@ -52,13 +52,6 @@ internal static class EditorEnhancements
         MainWindow window,
         TextBox translationBox)
     {
-        // Раньше UpdateSourceTrigger=PropertyChanged менял модель на каждый
-        // символ. При активном фильтре/поиске ViewModel мог сразу обновить
-        // CollectionView, из-за чего TextBox терял корректное выделение и
-        // позицию каретки во время Backspace/Delete.
-        //
-        // Теперь ввод является локальным сеансом редактирования и атомарно
-        // фиксируется при выходе из поля/смене контекста.
         BindingOperations.SetBinding(
             translationBox,
             TextBox.TextProperty,
@@ -128,9 +121,6 @@ internal static class EditorEnhancements
         MainWindow window,
         TextBox translationBox)
     {
-        if (window.FindName("EntriesGrid") is not DataGrid entriesGrid)
-            return;
-
         if (translationBox.Parent is not Border editorBorder ||
             editorBorder.Parent is not Grid editorGrid)
         {
@@ -147,7 +137,6 @@ internal static class EditorEnhancements
         if (footer is null)
             return;
 
-        // Старые навигационные/Apply-кнопки больше не нужны в редакторе.
         var obsoleteButtons =
             footer.Children
                 .OfType<Button>()
@@ -183,7 +172,7 @@ internal static class EditorEnhancements
                 window,
                 "Массово…",
                 "SecondaryButton",
-                "Автоисправление выделенных строк или всего текущего отфильтрованного списка.");
+                "Автоисправление всего текущего открытого файла. Выделение, поиск и фильтры не ограничивают область операции.");
 
         bulkButton.Margin =
             new Thickness(8, 0, 8, 0);
@@ -191,8 +180,7 @@ internal static class EditorEnhancements
         bulkButton.Click += (_, _) =>
             AutoCorrectBulk(
                 window,
-                translationBox,
-                entriesGrid);
+                translationBox);
 
         Grid.SetColumn(
             bulkButton,
@@ -270,35 +258,34 @@ internal static class EditorEnhancements
 
     private static void AutoCorrectBulk(
         MainWindow window,
-        TextBox translationBox,
-        DataGrid entriesGrid)
+        TextBox translationBox)
     {
         CommitTranslation(translationBox);
 
-        if (window.DataContext is not MainViewModel viewModel)
+        if (window.DataContext is not MainViewModel viewModel ||
+            viewModel.ActiveDocument is not LocalizationDocument document)
+        {
+            AppDialog.Show(
+                "Сначала откройте файл локализации.",
+                "Массовое автоисправление",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                window);
             return;
+        }
 
-        var selected =
-            entriesGrid.SelectedItems
-                .OfType<LocalizationEntry>()
+        // Массовое автоисправление всегда работает по полному открытому
+        // документу. Выделение строк, поиск, статусные и Namespace-фильтры
+        // влияют только на отображение таблицы и не сужают область операции.
+        var candidates =
+            document.Entries
                 .Distinct()
                 .ToList();
-
-        var useSelection =
-            selected.Count > 1;
-
-        var candidates =
-            useSelection
-                ? selected
-                : entriesGrid.Items
-                    .OfType<LocalizationEntry>()
-                    .Distinct()
-                    .ToList();
 
         if (candidates.Count == 0)
         {
             AppDialog.Show(
-                "Нет строк для массового автоисправления.",
+                "В текущем файле нет строк для автоисправления.",
                 "Массовое автоисправление",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information,
@@ -325,7 +312,8 @@ internal static class EditorEnhancements
         if (plan.AffectedEntries == 0)
         {
             AppDialog.Show(
-                "В выбранной области безопасных автоисправлений не найдено.",
+                $"Проверен весь файл: {candidates.Count:N0} строк.\n" +
+                "Безопасных автоисправлений не найдено.",
                 "Массовое автоисправление",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information,
@@ -333,17 +321,13 @@ internal static class EditorEnhancements
             return;
         }
 
-        var scopeText =
-            useSelection
-                ? $"выделенные строки: {candidates.Count:N0}"
-                : $"текущий список: {candidates.Count:N0}";
-
         var confirmation =
             AppDialog.Show(
-                $"Область: {scopeText}.\n" +
+                "Область: весь текущий файл.\n" +
+                $"Всего строк в файле: {candidates.Count:N0}.\n" +
                 $"Будет изменено строк: {plan.AffectedEntries:N0}.\n" +
                 $"Найдено исправлений: {plan.TotalFixes:N0}.\n\n" +
-                "Применить автоисправление?",
+                "Применить автоисправление ко всему файлу?",
                 "Массовое автоисправление",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question,
@@ -352,10 +336,9 @@ internal static class EditorEnhancements
         if (confirmation != MessageBoxResult.Yes)
             return;
 
-        // Во время пакетного применения временно отключаем фильтр статуса
-        // и текстовый поиск. Это не даёт CollectionView перестраиваться
-        // после каждой отдельной строки. Пользовательские значения затем
-        // восстанавливаются.
+        // Временно отключаем только те фильтры, из-за которых ViewModel
+        // перестраивает CollectionView после изменения каждой строки.
+        // После пакетного применения пользовательские значения возвращаются.
         var previousStatusFilter =
             viewModel.StatusFilter;
         var previousSearchText =
@@ -370,17 +353,14 @@ internal static class EditorEnhancements
 
             var applyResult = plan.Apply();
 
-            // Синхронизируем видимый редактор до открытия диалога, иначе
-            // Window.Deactivated мог бы зафиксировать в SelectedEntry старый
-            // текст из TextBox поверх уже исправленного значения.
             translationBox
                 .GetBindingExpression(TextBox.TextProperty)?
                 .UpdateTarget();
 
             AppDialog.Show(
                 applyResult.SkippedEntries == 0
-                    ? $"Исправлено строк: {applyResult.AppliedEntries:N0}."
-                    : $"Исправлено строк: {applyResult.AppliedEntries:N0}. " +
+                    ? $"Весь файл обработан. Исправлено строк: {applyResult.AppliedEntries:N0}."
+                    : $"Весь файл обработан. Исправлено строк: {applyResult.AppliedEntries:N0}. " +
                       $"Пропущено изменённых во время операции: {applyResult.SkippedEntries:N0}.",
                 "Массовое автоисправление",
                 MessageBoxButton.OK,
