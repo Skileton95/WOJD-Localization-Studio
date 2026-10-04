@@ -1,3 +1,5 @@
+using WOJD.LocalizationStudio.Services;
+
 namespace WOJD.LocalizationStudio.Models;
 
 internal sealed class DocumentSession
@@ -14,6 +16,7 @@ internal sealed class DocumentSession
 
     public LocalizationEntry? SelectedEntry { get; set; }
     public bool HistoryChangeInProgress { get; set; }
+    public FileStamp DiskStamp { get; set; }
 
     public int TranslatedCount { get; set; }
     public int UntranslatedCount { get; set; }
