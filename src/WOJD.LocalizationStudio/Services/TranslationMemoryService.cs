@@ -13,7 +13,7 @@ public sealed record TranslationMemorySuggestion(
     string Key,
     int Index);
 
-public sealed class TranslationMemoryIndex
+public sealed partial class TranslationMemoryIndex
 {
     private readonly Dictionary<string, List<LocalizationEntry>> _exact;
     private readonly Dictionary<string, List<LocalizationEntry>> _buckets;
