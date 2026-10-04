@@ -45,15 +45,15 @@ internal static class TokenPreviewEnhancement
         });
     }
 
-    private sealed class TokenRibbonAdorner(TextBox adornedElement)
-        : Adorner(adornedElement)
+    private sealed class TokenRibbonAdorner : Adorner
     {
-        private readonly TextBox _box = adornedElement;
+        private readonly TextBox _box;
 
-        public override bool IsHitTestVisible
+        public TokenRibbonAdorner(TextBox adornedElement)
+            : base(adornedElement)
         {
-            get => false;
-            set { }
+            _box = adornedElement;
+            IsHitTestVisible = false;
         }
 
         protected override void OnRender(DrawingContext drawingContext)
