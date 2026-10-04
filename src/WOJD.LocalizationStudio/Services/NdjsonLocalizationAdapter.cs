@@ -34,7 +34,6 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         string path,
         CancellationToken cancellationToken = default)
     {
-        // JSON-разбор выполняется вне UI-потока.
         return Task.Run(
             () => LoadCore(path, cancellationToken),
             cancellationToken);
@@ -117,8 +116,7 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
             }
             catch (JsonException)
             {
-                // Невалидная NDJSON-строка пропускается,
-                // как и в предыдущей версии редактора.
+                // Невалидная NDJSON-строка пропускается.
             }
         }
 
@@ -130,69 +128,112 @@ public sealed class NdjsonLocalizationAdapter : ILocalizationFileAdapter
         CancellationToken cancellationToken = default)
     {
         var tempPath = document.FilePath + ".tmp";
-
-        await using var stream = new FileStream(
-            tempPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            bufferSize: 1024 * 1024,
-            useAsync: true);
-
-        await using var writer = new StreamWriter(
-            stream,
-            new UTF8Encoding(false),
-            bufferSize: 1024 * 1024);
-
         var changedEntries =
             new List<(LocalizationEntry Entry, string RawLine)>();
 
-        foreach (var entry in document.Entries)
+        // Важно: writer и stream должны быть полностью закрыты ДО замены
+        // исходного файла. В предыдущей версии File.Move выполнялся внутри
+        // области await using и Windows видел .tmp как всё ещё занятый самим
+        // редактором.
+        await using (var stream = new FileStream(
+                         tempPath,
+                         FileMode.Create,
+                         FileAccess.Write,
+                         FileShare.None,
+                         bufferSize: 1024 * 1024,
+                         useAsync: true))
+        await using (var writer = new StreamWriter(
+                         stream,
+                         new UTF8Encoding(false),
+                         bufferSize: 1024 * 1024))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var line = entry.RawLine;
-
-            if (entry.Status == TranslationStatus.Modified)
+            foreach (var entry in document.Entries)
             {
-                JsonObject obj;
+                cancellationToken.ThrowIfCancellationRequested();
 
-                try
+                var line = entry.RawLine;
+
+                if (entry.Status == TranslationStatus.Modified)
                 {
-                    obj =
-                        JsonNode.Parse(entry.RawLine)?.AsObject()
-                        ?? new JsonObject();
-                }
-                catch (JsonException)
-                {
-                    obj = new JsonObject();
-                }
+                    JsonObject obj;
 
-                obj[entry.TranslationField] = entry.Translation;
-
-                line = obj.ToJsonString(
-                    new JsonSerializerOptions
+                    try
                     {
-                        WriteIndented = false
-                    });
+                        obj =
+                            JsonNode.Parse(entry.RawLine)?.AsObject()
+                            ?? new JsonObject();
+                    }
+                    catch (JsonException)
+                    {
+                        obj = new JsonObject();
+                    }
 
-                changedEntries.Add((entry, line));
+                    obj[entry.TranslationField] = entry.Translation;
+
+                    line = obj.ToJsonString(
+                        new JsonSerializerOptions
+                        {
+                            WriteIndented = false
+                        });
+
+                    changedEntries.Add((entry, line));
+                }
+
+                await writer.WriteLineAsync(
+                    line.AsMemory(),
+                    cancellationToken);
             }
 
-            await writer.WriteLineAsync(
-                line.AsMemory(),
-                cancellationToken);
+            await writer.FlushAsync(cancellationToken);
         }
 
-        await writer.FlushAsync(cancellationToken);
-
-        File.Move(
+        await ReplaceFileWithRetryAsync(
             tempPath,
             document.FilePath,
-            overwrite: true);
+            cancellationToken);
 
         foreach (var (entry, rawLine) in changedEntries)
             entry.MarkSaved(rawLine);
+    }
+
+    private static async Task ReplaceFileWithRetryAsync(
+        string tempPath,
+        string targetPath,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 5;
+        IOException? lastError = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                File.Move(
+                    tempPath,
+                    targetPath,
+                    overwrite: true);
+                return;
+            }
+            catch (IOException ex) when (attempt < maxAttempts)
+            {
+                lastError = ex;
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(150 * attempt),
+                    cancellationToken);
+            }
+            catch (IOException ex)
+            {
+                lastError = ex;
+                break;
+            }
+        }
+
+        throw new IOException(
+            $"Не удалось сохранить файл «{Path.GetFileName(targetPath)}»: " +
+            "он всё ещё занят другим процессом. Закройте программу, которая держит файл, и повторите сохранение.",
+            lastError);
     }
 
     private static string? ReadString(
