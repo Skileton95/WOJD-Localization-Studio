@@ -22,8 +22,6 @@ public sealed class LocalizationEntry : ObservableObject
             : Original;
     public string TranslationField { get; init; } = "translation";
 
-    // Исходная NDJSON-строка хранится как текст.
-    // Это значительно дешевле по памяти, чем держать JsonObject для каждой записи.
     public string RawLine { get; set; } = string.Empty;
 
     public string Translation
@@ -83,6 +81,31 @@ public sealed class LocalizationEntry : ObservableObject
     public bool HasProfileRuleIssue
         => _validationKinds.Contains(TranslationIssueKind.ProfileRule);
 
+    public bool HasStructuralValidationIssues
+        => HasPlaceholderIssues || HasTagIssues || HasNewLineIssues;
+
+    public string QaIndicator
+        => string.IsNullOrWhiteSpace(Translation)
+            ? string.Empty
+            : HasSourceMissingIssue
+                ? "—"
+                : HasStructuralValidationIssues
+                    ? "✕"
+                    : HasValidationIssues
+                        ? "⚠"
+                        : "✓";
+
+    public string QaStateText
+        => string.IsNullOrWhiteSpace(Translation)
+            ? "Нет перевода"
+            : HasSourceMissingIssue
+                ? "Проверка невозможна"
+                : HasStructuralValidationIssues
+                    ? "Ошибка"
+                    : HasValidationIssues
+                        ? "Предупреждение"
+                        : "Проверено";
+
     public void RefreshValidation()
     {
         var result =
@@ -112,6 +135,9 @@ public sealed class LocalizationEntry : ObservableObject
         OnPropertyChanged(nameof(HasSuspiciousLengthIssue));
         OnPropertyChanged(nameof(HasSourceMissingIssue));
         OnPropertyChanged(nameof(HasProfileRuleIssue));
+        OnPropertyChanged(nameof(HasStructuralValidationIssues));
+        OnPropertyChanged(nameof(QaIndicator));
+        OnPropertyChanged(nameof(QaStateText));
 
         if (issueCountChanged)
             OnPropertyChanged(nameof(HasValidationIssues));
