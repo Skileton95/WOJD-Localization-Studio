@@ -11,6 +11,9 @@ public sealed class LocalizationEntry : ObservableObject
     private string _validationSummary = string.Empty;
     private IReadOnlySet<TranslationIssueKind> _validationKinds =
         new HashSet<TranslationIssueKind>();
+    private string? _validatedTranslation;
+    private long _validatedQaProfileVersion = -1;
+    private long _validatedGlossaryVersion = -1;
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
@@ -111,12 +114,29 @@ public sealed class LocalizationEntry : ObservableObject
 
     public void RefreshValidation()
     {
+        var profileVersion = QaProfileService.Version;
+        var glossaryVersion = GlossaryService.Version;
+
+        if (string.Equals(
+                _validatedTranslation,
+                Translation,
+                StringComparison.Ordinal) &&
+            _validatedQaProfileVersion == profileVersion &&
+            _validatedGlossaryVersion == glossaryVersion)
+        {
+            return;
+        }
+
         var result =
             TranslationValidator.Validate(
                 Namespace,
                 Key,
                 Original,
                 Translation);
+
+        _validatedTranslation = Translation;
+        _validatedQaProfileVersion = profileVersion;
+        _validatedGlossaryVersion = glossaryVersion;
 
         var issueCountChanged =
             SetProperty(
