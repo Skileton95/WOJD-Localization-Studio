@@ -8,7 +8,9 @@ public enum TranslationIssueKind
     Tag,
     NewLine,
     SameAsSource,
-    SuspiciousLength
+    SuspiciousLength,
+    SourceMissing,
+    ProfileRule
 }
 
 public sealed record TranslationValidationResult(
@@ -21,6 +23,31 @@ public static partial class TranslationValidator
     public static TranslationValidationResult Validate(
         string source,
         string translation)
+        => Validate(
+            string.Empty,
+            string.Empty,
+            source,
+            translation,
+            applyProfiles: false);
+
+    public static TranslationValidationResult Validate(
+        string nameSpace,
+        string key,
+        string source,
+        string translation)
+        => Validate(
+            nameSpace,
+            key,
+            source,
+            translation,
+            applyProfiles: true);
+
+    private static TranslationValidationResult Validate(
+        string nameSpace,
+        string key,
+        string source,
+        string translation,
+        bool applyProfiles)
     {
         if (string.IsNullOrWhiteSpace(translation))
         {
@@ -32,73 +59,96 @@ public static partial class TranslationValidator
 
         var issues = new List<(TranslationIssueKind Kind, string Message)>();
 
-        CompareTokens(
-            source,
-            translation,
-            BracePlaceholderRegex(),
-            TranslationIssueKind.Placeholder,
-            "Плейсхолдеры {…} не совпадают",
-            issues);
-
-        CompareTokens(
-            source,
-            translation,
-            PercentPlaceholderRegex(),
-            TranslationIssueKind.Placeholder,
-            "Плейсхолдеры %… не совпадают",
-            issues);
-
-        CompareTokens(
-            source,
-            translation,
-            TagRegex(),
-            TranslationIssueKind.Tag,
-            "Теги <…> не совпадают",
-            issues);
-
-        var sourceNewLines = CountNewLines(source);
-        var targetNewLines = CountNewLines(translation);
-
-        if (sourceNewLines != targetNewLines)
+        if (string.IsNullOrWhiteSpace(source))
         {
             issues.Add((
-                TranslationIssueKind.NewLine,
-                $"Переносы строк: {sourceNewLines} → {targetNewLines}"));
+                TranslationIssueKind.SourceMissing,
+                "Исходный текст отсутствует — содержимое и структура не могут быть проверены"));
         }
-
-        var trimmedSource = source.Trim();
-        var trimmedTranslation = translation.Trim();
-
-        if (ContainsCjk(trimmedSource) &&
-            string.Equals(
-                trimmedSource,
-                trimmedTranslation,
-                StringComparison.Ordinal))
+        else
         {
-            issues.Add((
-                TranslationIssueKind.SameAsSource,
-                "Перевод полностью совпадает с китайским оригиналом"));
-        }
+            CompareTokens(
+                source,
+                translation,
+                BracePlaceholderRegex(),
+                TranslationIssueKind.Placeholder,
+                "Плейсхолдеры {…} не совпадают",
+                issues);
 
-        var sourceLength = GetVisibleLength(source);
-        var translationLength = GetVisibleLength(translation);
+            CompareTokens(
+                source,
+                translation,
+                PercentPlaceholderRegex(),
+                TranslationIssueKind.Placeholder,
+                "Плейсхолдеры %… не совпадают",
+                issues);
 
-        if (sourceLength >= 8 && translationLength > 0)
-        {
-            var ratio =
-                (double)translationLength / sourceLength;
+            CompareTokens(
+                source,
+                translation,
+                TagRegex(),
+                TranslationIssueKind.Tag,
+                "Теги <…> не совпадают",
+                issues);
 
-            if (ratio < 0.35)
+            var sourceNewLines = CountNewLines(source);
+            var targetNewLines = CountNewLines(translation);
+
+            if (sourceNewLines != targetNewLines)
             {
                 issues.Add((
-                    TranslationIssueKind.SuspiciousLength,
-                    $"Подозрительно короткий перевод: {sourceLength} → {translationLength} символов"));
+                    TranslationIssueKind.NewLine,
+                    $"Переносы строк: {sourceNewLines} → {targetNewLines}"));
             }
-            else if (ratio > 8.0)
+
+            var trimmedSource = source.Trim();
+            var trimmedTranslation = translation.Trim();
+
+            if (ContainsCjk(trimmedSource) &&
+                string.Equals(
+                    trimmedSource,
+                    trimmedTranslation,
+                    StringComparison.Ordinal))
             {
                 issues.Add((
-                    TranslationIssueKind.SuspiciousLength,
-                    $"Подозрительно длинный перевод: {sourceLength} → {translationLength} символов"));
+                    TranslationIssueKind.SameAsSource,
+                    "Перевод полностью совпадает с китайским оригиналом"));
+            }
+
+            var sourceLength = GetVisibleLength(source);
+            var translationLength = GetVisibleLength(translation);
+
+            if (sourceLength >= 8 && translationLength > 0)
+            {
+                var ratio =
+                    (double)translationLength / sourceLength;
+
+                if (ratio < 0.35)
+                {
+                    issues.Add((
+                        TranslationIssueKind.SuspiciousLength,
+                        $"Подозрительно короткий перевод: {sourceLength} → {translationLength} символов"));
+                }
+                else if (ratio > 8.0)
+                {
+                    issues.Add((
+                        TranslationIssueKind.SuspiciousLength,
+                        $"Подозрительно длинный перевод: {sourceLength} → {translationLength} символов"));
+                }
+            }
+        }
+
+        if (applyProfiles)
+        {
+            foreach (var profileIssue in
+                     QaProfileService.Validate(
+                         nameSpace,
+                         key,
+                         translation))
+            {
+                issues.Add((
+                    TranslationIssueKind.ProfileRule,
+                    profileIssue));
             }
         }
 
