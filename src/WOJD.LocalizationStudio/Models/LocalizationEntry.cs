@@ -81,6 +81,9 @@ public sealed class LocalizationEntry : ObservableObject
     public bool HasProfileRuleIssue
         => _validationKinds.Contains(TranslationIssueKind.ProfileRule);
 
+    public bool HasGlossaryIssue
+        => _validationKinds.Contains(TranslationIssueKind.Glossary);
+
     public bool HasStructuralValidationIssues
         => HasPlaceholderIssues || HasTagIssues || HasNewLineIssues;
 
@@ -108,18 +111,16 @@ public sealed class LocalizationEntry : ObservableObject
 
     public void RefreshValidation()
     {
-        var result =
-            TranslationValidator.Validate(
-                Namespace,
-                Key,
-                Original,
-                Translation);
+        var result = TranslationValidator.Validate(
+            Namespace,
+            Key,
+            Original,
+            Translation);
 
-        var issueCountChanged =
-            SetProperty(
-                ref _validationIssueCount,
-                result.IssueCount,
-                nameof(ValidationIssueCount));
+        var issueCountChanged = SetProperty(
+            ref _validationIssueCount,
+            result.IssueCount,
+            nameof(ValidationIssueCount));
 
         SetProperty(
             ref _validationSummary,
@@ -135,6 +136,7 @@ public sealed class LocalizationEntry : ObservableObject
         OnPropertyChanged(nameof(HasSuspiciousLengthIssue));
         OnPropertyChanged(nameof(HasSourceMissingIssue));
         OnPropertyChanged(nameof(HasProfileRuleIssue));
+        OnPropertyChanged(nameof(HasGlossaryIssue));
         OnPropertyChanged(nameof(HasStructuralValidationIssues));
         OnPropertyChanged(nameof(QaIndicator));
         OnPropertyChanged(nameof(QaStateText));
