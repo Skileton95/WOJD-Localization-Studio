@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Input;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.Views;
@@ -183,7 +182,7 @@ public partial class MainWindow
         EntriesGrid.ScrollIntoView(dialog.NavigateToEntry);
     }
 
-    private void Glossary_Click(object sender, RoutedEventArgs e)
+    private async void Glossary_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new GlossaryWindow
         {
@@ -195,21 +194,8 @@ public partial class MainWindow
 
         GlossaryService.Reload();
 
-        if (_viewModel.ActiveDocument is not LocalizationDocument document)
-            return;
-
-        Mouse.OverrideCursor = Cursors.Wait;
-        try
-        {
-            foreach (var entry in document.Entries)
-                entry.RefreshValidation();
-
-            _viewModel.EntriesView.Refresh();
-        }
-        finally
-        {
-            Mouse.OverrideCursor = null;
-        }
+        if (_viewModel.ActiveDocument is LocalizationDocument document)
+            await RefreshQaWithProgressAsync(document, "Перепроверка глоссария");
     }
 
     private void ProjectHistory_Click(object sender, RoutedEventArgs e)
@@ -256,7 +242,7 @@ public partial class MainWindow
         }
     }
 
-    private void QaProfilesMenu_Click(object sender, RoutedEventArgs e)
+    private async void QaProfilesMenu_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new QaProfilesWindow
         {
@@ -269,10 +255,7 @@ public partial class MainWindow
             return;
         }
 
-        foreach (var entry in document.Entries)
-            entry.RefreshValidation();
-
-        _viewModel.EntriesView.Refresh();
+        await RefreshQaWithProgressAsync(document, "Перепроверка QA-профилей");
     }
 
     private void EditorSettings_Click(object sender, RoutedEventArgs e)
@@ -286,6 +269,42 @@ public partial class MainWindow
 
         if (dialog.ShowDialog() == true)
             ApplyEditorSettingsShell();
+    }
+
+    private async Task RefreshQaWithProgressAsync(
+        LocalizationDocument document,
+        string title)
+    {
+        var progressWindow = new OperationProgressWindow(
+            title,
+            $"0 / {document.Entries.Count:N0}")
+        {
+            Owner = this
+        };
+        progressWindow.Show();
+
+        try
+        {
+            var progress = new Progress<ValidationRefreshProgress>(p =>
+                progressWindow.Report(
+                    $"Проверка: {p.Processed:N0} / {p.Total:N0} · ошибок {p.Errors:N0}",
+                    p.Processed,
+                    p.Total));
+
+            await ValidationRefreshService.RefreshAsync(
+                document,
+                progress,
+                progressWindow.CancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Пользователь отменил длительную перепроверку.
+        }
+        finally
+        {
+            progressWindow.Complete();
+            _viewModel.EntriesView.Refresh();
+        }
     }
 }
 
