@@ -77,10 +77,18 @@ public sealed class LocalizationEntry : ObservableObject
     public bool HasSuspiciousLengthIssue
         => _validationKinds.Contains(TranslationIssueKind.SuspiciousLength);
 
+    public bool HasSourceMissingIssue
+        => _validationKinds.Contains(TranslationIssueKind.SourceMissing);
+
+    public bool HasProfileRuleIssue
+        => _validationKinds.Contains(TranslationIssueKind.ProfileRule);
+
     public void RefreshValidation()
     {
         var result =
             TranslationValidator.Validate(
+                Namespace,
+                Key,
                 Original,
                 Translation);
 
@@ -102,6 +110,8 @@ public sealed class LocalizationEntry : ObservableObject
         OnPropertyChanged(nameof(HasNewLineIssues));
         OnPropertyChanged(nameof(HasSameAsSourceIssue));
         OnPropertyChanged(nameof(HasSuspiciousLengthIssue));
+        OnPropertyChanged(nameof(HasSourceMissingIssue));
+        OnPropertyChanged(nameof(HasProfileRuleIssue));
 
         if (issueCountChanged)
             OnPropertyChanged(nameof(HasValidationIssues));
