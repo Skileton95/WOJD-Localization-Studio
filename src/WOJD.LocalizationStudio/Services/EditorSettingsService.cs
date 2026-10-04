@@ -51,10 +51,20 @@ public static class EditorSettingsService
 
     public static void Save(EditorSettings settings)
     {
-        settings = Normalize(settings);
-
         lock (Sync)
         {
+            // EditorSettingsWindow in this release edits the text/editor options;
+            // table view toggles are changed from the DataGrid context menu.
+            // Preserve them when the dialog saves a cloned settings object.
+            if (_cached is not null && !ReferenceEquals(settings, _cached))
+            {
+                settings.ShowNamespaceColumn = _cached.ShowNamespaceColumn;
+                settings.ShowKeyColumn = _cached.ShowKeyColumn;
+                settings.ShowStatusColumn = _cached.ShowStatusColumn;
+                settings.CompactTable = _cached.CompactTable;
+            }
+
+            settings = Normalize(settings);
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             var temp = SettingsPath + ".tmp";
             var json = JsonSerializer.Serialize(settings, JsonOptions);
