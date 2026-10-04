@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,12 +8,13 @@ using System.Windows.Media;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
+using WOJD.LocalizationStudio.Views;
 
 namespace WOJD.LocalizationStudio;
 
 internal static class EditorEnhancements
 {
-    private static readonly ConditionalWeakTable<MainWindow, object>
+    private static readonly ConditionalWeakTable<MainWindow, EditorState>
         InstalledWindows = new();
 
     [ModuleInitializer]
@@ -34,18 +36,15 @@ internal static class EditorEnhancements
             return;
         }
 
-        InstalledWindows.Add(window, new object());
+        var state = new EditorState();
+        InstalledWindows.Add(window, state);
 
         if (window.FindName("TranslationBox") is not TextBox translationBox)
             return;
 
-        InstallSafeTranslationBinding(
-            window,
-            translationBox);
-
-        InstallAutoCorrectionControls(
-            window,
-            translationBox);
+        InstallSafeTranslationBinding(window, translationBox);
+        InstallAutoCorrectionControls(window, translationBox, state);
+        InstallHistoryCommands(window, translationBox, state);
     }
 
     private static void InstallSafeTranslationBinding(
@@ -92,14 +91,11 @@ internal static class EditorEnhancements
                 return;
 
             var modifiers = Keyboard.Modifiers;
-            var ctrl =
-                (modifiers & ModifierKeys.Control) != 0;
+            var ctrl = (modifiers & ModifierKeys.Control) != 0;
 
             if (ctrl && args.Key == Key.Enter)
             {
-                AutoCorrectCurrent(
-                    window,
-                    translationBox);
+                AutoCorrectCurrent(window, translationBox);
                 args.Handled = true;
                 return;
             }
@@ -119,7 +115,8 @@ internal static class EditorEnhancements
 
     private static void InstallAutoCorrectionControls(
         MainWindow window,
-        TextBox translationBox)
+        TextBox translationBox,
+        EditorState state)
     {
         if (translationBox.Parent is not Border editorBorder ||
             editorBorder.Parent is not Grid editorGrid)
@@ -155,16 +152,12 @@ internal static class EditorEnhancements
                 window,
                 "Автоисправить",
                 "PrimaryButton",
-                "Без ИИ: безопасно исправляет пробелы и пунктуацию. Теги и плейсхолдеры не изменяются.");
+                "Исправляет безопасные ошибки строки, включая однозначно восстанавливаемые теги и плейсхолдеры из оригинала.");
 
         autoCorrectButton.Click += (_, _) =>
-            AutoCorrectCurrent(
-                window,
-                translationBox);
+            AutoCorrectCurrent(window, translationBox);
 
-        Grid.SetColumn(
-            autoCorrectButton,
-            1);
+        Grid.SetColumn(autoCorrectButton, 1);
         footer.Children.Add(autoCorrectButton);
 
         var bulkButton =
@@ -172,19 +165,13 @@ internal static class EditorEnhancements
                 window,
                 "Массово…",
                 "SecondaryButton",
-                "Автоисправление всего текущего открытого файла. Выделение, поиск и фильтры не ограничивают область операции.");
+                "Анализирует весь открытый файл и показывает предпросмотр перед применением.");
 
-        bulkButton.Margin =
-            new Thickness(8, 0, 8, 0);
-
+        bulkButton.Margin = new Thickness(8, 0, 8, 0);
         bulkButton.Click += (_, _) =>
-            AutoCorrectBulk(
-                window,
-                translationBox);
+            AutoCorrectBulk(window, translationBox, state);
 
-        Grid.SetColumn(
-            bulkButton,
-            2);
+        Grid.SetColumn(bulkButton, 2);
         footer.Children.Add(bulkButton);
 
         var aiButton =
@@ -192,14 +179,56 @@ internal static class EditorEnhancements
                 window,
                 "ИИ-исправление",
                 "SecondaryButton",
-                "Интерфейс подготовлен. ИИ-провайдер будет подключён к тому же механизму исправлений позднее.");
+                "ИИ-провайдер будет подключён к тому же механизму предпросмотра и пакетного применения.");
 
         aiButton.IsEnabled = false;
-
-        Grid.SetColumn(
-            aiButton,
-            3);
+        Grid.SetColumn(aiButton, 3);
         footer.Children.Add(aiButton);
+    }
+
+    private static void InstallHistoryCommands(
+        MainWindow window,
+        TextBox translationBox,
+        EditorState state)
+    {
+        if (window.DataContext is not MainViewModel viewModel)
+            return;
+
+        var undoCommand = new DelegateCommand(
+            () => Undo(window, translationBox, viewModel, state));
+        var redoCommand = new DelegateCommand(
+            () => Redo(window, translationBox, viewModel, state));
+
+        foreach (var binding in window.InputBindings.OfType<KeyBinding>())
+        {
+            if (binding.Key == Key.Z && binding.Modifiers == ModifierKeys.Control)
+                binding.Command = undoCommand;
+
+            if (binding.Key == Key.Y && binding.Modifiers == ModifierKeys.Control)
+                binding.Command = redoCommand;
+        }
+
+        var menu = FindVisualChild<Menu>(window);
+        var editMenu = menu?.Items
+            .OfType<MenuItem>()
+            .FirstOrDefault(x =>
+                string.Equals(
+                    x.Header?.ToString(),
+                    "Правка",
+                    StringComparison.Ordinal));
+
+        if (editMenu is null)
+            return;
+
+        foreach (var item in editMenu.Items.OfType<MenuItem>())
+        {
+            var header = item.Header?.ToString();
+
+            if (string.Equals(header, "Отменить", StringComparison.Ordinal))
+                item.Command = undoCommand;
+            else if (string.Equals(header, "Повторить", StringComparison.Ordinal))
+                item.Command = redoCommand;
+        }
     }
 
     private static Button CreateButton(
@@ -234,17 +263,20 @@ internal static class EditorEnhancements
             return;
         }
 
-        var result =
-            TranslationAutoCorrectionService.RuleBased
-                .Correct(entry);
+        var result = TranslationAutoCorrectionService.RuleBased.Correct(entry);
 
         if (!result.HasChanges)
         {
             AppDialog.Show(
-                "Безопасных автоисправлений для этой строки не найдено.",
+                result.RequiresReview
+                    ? "Ошибка структуры найдена, но безопасно исправить её автоматически нельзя.\n\n" +
+                      result.ReviewReason
+                    : "Безопасных автоисправлений для этой строки не найдено.",
                 "Автоисправление",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information,
+                result.RequiresReview
+                    ? MessageBoxImage.Warning
+                    : MessageBoxImage.Information,
                 window);
             return;
         }
@@ -254,11 +286,23 @@ internal static class EditorEnhancements
         translationBox
             .GetBindingExpression(TextBox.TextProperty)?
             .UpdateTarget();
+
+        if (result.RequiresReview)
+        {
+            AppDialog.Show(
+                "Безопасная часть исправлена, но строка всё ещё требует проверки структуры:\n\n" +
+                result.ReviewReason,
+                "Автоисправление",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning,
+                window);
+        }
     }
 
     private static void AutoCorrectBulk(
         MainWindow window,
-        TextBox translationBox)
+        TextBox translationBox,
+        EditorState state)
     {
         CommitTranslation(translationBox);
 
@@ -274,13 +318,7 @@ internal static class EditorEnhancements
             return;
         }
 
-        // Массовое автоисправление всегда работает по полному открытому
-        // документу. Выделение строк, поиск, статусные и Namespace-фильтры
-        // влияют только на отображение таблицы и не сужают область операции.
-        var candidates =
-            document.Entries
-                .Distinct()
-                .ToList();
+        var candidates = document.Entries.Distinct().ToList();
 
         if (candidates.Count == 0)
         {
@@ -294,15 +332,13 @@ internal static class EditorEnhancements
         }
 
         Mouse.OverrideCursor = Cursors.Wait;
-
         TranslationCorrectionPlan plan;
 
         try
         {
-            plan =
-                TranslationAutoCorrectionService.BuildPlan(
-                    candidates,
-                    TranslationAutoCorrectionService.RuleBased);
+            plan = TranslationAutoCorrectionService.BuildPlan(
+                candidates,
+                TranslationAutoCorrectionService.RuleBased);
         }
         finally
         {
@@ -312,37 +348,37 @@ internal static class EditorEnhancements
         if (plan.AffectedEntries == 0)
         {
             AppDialog.Show(
-                $"Проверен весь файл: {candidates.Count:N0} строк.\n" +
-                "Безопасных автоисправлений не найдено.",
+                plan.ReviewItems.Count == 0
+                    ? $"Проверен весь файл: {candidates.Count:N0} строк.\nБезопасных автоисправлений не найдено."
+                    : $"Проверен весь файл: {candidates.Count:N0} строк.\n" +
+                      $"Автоматически исправлять нечего. Требуют ручной проверки: {plan.ReviewItems.Count:N0}.",
                 "Массовое автоисправление",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information,
+                plan.ReviewItems.Count == 0
+                    ? MessageBoxImage.Information
+                    : MessageBoxImage.Warning,
                 window);
             return;
         }
 
-        var confirmation =
-            AppDialog.Show(
-                "Область: весь текущий файл.\n" +
-                $"Всего строк в файле: {candidates.Count:N0}.\n" +
-                $"Будет изменено строк: {plan.AffectedEntries:N0}.\n" +
-                $"Найдено исправлений: {plan.TotalFixes:N0}.\n\n" +
-                "Применить автоисправление ко всему файлу?",
-                "Массовое автоисправление",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                window);
+        var preview =
+            new TranslationCorrectionPreviewWindow(
+                candidates.Count,
+                plan)
+            {
+                Owner = window
+            };
 
-        if (confirmation != MessageBoxResult.Yes)
+        if (preview.ShowDialog() != true ||
+            preview.SelectedChanges.Count == 0)
+        {
             return;
+        }
 
-        // Временно отключаем только те фильтры, из-за которых ViewModel
-        // перестраивает CollectionView после изменения каждой строки.
-        // После пакетного применения пользовательские значения возвращаются.
-        var previousStatusFilter =
-            viewModel.StatusFilter;
-        var previousSearchText =
-            viewModel.SearchText;
+        var previousStatusFilter = viewModel.StatusFilter;
+        var previousSearchText = viewModel.SearchText;
+        var session = GetActiveSession(viewModel);
+        var normalUndoBaseline = session?.UndoStack.Count ?? 0;
 
         Mouse.OverrideCursor = Cursors.Wait;
 
@@ -351,7 +387,29 @@ internal static class EditorEnhancements
             viewModel.StatusFilter = "Все";
             viewModel.SearchText = string.Empty;
 
-            var applyResult = plan.Apply();
+            if (session is not null)
+                session.HistoryChangeInProgress = true;
+
+            TranslationCorrectionApplyResult applyResult;
+
+            try
+            {
+                applyResult = plan.Apply(preview.SelectedChanges);
+            }
+            finally
+            {
+                if (session is not null)
+                    session.HistoryChangeInProgress = false;
+            }
+
+            if (applyResult.AppliedChanges.Count > 0)
+            {
+                state.BulkUndo.Push(
+                    new BulkHistoryOperation(
+                        applyResult.AppliedChanges,
+                        normalUndoBaseline));
+                state.BulkRedo.Clear();
+            }
 
             translationBox
                 .GetBindingExpression(TextBox.TextProperty)?
@@ -359,9 +417,12 @@ internal static class EditorEnhancements
 
             AppDialog.Show(
                 applyResult.SkippedEntries == 0
-                    ? $"Весь файл обработан. Исправлено строк: {applyResult.AppliedEntries:N0}."
-                    : $"Весь файл обработан. Исправлено строк: {applyResult.AppliedEntries:N0}. " +
-                      $"Пропущено изменённых во время операции: {applyResult.SkippedEntries:N0}.",
+                    ? $"Исправлено строк: {applyResult.AppliedEntries:N0}.\n" +
+                      $"Неоднозначных случаев оставлено для QA: {plan.ReviewItems.Count:N0}.\n\n" +
+                      "Всю операцию можно отменить одним Ctrl+Z."
+                    : $"Исправлено строк: {applyResult.AppliedEntries:N0}. " +
+                      $"Пропущено изменённых во время предпросмотра: {applyResult.SkippedEntries:N0}.\n" +
+                      $"Неоднозначных случаев: {plan.ReviewItems.Count:N0}.",
                 "Массовое автоисправление",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information,
@@ -375,8 +436,122 @@ internal static class EditorEnhancements
         }
     }
 
-    private static void CommitTranslation(
-        TextBox translationBox)
+    private static void Undo(
+        MainWindow window,
+        TextBox translationBox,
+        MainViewModel viewModel,
+        EditorState state)
+    {
+        CommitTranslation(translationBox);
+
+        var session = GetActiveSession(viewModel);
+        var operation = state.BulkUndo.Count > 0
+            ? state.BulkUndo.Peek()
+            : null;
+
+        if (operation is null ||
+            session is null ||
+            session.UndoStack.Count > operation.NormalUndoBaseline)
+        {
+            if (viewModel.UndoCommand.CanExecute(null))
+                viewModel.UndoCommand.Execute(null);
+            return;
+        }
+
+        state.BulkUndo.Pop();
+        session.HistoryChangeInProgress = true;
+
+        try
+        {
+            foreach (var change in operation.Changes.Reverse())
+            {
+                if (string.Equals(
+                        change.Entry.Translation,
+                        change.After,
+                        StringComparison.Ordinal))
+                {
+                    change.Entry.Translation = change.Before;
+                }
+            }
+        }
+        finally
+        {
+            session.HistoryChangeInProgress = false;
+        }
+
+        state.BulkRedo.Push(operation);
+        RefreshAfterHistory(window, translationBox, viewModel);
+    }
+
+    private static void Redo(
+        MainWindow window,
+        TextBox translationBox,
+        MainViewModel viewModel,
+        EditorState state)
+    {
+        CommitTranslation(translationBox);
+
+        var session = GetActiveSession(viewModel);
+
+        if (state.BulkRedo.Count == 0 || session is null)
+        {
+            if (viewModel.RedoCommand.CanExecute(null))
+                viewModel.RedoCommand.Execute(null);
+            return;
+        }
+
+        var operation = state.BulkRedo.Pop();
+        session.HistoryChangeInProgress = true;
+
+        try
+        {
+            foreach (var change in operation.Changes)
+            {
+                if (string.Equals(
+                        change.Entry.Translation,
+                        change.Before,
+                        StringComparison.Ordinal))
+                {
+                    change.Entry.Translation = change.After;
+                }
+            }
+        }
+        finally
+        {
+            session.HistoryChangeInProgress = false;
+        }
+
+        state.BulkUndo.Push(operation);
+        RefreshAfterHistory(window, translationBox, viewModel);
+    }
+
+    private static void RefreshAfterHistory(
+        MainWindow window,
+        TextBox translationBox,
+        MainViewModel viewModel)
+    {
+        translationBox
+            .GetBindingExpression(TextBox.TextProperty)?
+            .UpdateTarget();
+
+        viewModel.EntriesView.Refresh();
+
+        if (viewModel.SelectedEntry is not null &&
+            window.FindName("EntriesGrid") is DataGrid entriesGrid)
+        {
+            entriesGrid.UpdateLayout();
+            entriesGrid.ScrollIntoView(viewModel.SelectedEntry);
+        }
+    }
+
+    private static DocumentSession? GetActiveSession(MainViewModel viewModel)
+        => typeof(MainViewModel)
+            .GetField(
+                "_activeSession",
+                BindingFlags.Instance | BindingFlags.NonPublic)?
+            .GetValue(viewModel) as DocumentSession;
+
+    private static void CommitTranslation(TextBox translationBox)
     {
         translationBox
             .GetBindingExpression(TextBox.TextProperty)?
@@ -400,13 +575,11 @@ internal static class EditorEnhancements
         return false;
     }
 
-    private static DependencyObject? GetParent(
-        DependencyObject child)
+    private static DependencyObject? GetParent(DependencyObject child)
     {
         try
         {
-            var visualParent =
-                VisualTreeHelper.GetParent(child);
+            var visualParent = VisualTreeHelper.GetParent(child);
 
             if (visualParent is not null)
                 return visualParent;
@@ -416,5 +589,51 @@ internal static class EditorEnhancements
         }
 
         return LogicalTreeHelper.GetParent(child);
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+
+            if (child is T match)
+                return match;
+
+            var nested = FindVisualChild<T>(child);
+            if (nested is not null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private sealed class EditorState
+    {
+        public Stack<BulkHistoryOperation> BulkUndo { get; } = new();
+        public Stack<BulkHistoryOperation> BulkRedo { get; } = new();
+    }
+
+    private sealed record BulkHistoryOperation(
+        IReadOnlyList<TranslationCorrectionChange> Changes,
+        int NormalUndoBaseline);
+
+    private sealed class DelegateCommand : ICommand
+    {
+        private readonly Action _execute;
+
+        public DelegateCommand(Action execute)
+        {
+            _execute = execute;
+        }
+
+        public bool CanExecute(object? parameter) => true;
+        public void Execute(object? parameter) => _execute();
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
     }
 }
