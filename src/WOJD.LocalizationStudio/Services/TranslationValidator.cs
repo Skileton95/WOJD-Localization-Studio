@@ -10,7 +10,8 @@ public enum TranslationIssueKind
     SameAsSource,
     SuspiciousLength,
     SourceMissing,
-    ProfileRule
+    ProfileRule,
+    Glossary
 }
 
 public sealed record TranslationValidationResult(
@@ -135,6 +136,13 @@ public static partial class TranslationValidator
                         TranslationIssueKind.SuspiciousLength,
                         $"Подозрительно длинный перевод: {sourceLength} → {translationLength} символов"));
                 }
+            }
+
+            foreach (var glossaryIssue in GlossaryService.Validate(source, translation))
+            {
+                issues.Add((
+                    TranslationIssueKind.Glossary,
+                    glossaryIssue));
             }
         }
 
