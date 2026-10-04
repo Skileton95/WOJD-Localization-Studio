@@ -28,4 +28,4 @@ jobs:
       - name: Test
         shell: pwsh
         run: |
-          dotnet test 'tests/WOJD.LocalizationStudio.Tests/WOJD.LocalizationStudio.Tests.csproj' -c Release --no-restore
+          dotnet test 'tests/WOJD.LocalizationStudio.Tests/WOJD.LocalizationStudio.Tests.csproj' -c Release
