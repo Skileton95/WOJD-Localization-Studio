@@ -18,6 +18,9 @@ public static class QaProfileService
 {
     private static readonly object Sync = new();
     private static IReadOnlyList<QaProfileRule>? _rules;
+    private static long _version = 1;
+
+    public static long Version => Interlocked.Read(ref _version);
 
     public static string SettingsPath
         => Path.Combine(
@@ -91,6 +94,8 @@ public static class QaProfileService
     {
         lock (Sync)
             _rules = null;
+
+        Interlocked.Increment(ref _version);
     }
 
     public static void SaveRules(IEnumerable<QaProfileRule> rules)
@@ -123,6 +128,8 @@ public static class QaProfileService
 
         lock (Sync)
             _rules = normalized;
+
+        Interlocked.Increment(ref _version);
     }
 
     private static void EnsureDefaultFile()
