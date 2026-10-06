@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,9 +26,11 @@ public partial class EditorWorkspaceControl : UserControl
     private bool _collapsed;
     private double _expandedHeight = 360;
     private LocalizationDocument? _watchedDocument;
+    private PaneZoom _paneZoom = PaneZoom.None;
 
     public event EventHandler? CollapseRequested;
     public event EventHandler? SettingsChanged;
+    public event EventHandler? FocusModeRequested;
 
     public EditorWorkspaceControl()
     {
@@ -78,6 +81,9 @@ public partial class EditorWorkspaceControl : UserControl
             : Visibility.Collapsed;
         _collapsed = settings.EditorCollapsed;
         UpdateCollapseButton();
+        UpdateFocusButton();
+        ApplyPaneLayout();
+        RefreshHeader();
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -106,6 +112,7 @@ public partial class EditorWorkspaceControl : UserControl
 
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         RefreshDiagnostics();
+        RefreshHeader();
         _viewModel?.EntriesView.Refresh();
         return true;
     }
@@ -119,6 +126,7 @@ public partial class EditorWorkspaceControl : UserControl
 
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         RefreshDiagnostics();
+        RefreshHeader();
         _viewModel?.EntriesView.Refresh();
         return true;
     }
@@ -129,7 +137,11 @@ public partial class EditorWorkspaceControl : UserControl
         {
             CaptureManualHistory();
             OnSelectionChanged();
+            return;
         }
+
+        if (e.PropertyName is nameof(MainViewModel.ModifiedCount) or nameof(MainViewModel.TotalCount))
+            RefreshHeader();
     }
 
     private void OnSelectionChanged()
@@ -140,6 +152,7 @@ public partial class EditorWorkspaceControl : UserControl
         _currentEntry = _viewModel.SelectedEntry;
         _baselineTranslation = _currentEntry?.Translation ?? string.Empty;
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
+        RefreshHeader();
         RefreshDiagnostics();
 
         var document = _viewModel.ActiveDocument;
@@ -152,17 +165,49 @@ public partial class EditorWorkspaceControl : UserControl
         }
     }
 
+    private void RefreshHeader()
+    {
+        var document = _viewModel?.ActiveDocument;
+        var entry = _viewModel?.SelectedEntry;
+
+        FileNameText.Text = document is null
+            ? string.Empty
+            : Path.GetFileName(document.FilePath);
+        UnsavedIndicator.Visibility = (_viewModel?.ModifiedCount ?? 0) > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        EntryMetaText.Text = entry is null
+            ? string.Empty
+            : $"{entry.Namespace} / {entry.Key}";
+
+        if (document is null || entry is null)
+        {
+            PositionText.Text = string.Empty;
+            return;
+        }
+
+        var position = entry.Index > 0 ? entry.Index : 1;
+        PositionText.Text = $"{position:N0} / {document.Entries.Count:N0}";
+    }
+
     private void TranslationBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (!_attached)
             return;
+
         RefreshDiagnostics();
     }
+
+    private void TranslationBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        => UpdateTranslationBorder(null);
 
     private void TranslationBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         CommitCurrentTranslation();
         CaptureManualHistory();
+        RefreshHeader();
+        RefreshDiagnostics();
     }
 
     private void CommitCurrentTranslation()
@@ -197,6 +242,7 @@ public partial class EditorWorkspaceControl : UserControl
         }
 
         _baselineTranslation = current;
+        RefreshHeader();
     }
 
     private void RefreshDiagnostics()
@@ -204,41 +250,191 @@ public partial class EditorWorkspaceControl : UserControl
         var entry = _viewModel?.SelectedEntry;
         if (entry is null)
         {
-            StructureSummaryText.Text = string.Empty;
-            StructureDetailsText.Text = string.Empty;
+            HideQaChips();
             TokenPreview.Document = new FlowDocument();
+            RestoreStructureButton.Visibility = Visibility.Collapsed;
+            AutoCorrectButton.IsEnabled = false;
+            AutoCorrectButton.Content = "Автоисправить";
+            UpdateTranslationBorder(null);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(entry.Original))
         {
-            StructureSummaryText.Text = "— Исходный текст отсутствует — структура не проверяется";
-            StructureSummaryText.Foreground = Brushes.DimGray;
-            StructureDetailsText.Text = string.Empty;
-            RenderTokenPreview(entry.Translation, null);
+            TagsChip.Visibility = Visibility.Collapsed;
+            PlaceholdersChip.Visibility = Visibility.Collapsed;
+            NewLinesChip.Visibility = Visibility.Collapsed;
+            StructureChip.Visibility = Visibility.Visible;
+            StructureChipText.Text = "— Нет Original";
+            SetChipState(StructureChip, StructureChipText, ChipState.Neutral);
+            StructureChip.ToolTip = "Исходный текст отсутствует — структура не проверяется.";
+            RestoreStructureButton.Visibility = Visibility.Collapsed;
+            RefreshAutoCorrectButton(entry);
+            RenderTokenPreview(TranslationBox.Text, null);
+            UpdateTranslationBorder(null);
             return;
         }
 
         var diff = StructuralDiffService.Analyze(entry.Original, TranslationBox.Text);
-        var ok = !diff.HasIssues;
-        StructureSummaryText.Text =
-            $"Теги {diff.TargetTags}/{diff.SourceTags} {(diff.SourceTags == diff.TargetTags && !diff.MissingTokens.Any(IsTag) && !diff.ExtraTokens.Any(IsTag) && !diff.OrderMismatch ? "✓" : "✕")}   " +
-            $"Плейсхолдеры {diff.TargetPlaceholders}/{diff.SourcePlaceholders} {(diff.SourcePlaceholders == diff.TargetPlaceholders && !diff.MissingTokens.Any(x => !IsTag(x)) && !diff.ExtraTokens.Any(x => !IsTag(x)) ? "✓" : "✕")}   " +
-            $"Переносы {diff.TargetNewLines}/{diff.SourceNewLines} {(diff.SourceNewLines == diff.TargetNewLines ? "✓" : "✕")}";
-        StructureSummaryText.Foreground = ok ? Brushes.SeaGreen : Brushes.Firebrick;
+        var missingTags = diff.MissingTokens.Where(IsTag).ToList();
+        var extraTags = diff.ExtraTokens.Where(IsTag).ToList();
+        var missingPlaceholders = diff.MissingTokens.Where(x => !IsTag(x)).ToList();
+        var extraPlaceholders = diff.ExtraTokens.Where(x => !IsTag(x)).ToList();
+        var tagIssue = diff.SourceTags != diff.TargetTags || missingTags.Count > 0 || extraTags.Count > 0 || diff.OrderMismatch;
+        var placeholderIssue = diff.SourcePlaceholders != diff.TargetPlaceholders || missingPlaceholders.Count > 0 || extraPlaceholders.Count > 0;
+        var newlineIssue = diff.SourceNewLines != diff.TargetNewLines;
 
-        var details = new List<string>();
+        ConfigureQaChip(
+            TagsChip,
+            TagsChipText,
+            "Теги",
+            diff.TargetTags,
+            diff.SourceTags,
+            tagIssue,
+            diff.SourceTags > 0 || diff.TargetTags > 0 || tagIssue);
+        ConfigureQaChip(
+            PlaceholdersChip,
+            PlaceholdersChipText,
+            "Плейсхолдеры",
+            diff.TargetPlaceholders,
+            diff.SourcePlaceholders,
+            placeholderIssue,
+            diff.SourcePlaceholders > 0 || diff.TargetPlaceholders > 0 || placeholderIssue);
+        ConfigureQaChip(
+            NewLinesChip,
+            NewLinesChipText,
+            "Переносы",
+            diff.TargetNewLines,
+            diff.SourceNewLines,
+            newlineIssue,
+            diff.SourceNewLines > 0 || diff.TargetNewLines > 0 || newlineIssue);
+
+        StructureChip.Visibility = Visibility.Visible;
+        StructureChipText.Text = diff.HasIssues ? "Структура ✕" : "Структура ✓";
+        SetChipState(
+            StructureChip,
+            StructureChipText,
+            diff.HasIssues ? ChipState.Error : ChipState.Ok);
+
+        var details = new List<string>
+        {
+            $"Теги {diff.TargetTags}/{diff.SourceTags}",
+            $"Плейсхолдеры {diff.TargetPlaceholders}/{diff.SourcePlaceholders}",
+            $"Переносы {diff.TargetNewLines}/{diff.SourceNewLines}"
+        };
         if (diff.MissingTokens.Count > 0)
-            details.Add("нет: " + string.Join(", ", diff.MissingTokens.Distinct()));
+            details.Add("Нет: " + string.Join(", ", diff.MissingTokens.Distinct()));
         if (diff.ExtraTokens.Count > 0)
-            details.Add("лишнее: " + string.Join(", ", diff.ExtraTokens.Distinct()));
+            details.Add("Лишнее: " + string.Join(", ", diff.ExtraTokens.Distinct()));
         if (diff.OrderMismatch)
-            details.Add("нарушен порядок тегов");
-        if (diff.SourceNewLines != diff.TargetNewLines)
-            details.Add($"переносы {diff.SourceNewLines} → {diff.TargetNewLines}");
-        StructureDetailsText.Text = details.Count == 0 ? "Структура совпадает с Original." : string.Join(" · ", details);
-        StructureDetailsText.ToolTip = StructureDetailsText.Text;
+            details.Add("Нарушен порядок тегов");
+        StructureChip.ToolTip = string.Join("\n", details);
+
+        var restore = StructureProtectionService.RestoreStructure(entry.Original, TranslationBox.Text);
+        RestoreStructureButton.Visibility = diff.HasIssues && restore.CanRestore
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        RefreshAutoCorrectButton(entry);
         RenderTokenPreview(TranslationBox.Text, diff);
+        UpdateTranslationBorder(diff);
+    }
+
+    private void ConfigureQaChip(
+        Border border,
+        TextBlock text,
+        string label,
+        int actual,
+        int expected,
+        bool issue,
+        bool visible)
+    {
+        border.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (!visible)
+            return;
+
+        text.Text = issue ? $"{label} ✕ {actual}/{expected}" : $"{label} ✓";
+        border.ToolTip = $"{label}: {actual}/{expected}";
+        SetChipState(border, text, issue ? ChipState.Error : ChipState.Ok);
+    }
+
+    private static void SetChipState(Border border, TextBlock text, ChipState state)
+    {
+        switch (state)
+        {
+            case ChipState.Error:
+                border.Background = new SolidColorBrush(Color.FromRgb(255, 240, 242));
+                text.Foreground = Brushes.Firebrick;
+                break;
+            case ChipState.Ok:
+                border.Background = new SolidColorBrush(Color.FromRgb(238, 249, 242));
+                text.Foreground = new SolidColorBrush(Color.FromRgb(35, 138, 80));
+                break;
+            default:
+                border.Background = new SolidColorBrush(Color.FromRgb(241, 244, 248));
+                text.Foreground = Brushes.DimGray;
+                break;
+        }
+    }
+
+    private void HideQaChips()
+    {
+        TagsChip.Visibility = Visibility.Collapsed;
+        PlaceholdersChip.Visibility = Visibility.Collapsed;
+        NewLinesChip.Visibility = Visibility.Collapsed;
+        StructureChip.Visibility = Visibility.Collapsed;
+    }
+
+    private void RefreshAutoCorrectButton(LocalizationEntry entry)
+    {
+        var probe = new LocalizationEntry
+        {
+            Index = entry.Index,
+            Namespace = entry.Namespace,
+            Key = entry.Key,
+            Original = entry.Original,
+            TranslationField = entry.TranslationField
+        };
+        probe.Translation = TranslationBox.Text;
+        var result = TranslationAutoCorrectionService.RuleBased.Correct(probe);
+        AutoCorrectButton.IsEnabled = result.HasChanges;
+        AutoCorrectButton.Content = result.HasChanges
+            ? $"Автоисправить · {result.FixCount}"
+            : "Автоисправить";
+        AutoCorrectButton.ToolTip = result.HasChanges
+            ? $"Найдено безопасных исправлений: {result.FixCount}"
+            : result.RequiresReview
+                ? result.ReviewReason
+                : "Безопасных исправлений для этой строки нет";
+    }
+
+    private void UpdateTranslationBorder(StructuralDiffResult? diff)
+    {
+        if (TranslationBox.IsKeyboardFocusWithin)
+        {
+            TranslationEditorBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(47, 126, 247));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(TranslationBox.Text))
+        {
+            TranslationEditorBorder.BorderBrush = FindResource("BorderBrushApp") as Brush ?? Brushes.LightGray;
+            return;
+        }
+
+        if (diff?.HasIssues == true)
+        {
+            TranslationEditorBorder.BorderBrush = Brushes.Firebrick;
+            return;
+        }
+
+        if (_viewModel?.SelectedEntry?.HasValidationIssues == true)
+        {
+            TranslationEditorBorder.BorderBrush = Brushes.DarkGoldenrod;
+            return;
+        }
+
+        TranslationEditorBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(45, 157, 91));
     }
 
     private static bool IsTag(string token) => token.StartsWith('<');
@@ -283,7 +479,6 @@ public partial class EditorWorkspaceControl : UserControl
         }
 
         string? proposed = null;
-
         if (e.Key == Key.Back)
             proposed = SimulateBackspace(TranslationBox);
         else if (e.Key == Key.Delete)
@@ -292,18 +487,14 @@ public partial class EditorWorkspaceControl : UserControl
             proposed = ReplaceSelection(TranslationBox, string.Empty);
 
         if (proposed is null ||
-            !StructureProtectionService.WouldWorsenStructure(
-                entry.Original,
-                TranslationBox.Text,
-                proposed))
+            !StructureProtectionService.WouldWorsenStructure(entry.Original, TranslationBox.Text, proposed))
         {
             return;
         }
 
         System.Media.SystemSounds.Beep.Play();
         e.Handled = true;
-        StructureDetailsText.Text =
-            "Действие остановлено: оно повреждало тег или плейсхолдер.";
+        StructureChip.ToolTip = "Действие остановлено: оно повреждало тег или плейсхолдер.";
     }
 
     private void TranslationBox_Pasting(object sender, DataObjectPastingEventArgs e)
@@ -343,8 +534,7 @@ public partial class EditorWorkspaceControl : UserControl
             return ReplaceSelection(box, string.Empty);
         if (box.SelectionStart <= 0)
             return box.Text;
-        var index = box.SelectionStart - 1;
-        return box.Text.Remove(index, 1);
+        return box.Text.Remove(box.SelectionStart - 1, 1);
     }
 
     private static string SimulateDelete(TextBox box)
@@ -379,6 +569,7 @@ public partial class EditorWorkspaceControl : UserControl
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         RecordProgrammaticChange(entry, before, result.Text, "Восстановление структуры");
         RefreshDiagnostics();
+        RefreshHeader();
     }
 
     private void AutoCorrect_Click(object sender, RoutedEventArgs e)
@@ -390,22 +581,13 @@ public partial class EditorWorkspaceControl : UserControl
         var before = entry.Translation;
         var result = TranslationAutoCorrectionService.RuleBased.Correct(entry);
         if (!result.HasChanges)
-        {
-            AppDialog.Show(
-                result.RequiresReview
-                    ? result.ReviewReason
-                    : "Безопасных автоисправлений не найдено.",
-                "Автоисправление",
-                MessageBoxButton.OK,
-                result.RequiresReview ? MessageBoxImage.Warning : MessageBoxImage.Information,
-                _owner);
             return;
-        }
 
         entry.Translation = result.CorrectedText;
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         RecordProgrammaticChange(entry, before, result.CorrectedText, "Автоисправление");
         RefreshDiagnostics();
+        RefreshHeader();
     }
 
     private async void BulkAutoCorrect_Click(object sender, RoutedEventArgs e)
@@ -420,7 +602,7 @@ public partial class EditorWorkspaceControl : UserControl
             var entries = document.Entries.ToList();
             var fileName = Path.GetFileName(document.FilePath);
             var plan = await RunOperationAsync(
-                $"Анализ текущего файла {fileName}",
+                $"Анализ файла {fileName}",
                 (progress, token) => BackgroundCorrectionService.BuildPlanAsync(
                     entries,
                     TranslationAutoCorrectionService.RuleBased,
@@ -434,7 +616,7 @@ public partial class EditorWorkspaceControl : UserControl
             {
                 AppDialog.Show(
                     $"Текущий файл: {fileName}\nПроверено строк: {entries.Count:N0}. Изменений нет. Требуют ручной проверки: {plan.ReviewItems.Count:N0}.",
-                    "Массовое автоисправление",
+                    "Автоисправление файла",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information,
                     _owner);
@@ -444,7 +626,7 @@ public partial class EditorWorkspaceControl : UserControl
             var preview = new TranslationCorrectionPreviewWindow(entries.Count, plan)
             {
                 Owner = _owner,
-                Title = $"Массовое автоисправление — {fileName}"
+                Title = $"Автоисправление файла — {fileName}"
             };
             if (preview.ShowDialog() != true || preview.SelectedChanges.Count == 0)
                 return;
@@ -459,16 +641,17 @@ public partial class EditorWorkspaceControl : UserControl
             using (SuppressViewModelHistory())
                 applyResult = plan.Apply(selected);
 
-            BulkUndoService.Push(document.FilePath, "Массовое автоисправление", changes);
+            BulkUndoService.Push(document.FilePath, "Автоисправление файла", changes);
             ProjectHistoryService.Record(
                 document.FilePath,
-                "Массовое автоисправление",
+                "Автоисправление файла",
                 applyResult.AppliedEntries,
                 $"Исправлений: {selected.Sum(x => x.FixCount):N0}; ручная проверка: {plan.ReviewItems.Count:N0}",
                 snapshot.Path);
             TranslationMemoryService.Invalidate(document);
             TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
             RefreshDiagnostics();
+            RefreshHeader();
             _viewModel?.EntriesView.Refresh();
         }
         catch (OperationCanceledException)
@@ -478,7 +661,7 @@ public partial class EditorWorkspaceControl : UserControl
         {
             AppDialog.Show(
                 ex.Message,
-                "Ошибка массового автоисправления",
+                "Ошибка автоисправления файла",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error,
                 _owner);
@@ -564,6 +747,7 @@ public partial class EditorWorkspaceControl : UserControl
             TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
             _baselineTranslation = entry.Translation;
             RefreshDiagnostics();
+            RefreshHeader();
         }
     }
 
@@ -573,14 +757,212 @@ public partial class EditorWorkspaceControl : UserControl
         if (_viewModel?.ActiveDocument is not LocalizationDocument document)
             return;
 
-        var dialog = new ConsistencyWindow(document) { Owner = _owner };
+        var dialog = new ConsistencyWindow(document)
+        {
+            Owner = _owner,
+            Title = "Согласованность переводов"
+        };
         if (dialog.ShowDialog() == true)
         {
             TranslationMemoryService.Invalidate(document);
             _viewModel.EntriesView.Refresh();
             TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
+            RefreshDiagnostics();
+            RefreshHeader();
         }
     }
+
+    private void More_Click(object sender, RoutedEventArgs e)
+    {
+        if (MoreButton.ContextMenu is null)
+            return;
+        MoreButton.ContextMenu.PlacementTarget = MoreButton;
+        MoreButton.ContextMenu.IsOpen = true;
+    }
+
+    private void CopyOriginal_Click(object sender, RoutedEventArgs e)
+        => CopyToClipboard(_viewModel?.SelectedEntry?.Original ?? string.Empty);
+
+    private void CopyTranslation_Click(object sender, RoutedEventArgs e)
+        => CopyToClipboard(TranslationBox.Text);
+
+    private void CopyKey_Click(object sender, RoutedEventArgs e)
+        => CopyToClipboard(_viewModel?.SelectedEntry?.Key ?? string.Empty);
+
+    private static void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch
+        {
+        }
+    }
+
+    private void ClearTranslation_Click(object sender, RoutedEventArgs e)
+    {
+        CommitCurrentTranslation();
+        if (_viewModel?.SelectedEntry is not LocalizationEntry entry)
+            return;
+
+        var before = entry.Translation;
+        if (before.Length == 0)
+            return;
+        entry.Translation = string.Empty;
+        TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
+        RecordProgrammaticChange(entry, before, string.Empty, "Очистка перевода");
+        RefreshDiagnostics();
+        RefreshHeader();
+    }
+
+    private async void ExportCurrent_Click(object sender, RoutedEventArgs e)
+    {
+        CommitCurrentTranslation();
+        if (_viewModel?.SelectedEntry is not LocalizationEntry entry)
+            return;
+        await _viewModel.ExportEntriesAsync([entry], "selected");
+    }
+
+    private void HorizontalLayout_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = EditorSettingsService.Current;
+        settings.EditorPaneLayout = "Horizontal";
+        settings.TranslationOnlyMode = false;
+        EditorSettingsService.Save(settings);
+        _paneZoom = PaneZoom.None;
+        ApplyPaneLayout();
+    }
+
+    private void VerticalLayout_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = EditorSettingsService.Current;
+        settings.EditorPaneLayout = "Vertical";
+        settings.TranslationOnlyMode = false;
+        EditorSettingsService.Save(settings);
+        _paneZoom = PaneZoom.None;
+        ApplyPaneLayout();
+    }
+
+    private void TranslationOnly_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = EditorSettingsService.Current;
+        settings.TranslationOnlyMode = !settings.TranslationOnlyMode;
+        EditorSettingsService.Save(settings);
+        _paneZoom = PaneZoom.None;
+        ApplyPaneLayout();
+    }
+
+    private void OriginalHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2)
+            return;
+        _paneZoom = _paneZoom == PaneZoom.Original ? PaneZoom.None : PaneZoom.Original;
+        ApplyPaneLayout();
+        e.Handled = true;
+    }
+
+    private void TranslationHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2)
+            return;
+        _paneZoom = _paneZoom == PaneZoom.Translation ? PaneZoom.None : PaneZoom.Translation;
+        ApplyPaneLayout();
+        e.Handled = true;
+    }
+
+    private void ApplyPaneLayout()
+    {
+        var settings = EditorSettingsService.Current;
+        var translationOnly = settings.TranslationOnlyMode || _paneZoom == PaneZoom.Translation;
+        var originalOnly = _paneZoom == PaneZoom.Original;
+        var vertical = string.Equals(settings.EditorPaneLayout, "Vertical", StringComparison.OrdinalIgnoreCase);
+
+        Grid.SetColumnSpan(OriginalPane, 1);
+        Grid.SetRowSpan(OriginalPane, 1);
+        Grid.SetColumnSpan(TranslationPane, 1);
+        Grid.SetRowSpan(TranslationPane, 1);
+
+        if (translationOnly)
+        {
+            PaneColumn1.Width = new GridLength(1, GridUnitType.Star);
+            PaneColumnDivider.Width = new GridLength(0);
+            PaneColumn2.Width = new GridLength(0);
+            PaneRow1.Height = new GridLength(1, GridUnitType.Star);
+            PaneRowDivider.Height = new GridLength(0);
+            PaneRow2.Height = new GridLength(0);
+            OriginalPane.Visibility = Visibility.Collapsed;
+            PaneDivider.Visibility = Visibility.Collapsed;
+            TranslationPane.Visibility = Visibility.Visible;
+            TranslationPane.Margin = new Thickness(0);
+            Grid.SetColumn(TranslationPane, 0);
+            Grid.SetRow(TranslationPane, 0);
+            return;
+        }
+
+        if (originalOnly)
+        {
+            PaneColumn1.Width = new GridLength(1, GridUnitType.Star);
+            PaneColumnDivider.Width = new GridLength(0);
+            PaneColumn2.Width = new GridLength(0);
+            PaneRow1.Height = new GridLength(1, GridUnitType.Star);
+            PaneRowDivider.Height = new GridLength(0);
+            PaneRow2.Height = new GridLength(0);
+            OriginalPane.Visibility = Visibility.Visible;
+            PaneDivider.Visibility = Visibility.Collapsed;
+            TranslationPane.Visibility = Visibility.Collapsed;
+            OriginalPane.Margin = new Thickness(0);
+            Grid.SetColumn(OriginalPane, 0);
+            Grid.SetRow(OriginalPane, 0);
+            return;
+        }
+
+        OriginalPane.Visibility = Visibility.Visible;
+        TranslationPane.Visibility = Visibility.Visible;
+        PaneDivider.Visibility = Visibility.Visible;
+
+        if (!vertical)
+        {
+            PaneColumn1.Width = new GridLength(1, GridUnitType.Star);
+            PaneColumnDivider.Width = new GridLength(1);
+            PaneColumn2.Width = new GridLength(1, GridUnitType.Star);
+            PaneRow1.Height = new GridLength(1, GridUnitType.Star);
+            PaneRowDivider.Height = new GridLength(0);
+            PaneRow2.Height = new GridLength(0);
+
+            Grid.SetRow(OriginalPane, 0);
+            Grid.SetColumn(OriginalPane, 0);
+            OriginalPane.Margin = new Thickness(0, 0, 12, 0);
+            Grid.SetRow(PaneDivider, 0);
+            Grid.SetColumn(PaneDivider, 1);
+            Grid.SetRow(TranslationPane, 0);
+            Grid.SetColumn(TranslationPane, 2);
+            TranslationPane.Margin = new Thickness(12, 0, 0, 0);
+        }
+        else
+        {
+            PaneColumn1.Width = new GridLength(1, GridUnitType.Star);
+            PaneColumnDivider.Width = new GridLength(0);
+            PaneColumn2.Width = new GridLength(0);
+            PaneRow1.Height = new GridLength(1, GridUnitType.Star);
+            PaneRowDivider.Height = new GridLength(1);
+            PaneRow2.Height = new GridLength(1, GridUnitType.Star);
+
+            Grid.SetRow(OriginalPane, 0);
+            Grid.SetColumn(OriginalPane, 0);
+            OriginalPane.Margin = new Thickness(0, 0, 0, 12);
+            Grid.SetRow(PaneDivider, 1);
+            Grid.SetColumn(PaneDivider, 0);
+            Grid.SetRow(TranslationPane, 2);
+            Grid.SetColumn(TranslationPane, 0);
+            TranslationPane.Margin = new Thickness(0, 12, 0, 0);
+        }
+    }
+
+    private void FocusMode_Click(object sender, RoutedEventArgs e)
+        => FocusModeRequested?.Invoke(this, EventArgs.Empty);
 
     private void Collapse_Click(object sender, RoutedEventArgs e)
     {
@@ -599,6 +981,14 @@ public partial class EditorWorkspaceControl : UserControl
         CollapseButton.ToolTip = _collapsed
             ? "Развернуть редактор"
             : "Свернуть редактор";
+    }
+
+    private void UpdateFocusButton()
+    {
+        FocusModeButton.Content = EditorSettingsService.Current.FocusMode ? "⤢" : "⛶";
+        FocusModeButton.ToolTip = EditorSettingsService.Current.FocusMode
+            ? "Выйти из режима фокус"
+            : "Режим фокус";
     }
 
     private async void Monitor_Changed(object? sender, ExternalFileChangedEventArgs e)
@@ -664,9 +1054,7 @@ public partial class EditorWorkspaceControl : UserControl
             return;
 
         var snapshot = SnapshotService.CreateSnapshot(document, "before-external-reload");
-        var changed = ExternalFileDiffService.ApplyDiskTranslations(
-            document,
-            _externalDiff.DiskDocument);
+        var changed = ExternalFileDiffService.ApplyDiskTranslations(document, _externalDiff.DiskDocument);
         ProjectHistoryService.Record(
             document.FilePath,
             "Перезагрузка внешней версии",
@@ -679,6 +1067,8 @@ public partial class EditorWorkspaceControl : UserControl
         _monitor.AcknowledgeCurrent();
         ExternalChangeBanner.Visibility = Visibility.Collapsed;
         _externalDiff = null;
+        RefreshDiagnostics();
+        RefreshHeader();
     }
 
     private void ExternalOverwrite_Click(object sender, RoutedEventArgs e)
@@ -718,5 +1108,19 @@ public partial class EditorWorkspaceControl : UserControl
     {
         public static readonly EmptyDisposable Instance = new();
         public void Dispose() { }
+    }
+
+    private enum ChipState
+    {
+        Neutral,
+        Ok,
+        Error
+    }
+
+    private enum PaneZoom
+    {
+        None,
+        Original,
+        Translation
     }
 }
