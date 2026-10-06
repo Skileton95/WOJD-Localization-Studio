@@ -16,16 +16,15 @@ public partial class EditorWorkspaceControl : UserControl
 {
     private MainWindow? _owner;
     private MainViewModel? _viewModel;
-    private DataGrid? _entriesGrid;
     private readonly ExternalFileMonitorService _monitor = new();
     private CancellationTokenSource? _operationCts;
     private ExternalFileDiffResult? _externalDiff;
     private LocalizationEntry? _currentEntry;
     private string _baselineTranslation = string.Empty;
-    private bool _updatingReviewStatus;
     private bool _attached;
     private bool _collapsed;
     private double _expandedHeight = 360;
+    private LocalizationDocument? _watchedDocument;
 
     public event EventHandler? CollapseRequested;
     public event EventHandler? SettingsChanged;
@@ -33,11 +32,6 @@ public partial class EditorWorkspaceControl : UserControl
     public EditorWorkspaceControl()
     {
         InitializeComponent();
-        ReviewStatusCombo.Items.Add(new ReviewOption("Не проверено", ReviewState.Unreviewed));
-        ReviewStatusCombo.Items.Add(new ReviewOption("Проверено", ReviewState.Reviewed));
-        ReviewStatusCombo.Items.Add(new ReviewOption("Требует правки", ReviewState.NeedsFix));
-        ReviewStatusCombo.Items.Add(new ReviewOption("Пропустить", ReviewState.Skipped));
-        ReviewStatusCombo.SelectedIndex = 0;
         _monitor.Changed += Monitor_Changed;
         Unloaded += (_, _) => _operationCts?.Cancel();
     }
@@ -53,7 +47,6 @@ public partial class EditorWorkspaceControl : UserControl
         _attached = true;
         _owner = owner;
         _viewModel = viewModel;
-        _entriesGrid = entriesGrid;
         DataContext = viewModel;
 
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -84,7 +77,7 @@ public partial class EditorWorkspaceControl : UserControl
             ? Visibility.Visible
             : Visibility.Collapsed;
         _collapsed = settings.EditorCollapsed;
-        CollapseButton.Content = _collapsed ? "Развернуть" : "Свернуть";
+        UpdateCollapseButton();
         SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -148,9 +141,6 @@ public partial class EditorWorkspaceControl : UserControl
         _baselineTranslation = _currentEntry?.Translation ?? string.Empty;
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         RefreshDiagnostics();
-        RefreshReviewStatus();
-        RefreshGlossaryMatches();
-        _ = RefreshTranslationMemoryAsync(_currentEntry);
 
         var document = _viewModel.ActiveDocument;
         if (document is not null && !ReferenceEquals(document, _watchedDocument))
@@ -161,8 +151,6 @@ public partial class EditorWorkspaceControl : UserControl
             _externalDiff = null;
         }
     }
-
-    private LocalizationDocument? _watchedDocument;
 
     private void TranslationBox_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -200,7 +188,6 @@ public partial class EditorWorkspaceControl : UserControl
 
         if (_viewModel.ActiveDocument is LocalizationDocument document)
         {
-            ReviewWorkflowService.OnTranslationChanged(document.FilePath, _currentEntry);
             ProjectHistoryService.Record(
                 document.FilePath,
                 "Ручная правка",
@@ -210,7 +197,6 @@ public partial class EditorWorkspaceControl : UserControl
         }
 
         _baselineTranslation = current;
-        RefreshReviewStatus();
     }
 
     private void RefreshDiagnostics()
@@ -277,7 +263,9 @@ public partial class EditorWorkspaceControl : UserControl
             {
                 run.FontWeight = FontWeights.SemiBold;
                 run.Foreground = segment.IsProblem ? Brushes.Firebrick : Brushes.RoyalBlue;
-                run.Background = segment.IsProblem ? new SolidColorBrush(Color.FromArgb(26, 220, 38, 38)) : Brushes.Transparent;
+                run.Background = segment.IsProblem
+                    ? new SolidColorBrush(Color.FromArgb(26, 220, 38, 38))
+                    : Brushes.Transparent;
             }
             paragraph.Inlines.Add(run);
         }
@@ -288,8 +276,7 @@ public partial class EditorWorkspaceControl : UserControl
 
     private void TranslationBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (ProtectStructureCheckBox.IsChecked != true ||
-            _viewModel?.SelectedEntry is not LocalizationEntry entry ||
+        if (_viewModel?.SelectedEntry is not LocalizationEntry entry ||
             string.IsNullOrWhiteSpace(entry.Original))
         {
             return;
@@ -315,13 +302,13 @@ public partial class EditorWorkspaceControl : UserControl
 
         System.Media.SystemSounds.Beep.Play();
         e.Handled = true;
-        StructureDetailsText.Text = "Защита остановила действие: оно повреждало тег или плейсхолдер.";
+        StructureDetailsText.Text =
+            "Действие остановлено: оно повреждало тег или плейсхолдер.";
     }
 
     private void TranslationBox_Pasting(object sender, DataObjectPastingEventArgs e)
     {
-        if (ProtectStructureCheckBox.IsChecked != true ||
-            _viewModel?.SelectedEntry is not LocalizationEntry entry ||
+        if (_viewModel?.SelectedEntry is not LocalizationEntry entry ||
             string.IsNullOrWhiteSpace(entry.Original) ||
             !e.SourceDataObject.GetDataPresent(DataFormats.UnicodeText))
         {
@@ -379,8 +366,12 @@ public partial class EditorWorkspaceControl : UserControl
         var result = StructureProtectionService.RestoreStructure(entry.Original, before);
         if (!result.Changed)
         {
-            AppDialog.Show(result.Message, "Восстановление структуры", MessageBoxButton.OK,
-                result.CanRestore ? MessageBoxImage.Information : MessageBoxImage.Warning, _owner);
+            AppDialog.Show(
+                result.Message,
+                "Восстановление структуры",
+                MessageBoxButton.OK,
+                result.CanRestore ? MessageBoxImage.Information : MessageBoxImage.Warning,
+                _owner);
             return;
         }
 
@@ -401,7 +392,9 @@ public partial class EditorWorkspaceControl : UserControl
         if (!result.HasChanges)
         {
             AppDialog.Show(
-                result.RequiresReview ? result.ReviewReason : "Безопасных автоисправлений не найдено.",
+                result.RequiresReview
+                    ? result.ReviewReason
+                    : "Безопасных автоисправлений не найдено.",
                 "Автоисправление",
                 MessageBoxButton.OK,
                 result.RequiresReview ? MessageBoxImage.Warning : MessageBoxImage.Information,
@@ -425,8 +418,9 @@ public partial class EditorWorkspaceControl : UserControl
         try
         {
             var entries = document.Entries.ToList();
+            var fileName = Path.GetFileName(document.FilePath);
             var plan = await RunOperationAsync(
-                "Анализ автоисправлений",
+                $"Анализ текущего файла {fileName}",
                 (progress, token) => BackgroundCorrectionService.BuildPlanAsync(
                     entries,
                     TranslationAutoCorrectionService.RuleBased,
@@ -439,7 +433,7 @@ public partial class EditorWorkspaceControl : UserControl
             if (plan.AffectedEntries == 0)
             {
                 AppDialog.Show(
-                    $"Проверено строк: {entries.Count:N0}. Изменений нет. Требуют ручной проверки: {plan.ReviewItems.Count:N0}.",
+                    $"Текущий файл: {fileName}\nПроверено строк: {entries.Count:N0}. Изменений нет. Требуют ручной проверки: {plan.ReviewItems.Count:N0}.",
                     "Массовое автоисправление",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information,
@@ -447,13 +441,19 @@ public partial class EditorWorkspaceControl : UserControl
                 return;
             }
 
-            var preview = new TranslationCorrectionPreviewWindow(entries.Count, plan) { Owner = _owner };
+            var preview = new TranslationCorrectionPreviewWindow(entries.Count, plan)
+            {
+                Owner = _owner,
+                Title = $"Массовое автоисправление — {fileName}"
+            };
             if (preview.ShowDialog() != true || preview.SelectedChanges.Count == 0)
                 return;
 
             var snapshot = SnapshotService.CreateSnapshot(document, "before-bulk-autocorrect");
             var selected = preview.SelectedChanges.ToList();
-            var changes = selected.Select(x => new BulkTextChange(x.Entry, x.Before, x.After)).ToList();
+            var changes = selected
+                .Select(x => new BulkTextChange(x.Entry, x.Before, x.After))
+                .ToList();
             TranslationCorrectionApplyResult applyResult;
 
             using (SuppressViewModelHistory())
@@ -476,166 +476,13 @@ public partial class EditorWorkspaceControl : UserControl
         }
         catch (Exception ex)
         {
-            AppDialog.Show(ex.Message, "Ошибка массового автоисправления", MessageBoxButton.OK, MessageBoxImage.Error, _owner);
+            AppDialog.Show(
+                ex.Message,
+                "Ошибка массового автоисправления",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error,
+                _owner);
         }
-    }
-
-    private async void AiCurrent_Click(object sender, RoutedEventArgs e)
-    {
-        CommitCurrentTranslation();
-        if (_viewModel?.SelectedEntry is not LocalizationEntry entry)
-            return;
-        if (!EnsureAiConfigured())
-            return;
-
-        try
-        {
-            var result = await RunOperationAsync(
-                "ИИ-проверка строки",
-                async (_, token) => await AiCorrectionService.ReviewAsync(entry, token));
-            if (result is null)
-                return;
-
-            var preview = new AiReviewPreviewWindow(entry, result) { Owner = _owner };
-            if (preview.ShowDialog() == true && preview.ApplySuggestion && result.Changed)
-            {
-                var before = entry.Translation;
-                entry.Translation = result.Translation;
-                TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
-                RecordProgrammaticChange(entry, before, result.Translation, "ИИ-проверка");
-                RefreshDiagnostics();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            AppDialog.Show(ex.Message, "Ошибка ИИ-проверки", MessageBoxButton.OK, MessageBoxImage.Error, _owner);
-        }
-    }
-
-    private async void AiBatch_Click(object sender, RoutedEventArgs e)
-    {
-        CommitCurrentTranslation();
-        var document = _viewModel?.ActiveDocument;
-        if (document is null || !EnsureAiConfigured())
-            return;
-
-        var candidates = GetAiCandidates(document);
-        if (candidates.Count == 0)
-        {
-            AppDialog.Show("Нет подходящих строк для пакетной ИИ-проверки.", "ИИ-проверка", MessageBoxButton.OK, MessageBoxImage.Information, _owner);
-            return;
-        }
-
-        var settings = EditorSettingsService.Current;
-        var selected = candidates.Take(settings.AiBatchLimit).ToList();
-        var estimate = AiBatchReviewService.Estimate(selected, settings);
-        var answer = AppDialog.Show(
-            $"Будет проверено строк: {selected.Count:N0} из {candidates.Count:N0}.\n" +
-            $"Оценка токенов: input ≈ {estimate.ApproxInputTokens:N0}, output ≈ {estimate.ApproxOutputTokens:N0}.\n" +
-            $"Ориентировочная стоимость: {estimate.CostText}.\n\nЗапустить?",
-            "Пакетная ИИ-проверка",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question,
-            _owner);
-        if (answer != MessageBoxResult.Yes)
-            return;
-
-        try
-        {
-            var results = await RunOperationAsync(
-                "ИИ-проверка",
-                (progress, token) => AiBatchReviewService.ReviewAsync(selected, settings, progress, token));
-            if (results is null)
-                return;
-
-            var suggestions = results
-                .Where(x => x.Success && x.Review is { Changed: true })
-                .Select(x => new AiBatchSuggestion
-                {
-                    Entry = x.Entry,
-                    Before = x.Entry.Translation,
-                    After = x.Review!.Translation,
-                    Reason = x.Review.Reason
-                })
-                .ToList();
-            var failures = results.Count(x => !x.Success);
-
-            if (suggestions.Count == 0)
-            {
-                AppDialog.Show(
-                    $"ИИ не предложил изменений. Ошибок запросов: {failures:N0}.",
-                    "ИИ-проверка",
-                    MessageBoxButton.OK,
-                    failures == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning,
-                    _owner);
-                return;
-            }
-
-            var preview = new AiBatchPreviewWindow(suggestions) { Owner = _owner };
-            if (preview.ShowDialog() != true || preview.SelectedSuggestions.Count == 0)
-                return;
-
-            var chosen = preview.SelectedSuggestions.ToList();
-            var snapshot = SnapshotService.CreateSnapshot(document, "before-ai-batch");
-            var bulk = chosen.Select(x => new BulkTextChange(x.Entry, x.Before, x.After)).ToList();
-            using (SuppressViewModelHistory())
-            {
-                foreach (var item in chosen)
-                {
-                    if (string.Equals(item.Entry.Translation, item.Before, StringComparison.Ordinal))
-                        item.Entry.Translation = item.After;
-                }
-            }
-            BulkUndoService.Push(document.FilePath, "Пакетная ИИ-проверка", bulk);
-            ProjectHistoryService.Record(
-                document.FilePath,
-                "Пакетная ИИ-проверка",
-                chosen.Count,
-                $"Модель: {AiCorrectionService.Model}; ошибок API: {failures:N0}",
-                snapshot.Path);
-            TranslationMemoryService.Invalidate(document);
-            TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
-            RefreshDiagnostics();
-            _viewModel?.EntriesView.Refresh();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            AppDialog.Show(ex.Message, "Ошибка пакетной ИИ-проверки", MessageBoxButton.OK, MessageBoxImage.Error, _owner);
-        }
-    }
-
-    private List<LocalizationEntry> GetAiCandidates(LocalizationDocument document)
-    {
-        var selectedRows = _entriesGrid?.SelectedItems.OfType<LocalizationEntry>().ToList() ?? [];
-        if (selectedRows.Count > 1)
-            return selectedRows.Where(x => !string.IsNullOrWhiteSpace(x.Original) && !string.IsNullOrWhiteSpace(x.Translation)).ToList();
-
-        return document.Entries
-            .Where(x => !string.IsNullOrWhiteSpace(x.Original) &&
-                        !string.IsNullOrWhiteSpace(x.Translation) &&
-                        (x.HasValidationIssues ||
-                         ReviewWorkflowService.GetStatus(document.FilePath, x) == ReviewState.NeedsFix ||
-                         x.HasSuspiciousLengthIssue))
-            .ToList();
-    }
-
-    private bool EnsureAiConfigured()
-    {
-        if (AiCorrectionService.IsConfigured)
-            return true;
-
-        var dialog = new AiSettingsWindow { Owner = _owner };
-        if (dialog.ShowDialog() != true)
-            return false;
-
-        AiCorrectionService.ConfigureSession(dialog.ApiKey, dialog.Model);
-        return AiCorrectionService.IsConfigured;
     }
 
     private async Task<T?> RunOperationAsync<T>(
@@ -684,10 +531,8 @@ public partial class EditorWorkspaceControl : UserControl
         if (document is null)
             return;
 
-        ReviewWorkflowService.OnTranslationChanged(document.FilePath, entry);
         ProjectHistoryService.Record(document.FilePath, reason, 1, entry.Key);
         TranslationMemoryService.Invalidate(document);
-        RefreshReviewStatus();
     }
 
     private IDisposable SuppressViewModelHistory()
@@ -695,147 +540,15 @@ public partial class EditorWorkspaceControl : UserControl
         if (_viewModel is null)
             return EmptyDisposable.Instance;
 
-        var field = typeof(MainViewModel).GetField("_activeSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        var field = typeof(MainViewModel).GetField(
+            "_activeSession",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         var session = field?.GetValue(_viewModel) as DocumentSession;
         if (session is null)
             return EmptyDisposable.Instance;
 
         session.HistoryChangeInProgress = true;
         return new ActionDisposable(() => session.HistoryChangeInProgress = false);
-    }
-
-    private async Task RefreshTranslationMemoryAsync(LocalizationEntry? entry)
-    {
-        if (entry is null || _viewModel?.ActiveDocument is not LocalizationDocument document)
-        {
-            TmList.ItemsSource = null;
-            return;
-        }
-
-        var expected = entry;
-        try
-        {
-            var index = await TranslationMemoryService.GetOrBuildAsync(document);
-            if (!ReferenceEquals(_viewModel?.SelectedEntry, expected))
-                return;
-
-            TmList.ItemsSource = index.Search(expected)
-                .Select(x => new TmDisplayItem(x))
-                .ToList();
-        }
-        catch
-        {
-            TmList.ItemsSource = null;
-        }
-    }
-
-    private void RefreshGlossaryMatches()
-    {
-        var entry = _viewModel?.SelectedEntry;
-        GlossaryMatchesList.ItemsSource = entry is null
-            ? null
-            : GlossaryService.Match(entry.Original, entry.Translation)
-                .Select(x => new GlossaryDisplayItem(x))
-                .ToList();
-    }
-
-    private void ApplyTm_Click(object sender, RoutedEventArgs e) => ApplySelectedTm();
-    private void TmList_MouseDoubleClick(object sender, MouseButtonEventArgs e) => ApplySelectedTm();
-
-    private void ApplySelectedTm()
-    {
-        if (TmList.SelectedItem is not TmDisplayItem item ||
-            _viewModel?.SelectedEntry is not LocalizationEntry entry)
-            return;
-
-        CommitCurrentTranslation();
-        var before = entry.Translation;
-        entry.Translation = item.Suggestion.Translation;
-        TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
-        RecordProgrammaticChange(entry, before, entry.Translation, "Translation Memory");
-        RefreshDiagnostics();
-        RefreshGlossaryMatches();
-    }
-
-    private void RefreshReviewStatus()
-    {
-        if (_viewModel?.ActiveDocument is not LocalizationDocument document ||
-            _viewModel.SelectedEntry is not LocalizationEntry entry)
-        {
-            return;
-        }
-
-        var state = ReviewWorkflowService.GetStatus(document.FilePath, entry);
-        _updatingReviewStatus = true;
-        try
-        {
-            ReviewStatusCombo.SelectedItem = ReviewStatusCombo.Items
-                .OfType<ReviewOption>()
-                .FirstOrDefault(x => x.State == state);
-        }
-        finally
-        {
-            _updatingReviewStatus = false;
-        }
-    }
-
-    private void ReviewStatusCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_updatingReviewStatus ||
-            ReviewStatusCombo.SelectedItem is not ReviewOption option ||
-            _viewModel?.ActiveDocument is not LocalizationDocument document ||
-            _viewModel.SelectedEntry is not LocalizationEntry entry)
-            return;
-
-        CommitCurrentTranslation();
-        ReviewWorkflowService.SetStatus(document.FilePath, entry, option.State);
-    }
-
-    private void ReviewedNext_Click(object sender, RoutedEventArgs e)
-    {
-        SetStatusAndNext(ReviewState.Reviewed);
-    }
-
-    private void NeedsFixNext_Click(object sender, RoutedEventArgs e)
-    {
-        SetStatusAndNext(ReviewState.NeedsFix);
-    }
-
-    private void SetStatusAndNext(ReviewState state)
-    {
-        CommitCurrentTranslation();
-        if (_viewModel?.ActiveDocument is not LocalizationDocument document ||
-            _viewModel.SelectedEntry is not LocalizationEntry entry)
-            return;
-
-        ReviewWorkflowService.SetStatus(document.FilePath, entry, state);
-        NavigateNextUnreviewed();
-    }
-
-    private void NavigateNextUnreviewed()
-    {
-        if (_viewModel?.ActiveDocument is not LocalizationDocument document || document.Entries.Count == 0)
-            return;
-
-        var start = _viewModel.SelectedEntry is null ? -1 : document.Entries.IndexOf(_viewModel.SelectedEntry);
-        for (var offset = 1; offset <= document.Entries.Count; offset++)
-        {
-            var candidate = document.Entries[(start + offset) % document.Entries.Count];
-            if (ReviewWorkflowService.GetStatus(document.FilePath, candidate) != ReviewState.Unreviewed)
-                continue;
-
-            _viewModel.SelectedEntry = candidate;
-            _viewModel.EntriesView.MoveCurrentTo(candidate);
-            if (_entriesGrid is not null)
-            {
-                _entriesGrid.SelectedItem = candidate;
-                _entriesGrid.ScrollIntoView(candidate);
-            }
-            TranslationBox.Focus();
-            return;
-        }
-
-        AppDialog.Show("Непроверенных строк больше нет.", "Проверка", MessageBoxButton.OK, MessageBoxImage.Information, _owner);
     }
 
     private void History_Click(object sender, RoutedEventArgs e)
@@ -850,22 +563,6 @@ public partial class EditorWorkspaceControl : UserControl
         {
             TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
             _baselineTranslation = entry.Translation;
-            RefreshDiagnostics();
-        }
-    }
-
-    private void Snapshots_Click(object sender, RoutedEventArgs e)
-    {
-        CommitCurrentTranslation();
-        if (_viewModel?.ActiveDocument is not LocalizationDocument document)
-            return;
-
-        var dialog = new SnapshotManagerWindow(document) { Owner = _owner };
-        if (dialog.ShowDialog() == true && dialog.Restored)
-        {
-            TranslationMemoryService.Invalidate(document);
-            TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
-            _viewModel.EntriesView.Refresh();
             RefreshDiagnostics();
         }
     }
@@ -885,24 +582,6 @@ public partial class EditorWorkspaceControl : UserControl
         }
     }
 
-    private void Glossary_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new GlossaryWindow { Owner = _owner };
-        if (dialog.ShowDialog() != true)
-            return;
-
-        GlossaryService.Reload();
-        _viewModel?.SelectedEntry?.RefreshValidation();
-        RefreshGlossaryMatches();
-    }
-
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new EditorSettingsWindow { Owner = _owner };
-        if (dialog.ShowDialog() == true)
-            ApplySettings();
-    }
-
     private void Collapse_Click(object sender, RoutedEventArgs e)
     {
         _collapsed = !_collapsed;
@@ -910,15 +589,28 @@ public partial class EditorWorkspaceControl : UserControl
         settings.EditorCollapsed = _collapsed;
         settings.EditorHeight = _expandedHeight;
         EditorSettingsService.Save(settings);
-        CollapseButton.Content = _collapsed ? "Развернуть" : "Свернуть";
+        UpdateCollapseButton();
         CollapseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void UpdateCollapseButton()
+    {
+        CollapseButton.Content = _collapsed ? "⌄" : "⌃";
+        CollapseButton.ToolTip = _collapsed
+            ? "Развернуть редактор"
+            : "Свернуть редактор";
     }
 
     private async void Monitor_Changed(object? sender, ExternalFileChangedEventArgs e)
     {
         if (_viewModel?.ActiveDocument is not LocalizationDocument document ||
-            !string.Equals(Path.GetFullPath(document.FilePath), Path.GetFullPath(e.Path), StringComparison.OrdinalIgnoreCase))
+            !string.Equals(
+                Path.GetFullPath(document.FilePath),
+                Path.GetFullPath(e.Path),
+                StringComparison.OrdinalIgnoreCase))
+        {
             return;
+        }
 
         await Dispatcher.InvokeAsync(async () =>
         {
@@ -932,7 +624,8 @@ public partial class EditorWorkspaceControl : UserControl
                 }
 
                 _externalDiff = diff;
-                ExternalChangeText.Text = $"Файл изменён на диске: переводов отличается {diff.Changes.Count:N0}, новых строк {diff.AddedRows:N0}, отсутствующих {diff.MissingRows:N0}.";
+                ExternalChangeText.Text =
+                    $"Файл изменён на диске: переводов отличается {diff.Changes.Count:N0}, новых строк {diff.AddedRows:N0}, отсутствующих {diff.MissingRows:N0}.";
                 ExternalChangeBanner.Visibility = Visibility.Visible;
             }
             catch
@@ -943,16 +636,23 @@ public partial class EditorWorkspaceControl : UserControl
 
     private async void ExternalCompare_Click(object sender, RoutedEventArgs e)
     {
-        if (_externalDiff is null && _viewModel?.ActiveDocument is LocalizationDocument document)
+        if (_externalDiff is null &&
+            _viewModel?.ActiveDocument is LocalizationDocument document)
+        {
             _externalDiff = await ExternalFileDiffService.CompareAsync(document);
+        }
+
         if (_externalDiff is not null)
             new ExternalChangeWindow(_externalDiff) { Owner = _owner }.ShowDialog();
     }
 
     private void ExternalReload_Click(object sender, RoutedEventArgs e)
     {
-        if (_externalDiff is null || _viewModel?.ActiveDocument is not LocalizationDocument document)
+        if (_externalDiff is null ||
+            _viewModel?.ActiveDocument is not LocalizationDocument document)
+        {
             return;
+        }
 
         var answer = AppDialog.Show(
             "Загрузить переводы с диска? Текущее состояние сначала будет сохранено в снимок.",
@@ -964,8 +664,15 @@ public partial class EditorWorkspaceControl : UserControl
             return;
 
         var snapshot = SnapshotService.CreateSnapshot(document, "before-external-reload");
-        var changed = ExternalFileDiffService.ApplyDiskTranslations(document, _externalDiff.DiskDocument);
-        ProjectHistoryService.Record(document.FilePath, "Перезагрузка внешней версии", changed, string.Empty, snapshot.Path);
+        var changed = ExternalFileDiffService.ApplyDiskTranslations(
+            document,
+            _externalDiff.DiskDocument);
+        ProjectHistoryService.Record(
+            document.FilePath,
+            "Перезагрузка внешней версии",
+            changed,
+            string.Empty,
+            snapshot.Path);
         TranslationMemoryService.Invalidate(document);
         TranslationBox.GetBindingExpression(TextBox.TextProperty)?.UpdateTarget();
         _viewModel.EntriesView.Refresh();
@@ -991,29 +698,17 @@ public partial class EditorWorkspaceControl : UserControl
         _externalDiff = null;
     }
 
-    private sealed record ReviewOption(string Text, ReviewState State)
-    {
-        public override string ToString() => Text;
-    }
-
-    private sealed record TmDisplayItem(TranslationMemorySuggestion Suggestion)
-    {
-        public string Display => $"{Suggestion.Score}%  {Suggestion.Translation}  · {Suggestion.Key}";
-    }
-
-    private sealed record GlossaryDisplayItem(GlossaryMatch Match)
-    {
-        public string Display => $"{(Match.IsSatisfied ? "✓" : Match.Required ? "⚠" : "•")} {Match.Source} → {Match.Target}";
-    }
-
     private sealed class ActionDisposable : IDisposable
     {
         private readonly Action _action;
         private bool _done;
+
         public ActionDisposable(Action action) => _action = action;
+
         public void Dispose()
         {
-            if (_done) return;
+            if (_done)
+                return;
             _done = true;
             _action();
         }
