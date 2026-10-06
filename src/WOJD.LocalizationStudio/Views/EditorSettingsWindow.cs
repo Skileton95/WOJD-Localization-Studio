@@ -15,15 +15,18 @@ public sealed class EditorSettingsWindow : Window
     private readonly CheckBox _namespaceColumn;
     private readonly CheckBox _originalColumn;
     private readonly CheckBox _statusColumn;
+    private readonly ComboBox _paneLayout;
+    private readonly CheckBox _translationOnly;
+    private readonly CheckBox _focusMode;
 
     public EditorSettingsWindow()
     {
         var settings = EditorSettingsService.Current;
         Title = "Настройки редактора";
         Width = 620;
-        Height = 520;
+        Height = 620;
         MinWidth = 540;
-        MinHeight = 460;
+        MinHeight = 520;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var scroll = new ScrollViewer
@@ -49,8 +52,38 @@ public sealed class EditorSettingsWindow : Window
             settings.ShowTokenPreview);
         _qaDetails = AddCheck(
             root,
-            "Показывать подробный структурный QA",
+            "Показывать компактную строку QA",
             settings.ShowQaDetails);
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Расположение Original / Перевод",
+            Margin = new Thickness(0, 8, 0, 3)
+        });
+        _paneLayout = new ComboBox
+        {
+            Width = 220,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(7, 5, 7, 5)
+        };
+        _paneLayout.Items.Add("Горизонтально");
+        _paneLayout.Items.Add("Вертикально");
+        _paneLayout.SelectedIndex = string.Equals(
+            settings.EditorPaneLayout,
+            "Vertical",
+            StringComparison.OrdinalIgnoreCase)
+            ? 1
+            : 0;
+        root.Children.Add(_paneLayout);
+
+        _translationOnly = AddCheck(
+            root,
+            "Режим «Только перевод»",
+            settings.TranslationOnlyMode);
+        _focusMode = AddCheck(
+            root,
+            "Режим «Фокус» — скрыть дерево файлов и верхнюю шапку",
+            settings.FocusMode);
 
         root.Children.Add(Section("Колонки таблицы"));
         _namespaceColumn = AddCheck(root, "Namespace", settings.ShowNamespaceColumn);
@@ -59,7 +92,7 @@ public sealed class EditorSettingsWindow : Window
 
         root.Children.Add(new TextBlock
         {
-            Text = "Настройки применяются к основному редактору и сохраняются между запусками программы.",
+            Text = "Подсказка: двойной клик по заголовку «Оригинал» или «Перевод» временно разворачивает выбранную половину на всю область.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.DimGray,
             Margin = new Thickness(0, 12, 0, 14)
@@ -121,6 +154,11 @@ public sealed class EditorSettingsWindow : Window
         settings.ShowNamespaceColumn = _namespaceColumn.IsChecked == true;
         settings.ShowOriginalColumn = _originalColumn.IsChecked == true;
         settings.ShowStatusColumn = _statusColumn.IsChecked == true;
+        settings.EditorPaneLayout = _paneLayout.SelectedIndex == 1
+            ? "Vertical"
+            : "Horizontal";
+        settings.TranslationOnlyMode = _translationOnly.IsChecked == true;
+        settings.FocusMode = _focusMode.IsChecked == true;
         EditorSettingsService.Save(settings);
         DialogResult = true;
     }
