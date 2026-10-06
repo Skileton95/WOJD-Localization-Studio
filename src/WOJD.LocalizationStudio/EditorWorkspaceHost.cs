@@ -10,11 +10,6 @@ using WOJD.LocalizationStudio.Views;
 
 namespace WOJD.LocalizationStudio;
 
-/// <summary>
-/// Bridge from the legacy MainWindow XAML to the static editor UserControl.
-/// The host replaces the legacy lower region, owns the splitter row and wires
-/// editor-level menu actions.
-/// </summary>
 internal static class EditorWorkspaceHost
 {
     private static readonly ConditionalWeakTable<MainWindow, HostState> States = new();
@@ -96,17 +91,29 @@ internal static class EditorWorkspaceHost
         workspace.Attach(window, viewModel, entriesGrid);
         workspace.CollapseRequested += (_, _) => ApplyLayout(state);
         workspace.SettingsChanged += (_, _) => ApplyLayout(state);
+        workspace.FocusModeRequested += (_, _) => ToggleFocusMode(window, state);
         splitter.DragCompleted += (_, _) =>
         {
             if (!workspace.IsCollapsed)
                 workspace.SetExpandedHeight(editorRow.ActualHeight);
         };
 
-        window.PreviewKeyDown += (_, args) => HandlePreviewKeyDown(state, args);
+        window.PreviewKeyDown += (_, args) =>
+        {
+            if (args.Key == Key.F10)
+            {
+                ToggleFocusMode(window, state);
+                args.Handled = true;
+                return;
+            }
+
+            HandlePreviewKeyDown(state, args);
+        };
         window.Closed += (_, _) => workspace.CommitTranslation();
 
         InstallMenus(window, state);
         ApplyLayout(state);
+        ApplyFocusMode(window, state);
     }
 
     private static void ApplyLayout(HostState state)
@@ -124,10 +131,7 @@ internal static class EditorWorkspaceHost
         SetColumnVisibility(state.EntriesGrid, "Статус", settings.ShowStatusColumn);
     }
 
-    private static void SetColumnVisibility(
-        DataGrid grid,
-        string header,
-        bool visible)
+    private static void SetColumnVisibility(DataGrid grid, string header, bool visible)
     {
         var column = grid.Columns.FirstOrDefault(x =>
             string.Equals(x.Header?.ToString(), header, StringComparison.Ordinal));
@@ -158,6 +162,65 @@ internal static class EditorWorkspaceHost
         }
     }
 
+    private static void ToggleFocusMode(MainWindow window, HostState state)
+    {
+        var settings = EditorSettingsService.Current;
+        settings.FocusMode = !settings.FocusMode;
+        EditorSettingsService.Save(settings);
+        ApplyFocusMode(window, state);
+        state.Workspace.ApplySettings();
+    }
+
+    private static void ApplyFocusMode(MainWindow window, HostState state)
+    {
+        var enabled = EditorSettingsService.Current.FocusMode;
+        var rootGrid = window.Content as Grid;
+        var filesColumn = window.FindName("FilesColumn") as ColumnDefinition;
+        var filesDividerColumn = window.FindName("FilesDividerColumn") as ColumnDefinition;
+        var filesPanel = window.FindName("FilesPanel") as FrameworkElement;
+        var filesToggle = window.FindName("FilesPanelToggleButton") as FrameworkElement;
+        var shellGrid = filesPanel?.Parent as Grid;
+
+        if (enabled)
+        {
+            if (!state.FocusSnapshotCaptured)
+            {
+                state.PreviousFilesWidth = filesColumn?.Width ?? new GridLength(300);
+                state.PreviousFilesDividerWidth = filesDividerColumn?.Width ?? new GridLength(1);
+                state.PreviousToggleColumnWidth = shellGrid is not null && shellGrid.ColumnDefinitions.Count > 2
+                    ? shellGrid.ColumnDefinitions[2].Width
+                    : new GridLength(24);
+                state.PreviousHeaderHeight = rootGrid is not null && rootGrid.RowDefinitions.Count > 1
+                    ? rootGrid.RowDefinitions[1].Height
+                    : new GridLength(72);
+                state.FocusSnapshotCaptured = true;
+            }
+
+            if (filesColumn is not null) filesColumn.Width = new GridLength(0);
+            if (filesDividerColumn is not null) filesDividerColumn.Width = new GridLength(0);
+            if (shellGrid is not null && shellGrid.ColumnDefinitions.Count > 2)
+                shellGrid.ColumnDefinitions[2].Width = new GridLength(0);
+            if (filesPanel is not null) filesPanel.Visibility = Visibility.Collapsed;
+            if (filesToggle is not null) filesToggle.Visibility = Visibility.Collapsed;
+            if (rootGrid is not null && rootGrid.RowDefinitions.Count > 1)
+                rootGrid.RowDefinitions[1].Height = new GridLength(0);
+            return;
+        }
+
+        if (filesColumn is not null)
+            filesColumn.Width = state.FocusSnapshotCaptured ? state.PreviousFilesWidth : new GridLength(300);
+        if (filesDividerColumn is not null)
+            filesDividerColumn.Width = state.FocusSnapshotCaptured ? state.PreviousFilesDividerWidth : new GridLength(1);
+        if (shellGrid is not null && shellGrid.ColumnDefinitions.Count > 2)
+            shellGrid.ColumnDefinitions[2].Width = state.FocusSnapshotCaptured ? state.PreviousToggleColumnWidth : new GridLength(24);
+        if (filesPanel is not null) filesPanel.Visibility = Visibility.Visible;
+        if (filesToggle is not null) filesToggle.Visibility = Visibility.Visible;
+        if (rootGrid is not null && rootGrid.RowDefinitions.Count > 1)
+            rootGrid.RowDefinitions[1].Height = state.FocusSnapshotCaptured ? state.PreviousHeaderHeight : new GridLength(72);
+
+        state.FocusSnapshotCaptured = false;
+    }
+
     private static void InstallMenus(MainWindow window, HostState state)
     {
         var menu = FindVisualChild<Menu>(window);
@@ -165,8 +228,7 @@ internal static class EditorWorkspaceHost
             return;
 
         var tools = menu.Items.OfType<MenuItem>()
-            .FirstOrDefault(x =>
-                string.Equals(x.Header?.ToString(), "Инструменты", StringComparison.Ordinal));
+            .FirstOrDefault(x => string.Equals(x.Header?.ToString(), "Инструменты", StringComparison.Ordinal));
 
         if (tools is not null)
         {
@@ -210,8 +272,7 @@ internal static class EditorWorkspaceHost
         }
 
         var existingSettings = menu.Items.OfType<MenuItem>()
-            .FirstOrDefault(x =>
-                string.Equals(x.Header?.ToString(), "Настройки", StringComparison.Ordinal));
+            .FirstOrDefault(x => string.Equals(x.Header?.ToString(), "Настройки", StringComparison.Ordinal));
         if (existingSettings is null)
         {
             var settings = new MenuItem { Header = "Настройки" };
@@ -219,13 +280,15 @@ internal static class EditorWorkspaceHost
             {
                 var dialog = new EditorSettingsWindow { Owner = window };
                 if (dialog.ShowDialog() == true)
+                {
                     state.Workspace.ApplySettings();
+                    ApplyFocusMode(window, state);
+                }
             };
 
             var helpIndex = menu.Items.OfType<MenuItem>()
                 .Select((item, index) => (item, index))
-                .FirstOrDefault(x =>
-                    string.Equals(x.item.Header?.ToString(), "Справка", StringComparison.Ordinal))
+                .FirstOrDefault(x => string.Equals(x.item.Header?.ToString(), "Справка", StringComparison.Ordinal))
                 .index;
 
             if (helpIndex > 0)
@@ -258,5 +321,12 @@ internal static class EditorWorkspaceHost
         GridSplitter Splitter,
         EditorWorkspaceControl Workspace,
         DataGrid EntriesGrid,
-        MainViewModel ViewModel);
+        MainViewModel ViewModel)
+    {
+        public bool FocusSnapshotCaptured { get; set; }
+        public GridLength PreviousFilesWidth { get; set; } = new(300);
+        public GridLength PreviousFilesDividerWidth { get; set; } = new(1);
+        public GridLength PreviousToggleColumnWidth { get; set; } = new(24);
+        public GridLength PreviousHeaderHeight { get; set; } = new(72);
+    }
 }
