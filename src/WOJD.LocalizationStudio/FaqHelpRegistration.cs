@@ -47,7 +47,8 @@ internal static class FaqHelpRegistration
 
         var help = menu.Items
             .OfType<MenuItem>()
-            .FirstOrDefault(x => string.Equals(x.Header?.ToString(), "Справка", StringComparison.Ordinal));
+            .FirstOrDefault(x =>
+                string.Equals(x.Header?.ToString(), "Справка", StringComparison.Ordinal));
 
         if (help is null)
             return;
@@ -70,7 +71,7 @@ internal static class FaqHelpRegistration
 
     private static void OpenFaq(MainWindow owner)
     {
-        var dialog = new FaqHelpWindow
+        var dialog = new FaqHelpWindowV2
         {
             Owner = owner
         };
