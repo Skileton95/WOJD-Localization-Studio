@@ -54,90 +54,164 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding SelectedEntry.Namespace, Mode=OneWay}"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="  ·  " Foreground="{StaticResource MutedTextBrush}"/>
-                    <TextBlock Text="{Binding SelectedEntry.Key, Mode=OneWay}"
-                               FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis"/>
+
+                <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="FileNameText"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="UnsavedIndicator"
+                                   Text="  •"
+                                   Foreground="#F3A51B"
+                                   FontWeight="Bold"
+                                   Visibility="Collapsed"
+                                   ToolTip="Есть несохранённые изменения"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock x:Name="EntryMetaText"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="12"/>
+                        <Button Content="⧉"
+                                Click="CopyKey_Click"
+                                Width="24" Height="22" Padding="0" Margin="6,-2,0,0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource MutedTextBrush}"
+                                ToolTip="Копировать ключ"/>
+                    </StackPanel>
                 </StackPanel>
-                <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
-                    <Button Content="История" Click="History_Click"
-                            Style="{StaticResource SecondaryButton}" Padding="9,5" Margin="6,0,0,0"/>
-                    <Button Content="Consistency" Click="Consistency_Click"
-                            Style="{StaticResource SecondaryButton}" Padding="9,5" Margin="6,0,0,0"/>
+
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="◷" Click="History_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="10,5" Margin="6,0,0,0"
+                            MinWidth="34" ToolTip="История строки"/>
+                    <Button Content="Согласованность" Click="Consistency_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="9,5" Margin="6,0,0,0"
+                            ToolTip="Найти разные переводы одинакового Original"/>
+                    <Button x:Name="FocusModeButton" Content="⛶" Click="FocusMode_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="10,5" Margin="6,0,0,0"
+                            MinWidth="34" ToolTip="Режим фокус"/>
+                    <Button x:Name="MoreButton" Content="⋯" Click="More_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="10,5" Margin="6,0,0,0"
+                            MinWidth="34" ToolTip="Дополнительные действия">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Копировать Original" Click="CopyOriginal_Click"/>
+                                <MenuItem Header="Копировать перевод" Click="CopyTranslation_Click"/>
+                                <MenuItem Header="Копировать ключ" Click="CopyKey_Click"/>
+                                <MenuItem Header="Очистить перевод" Click="ClearTranslation_Click"/>
+                                <MenuItem Header="Экспортировать строку…" Click="ExportCurrent_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Горизонтальный редактор" Click="HorizontalLayout_Click"/>
+                                <MenuItem Header="Вертикальный редактор" Click="VerticalLayout_Click"/>
+                                <MenuItem Header="Только перевод" Click="TranslationOnly_Click"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
                     <Button x:Name="CollapseButton" Content="⌃" Click="Collapse_Click"
                             Style="{StaticResource SecondaryButton}" Padding="10,5" Margin="6,0,0,0"
                             MinWidth="34" ToolTip="Свернуть редактор"/>
                 </WrapPanel>
             </Grid>
 
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="1"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Grid Margin="0,0,12,0">
+            <Border Grid.Row="2"
+                    Background="#FCFDFE"
+                    BorderBrush="{StaticResource BorderBrushApp}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10">
+                <Grid x:Name="EditorPanesGrid">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="PaneColumn1" Width="*"/>
+                        <ColumnDefinition x:Name="PaneColumnDivider" Width="1"/>
+                        <ColumnDefinition x:Name="PaneColumn2" Width="*"/>
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition x:Name="PaneRow1" Height="*"/>
+                        <RowDefinition x:Name="PaneRowDivider" Height="0"/>
+                        <RowDefinition x:Name="PaneRow2" Height="0"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Оригинал" FontWeight="SemiBold" FontSize="15"/>
-                    <Border Grid.Row="1" Margin="0,7,0,0" Background="#FAFBFD"
-                            BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1"
-                            CornerRadius="7" Padding="11">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                    <Grid x:Name="OriginalPane" Grid.Column="0" Margin="0,0,12,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid MouseLeftButtonDown="OriginalHeader_MouseLeftButtonDown">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Оригинал" FontWeight="SemiBold" FontSize="15"/>
+                            <Button Grid.Column="1" Content="⧉" Click="CopyOriginal_Click"
+                                    Width="26" Height="22" Padding="0" Margin="6,-2,0,0"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{StaticResource MutedTextBrush}"
+                                    ToolTip="Копировать Original"/>
+                        </Grid>
+                        <ScrollViewer Grid.Row="1" Margin="0,7,0,0" VerticalScrollBarVisibility="Auto">
                             <TextBlock Text="{Binding SelectedEntry.OriginalDisplay, Mode=OneWay}"
-                                       TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap"
+                                       Padding="4,3"/>
                         </ScrollViewer>
-                    </Border>
-                </Grid>
+                    </Grid>
 
-                <Border Grid.Column="1" Background="{StaticResource BorderBrushApp}"/>
+                    <Border x:Name="PaneDivider" Grid.Column="1" Background="{StaticResource BorderBrushApp}"/>
 
-                <Grid Grid.Column="2" Margin="12,0,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="Перевод" FontWeight="SemiBold" FontSize="15"/>
-                    <Border Grid.Row="1" Margin="0,7,0,0" Background="White"
-                            BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
-                            CornerRadius="7" Padding="10">
-                        <TextBox x:Name="TranslationBox"
-                                 Text="{Binding SelectedEntry.Translation, Mode=TwoWay, UpdateSourceTrigger=Explicit, TargetNullValue=''}"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 TextWrapping="Wrap"
-                                 TextChanged="TranslationBox_TextChanged"
-                                 LostKeyboardFocus="TranslationBox_LostKeyboardFocus"
-                                 PreviewKeyDown="TranslationBox_PreviewKeyDown"/>
-                    </Border>
-                    <Border x:Name="TokenPreviewBorder"
-                            Grid.Row="2"
-                            Margin="0,6,0,0"
-                            Background="#FAFBFD"
-                            BorderBrush="{StaticResource BorderBrushApp}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Padding="6"
-                            Height="58">
-                        <RichTextBox x:Name="TokenPreview"
-                                     IsReadOnly="True"
+                    <Grid x:Name="TranslationPane" Grid.Column="2" Margin="12,0,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid MouseLeftButtonDown="TranslationHeader_MouseLeftButtonDown">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Перевод" FontWeight="SemiBold" FontSize="15"/>
+                            <Button Grid.Column="1" Content="⧉" Click="CopyTranslation_Click"
+                                    Width="26" Height="22" Padding="0" Margin="6,-2,0,0"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{StaticResource MutedTextBrush}"
+                                    ToolTip="Копировать перевод"/>
+                        </Grid>
+                        <Border x:Name="TranslationEditorBorder"
+                                Grid.Row="1" Margin="0,7,0,0" Background="White"
+                                BorderBrush="{StaticResource BorderBrushApp}" BorderThickness="1"
+                                CornerRadius="7" Padding="10">
+                            <TextBox x:Name="TranslationBox"
+                                     Text="{Binding SelectedEntry.Translation, Mode=TwoWay, UpdateSourceTrigger=Explicit, TargetNullValue=''}"
                                      BorderThickness="0"
                                      Background="Transparent"
+                                     AcceptsReturn="True"
                                      VerticalScrollBarVisibility="Auto"
-                                     IsDocumentEnabled="False"/>
-                    </Border>
+                                     TextWrapping="Wrap"
+                                     TextChanged="TranslationBox_TextChanged"
+                                     GotKeyboardFocus="TranslationBox_GotKeyboardFocus"
+                                     LostKeyboardFocus="TranslationBox_LostKeyboardFocus"
+                                     PreviewKeyDown="TranslationBox_PreviewKeyDown"/>
+                        </Border>
+                        <Border x:Name="TokenPreviewBorder"
+                                Grid.Row="2"
+                                Margin="0,6,0,0"
+                                Background="#FAFBFD"
+                                BorderBrush="{StaticResource BorderBrushApp}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="6"
+                                Height="58">
+                            <RichTextBox x:Name="TokenPreview"
+                                         IsReadOnly="True"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         VerticalScrollBarVisibility="Auto"
+                                         IsDocumentEnabled="False"/>
+                        </Border>
+                    </Grid>
                 </Grid>
-            </Grid>
+            </Border>
 
             <Border x:Name="QaDetailsBorder"
                     Grid.Row="3"
@@ -145,36 +219,55 @@
                     BorderBrush="{StaticResource BorderBrushApp}"
                     BorderThickness="1"
                     CornerRadius="6"
-                    Padding="8,6"
+                    Padding="7,5"
                     Margin="0,8,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="StructureSummaryText"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="0,0,12,0"/>
-                    <TextBlock x:Name="StructureDetailsText"
-                               Grid.Column="1"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center"/>
-                </Grid>
+                <WrapPanel VerticalAlignment="Center">
+                    <Border x:Name="TagsChip" Background="#EEF9F2" CornerRadius="10" Padding="8,3" Margin="0,0,6,0">
+                        <TextBlock x:Name="TagsChipText" Foreground="#238A50" FontWeight="SemiBold"/>
+                    </Border>
+                    <Border x:Name="PlaceholdersChip" Background="#EEF9F2" CornerRadius="10" Padding="8,3" Margin="0,0,6,0">
+                        <TextBlock x:Name="PlaceholdersChipText" Foreground="#238A50" FontWeight="SemiBold"/>
+                    </Border>
+                    <Border x:Name="NewLinesChip" Background="#EEF9F2" CornerRadius="10" Padding="8,3" Margin="0,0,6,0">
+                        <TextBlock x:Name="NewLinesChipText" Foreground="#238A50" FontWeight="SemiBold"/>
+                    </Border>
+                    <Border x:Name="StructureChip" Background="#F1F4F8" CornerRadius="10" Padding="8,3">
+                        <TextBlock x:Name="StructureChipText" Foreground="{StaticResource MutedTextBrush}" FontWeight="SemiBold"/>
+                    </Border>
+                </WrapPanel>
             </Border>
 
-            <WrapPanel Grid.Row="4" Margin="0,8,0,0" VerticalAlignment="Center">
-                <Button Content="↺ Структура" Click="RestoreStructure_Click"
-                        Style="{StaticResource SecondaryButton}" Padding="10,6" Margin="0,0,6,0"
-                        ToolTip="Восстановить однозначно повреждённые теги и плейсхолдеры по Original"/>
-                <Button Content="Автоисправить" Click="AutoCorrect_Click"
-                        Style="{StaticResource PrimaryButton}" Padding="11,6" Margin="0,0,6,0"
-                        ToolTip="Безопасное автоисправление текущей строки"/>
-                <Button Content="Массово…" Click="BulkAutoCorrect_Click"
-                        Style="{StaticResource SecondaryButton}" Padding="11,6"
-                        ToolTip="Массовое автоисправление только текущего открытого файла"/>
-            </WrapPanel>
+            <Grid Grid.Row="4" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <WrapPanel VerticalAlignment="Center">
+                    <Button x:Name="RestoreStructureButton"
+                            Content="↺ Структура" Click="RestoreStructure_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="10,6" Margin="0,0,6,0"
+                            Visibility="Collapsed"
+                            ToolTip="Восстановить однозначно повреждённые теги и плейсхолдеры по Original"/>
+                    <Button x:Name="AutoCorrectButton"
+                            Content="Автоисправить" Click="AutoCorrect_Click"
+                            Style="{StaticResource PrimaryButton}" Padding="11,6" Margin="0,0,6,0"
+                            ToolTip="Безопасное автоисправление текущей строки"/>
+                    <Button x:Name="BulkAutoCorrectButton"
+                            Content="Автоисправление файла…" Click="BulkAutoCorrect_Click"
+                            Style="{StaticResource SecondaryButton}" Padding="11,6"
+                            ToolTip="Проверить и исправить только текущий активный файл"/>
+                </WrapPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="‹" Command="{Binding PreviousCommand}"
+                            Style="{StaticResource SecondaryButton}" Width="34" Height="30" Padding="0"/>
+                    <TextBlock x:Name="PositionText"
+                               Margin="10,0" VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedTextBrush}"/>
+                    <Button Content="›" Command="{Binding NextCommand}"
+                            Style="{StaticResource SecondaryButton}" Width="34" Height="30" Padding="0"/>
+                </StackPanel>
+            </Grid>
 
             <Grid x:Name="OperationPanel" Grid.Row="5" Visibility="Collapsed" Margin="0,7,0,0">
                 <Grid.ColumnDefinitions>
