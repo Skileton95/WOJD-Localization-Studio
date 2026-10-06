@@ -15,6 +15,9 @@ public sealed class EditorSettings
     public bool ShowNamespaceColumn { get; set; } = true;
     public bool ShowOriginalColumn { get; set; } = true;
     public bool ShowStatusColumn { get; set; } = true;
+    public string EditorPaneLayout { get; set; } = "Horizontal";
+    public bool TranslationOnlyMode { get; set; }
+    public bool FocusMode { get; set; }
     public int AiConcurrency { get; set; } = 2;
     public int AiRetryCount { get; set; } = 2;
     public int AiBatchLimit { get; set; } = 100;
@@ -86,6 +89,12 @@ public static class EditorSettingsService
     {
         settings.EditorHeight = Math.Clamp(settings.EditorHeight, 180, 760);
         settings.EditorFontSize = Math.Clamp(settings.EditorFontSize, 10, 28);
+        settings.EditorPaneLayout = string.Equals(
+            settings.EditorPaneLayout,
+            "Vertical",
+            StringComparison.OrdinalIgnoreCase)
+            ? "Vertical"
+            : "Horizontal";
         settings.AiConcurrency = Math.Clamp(settings.AiConcurrency, 1, 6);
         settings.AiRetryCount = Math.Clamp(settings.AiRetryCount, 0, 5);
         settings.AiBatchLimit = Math.Clamp(settings.AiBatchLimit, 1, 500);
