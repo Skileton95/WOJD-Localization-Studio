@@ -11,9 +11,9 @@ using WOJD.LocalizationStudio.Views;
 namespace WOJD.LocalizationStudio;
 
 /// <summary>
-/// One small bridge from the legacy MainWindow XAML to the new static editor
-/// UserControl. All editor buttons and panels live in EditorWorkspaceControl.xaml;
-/// this host only replaces the legacy lower region and owns the splitter row.
+/// Bridge from the legacy MainWindow XAML to the static editor UserControl.
+/// The host replaces the legacy lower region, owns the splitter row and wires
+/// editor-level menu actions.
 /// </summary>
 internal static class EditorWorkspaceHost
 {
@@ -33,7 +33,6 @@ internal static class EditorWorkspaceHost
         if (sender is not MainWindow window || States.TryGetValue(window, out _))
             return;
 
-        // Mount once after InitializeComponent, before the user starts editing.
         window.Dispatcher.BeginInvoke(
             () => Install(window),
             DispatcherPriority.Loaded);
@@ -56,9 +55,6 @@ internal static class EditorWorkspaceHost
         var legacyRow = Grid.GetRow(legacyEditorBorder);
         contentGrid.Children.Remove(legacyEditorBorder);
 
-        // The legacy editor occupied the last row. Reuse it as a dedicated
-        // splitter row and append a new editor row. Nothing else in MainWindow
-        // competes for that space anymore.
         if (legacyRow < 0 || legacyRow >= contentGrid.RowDefinitions.Count)
             return;
 
@@ -109,7 +105,7 @@ internal static class EditorWorkspaceHost
         window.PreviewKeyDown += (_, args) => HandlePreviewKeyDown(state, args);
         window.Closed += (_, _) => workspace.CommitTranslation();
 
-        InstallToolsMenu(window, state);
+        InstallMenus(window, state);
         ApplyLayout(state);
     }
 
@@ -162,49 +158,81 @@ internal static class EditorWorkspaceHost
         }
     }
 
-    private static void InstallToolsMenu(MainWindow window, HostState state)
+    private static void InstallMenus(MainWindow window, HostState state)
     {
         var menu = FindVisualChild<Menu>(window);
-        var tools = menu?.Items.OfType<MenuItem>()
-            .FirstOrDefault(x => string.Equals(x.Header?.ToString(), "Инструменты", StringComparison.Ordinal));
-        if (tools is null)
+        if (menu is null)
             return;
 
-        tools.Items.Add(new Separator());
+        var tools = menu.Items.OfType<MenuItem>()
+            .FirstOrDefault(x =>
+                string.Equals(x.Header?.ToString(), "Инструменты", StringComparison.Ordinal));
 
-        var projectHistory = new MenuItem { Header = "История проекта…" };
-        projectHistory.Click += (_, _) =>
+        if (tools is not null)
         {
-            state.Workspace.CommitTranslation();
-            new ProjectHistoryWindow(state.ViewModel.ActiveDocument?.FilePath)
+            tools.Items.Add(new Separator());
+
+            var glossary = new MenuItem { Header = "Глоссарий…" };
+            glossary.Click += (_, _) =>
             {
-                Owner = window
-            }.ShowDialog();
-        };
-        tools.Items.Add(projectHistory);
+                var dialog = new GlossaryWindow { Owner = window };
+                if (dialog.ShowDialog() != true)
+                    return;
 
-        var qaProfiles = new MenuItem { Header = "QA-профили…" };
-        qaProfiles.Click += (_, _) =>
+                GlossaryService.Reload();
+                state.ViewModel.SelectedEntry?.RefreshValidation();
+                state.ViewModel.EntriesView.Refresh();
+            };
+            tools.Items.Add(glossary);
+
+            var projectHistory = new MenuItem { Header = "История проекта…" };
+            projectHistory.Click += (_, _) =>
+            {
+                state.Workspace.CommitTranslation();
+                new ProjectHistoryWindow(state.ViewModel.ActiveDocument?.FilePath)
+                {
+                    Owner = window
+                }.ShowDialog();
+            };
+            tools.Items.Add(projectHistory);
+
+            var qaProfiles = new MenuItem { Header = "QA-профили…" };
+            qaProfiles.Click += (_, _) =>
+            {
+                var dialog = new QaProfilesWindow { Owner = window };
+                if (dialog.ShowDialog() != true || state.ViewModel.ActiveDocument is null)
+                    return;
+
+                state.ViewModel.SelectedEntry?.RefreshValidation();
+                state.ViewModel.EntriesView.Refresh();
+            };
+            tools.Items.Add(qaProfiles);
+        }
+
+        var existingSettings = menu.Items.OfType<MenuItem>()
+            .FirstOrDefault(x =>
+                string.Equals(x.Header?.ToString(), "Настройки", StringComparison.Ordinal));
+        if (existingSettings is null)
         {
-            var dialog = new QaProfilesWindow { Owner = window };
-            if (dialog.ShowDialog() != true || state.ViewModel.ActiveDocument is null)
-                return;
+            var settings = new MenuItem { Header = "Настройки" };
+            settings.Click += (_, _) =>
+            {
+                var dialog = new EditorSettingsWindow { Owner = window };
+                if (dialog.ShowDialog() == true)
+                    state.Workspace.ApplySettings();
+            };
 
-            // Current row updates immediately. A full-file QA refresh is exposed
-            // below as a cancellable background command instead of freezing UI.
-            state.ViewModel.SelectedEntry?.RefreshValidation();
-            state.ViewModel.EntriesView.Refresh();
-        };
-        tools.Items.Add(qaProfiles);
+            var helpIndex = menu.Items.OfType<MenuItem>()
+                .Select((item, index) => (item, index))
+                .FirstOrDefault(x =>
+                    string.Equals(x.item.Header?.ToString(), "Справка", StringComparison.Ordinal))
+                .index;
 
-        var aiSettings = new MenuItem { Header = "Настройка ИИ…" };
-        aiSettings.Click += (_, _) =>
-        {
-            var dialog = new AiSettingsWindow { Owner = window };
-            if (dialog.ShowDialog() == true)
-                AiCorrectionService.ConfigureSession(dialog.ApiKey, dialog.Model);
-        };
-        tools.Items.Add(aiSettings);
+            if (helpIndex > 0)
+                menu.Items.Insert(helpIndex, settings);
+            else
+                menu.Items.Add(settings);
+        }
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent)
