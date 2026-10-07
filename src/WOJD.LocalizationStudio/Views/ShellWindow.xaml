@@ -39,19 +39,11 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Background="#FBFCFE" BorderBrush="#E2E8F2" BorderThickness="0,0,1,0">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="92"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
+                <Grid.RowDefinitions><RowDefinition Height="92"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <StackPanel Margin="24,18,16,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="✦" FontSize="28" Foreground="#2D70F5" VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -91,18 +83,10 @@
         </Border>
 
         <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="58"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
+            <Grid.RowDefinitions><RowDefinition Height="58"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Border Background="#FBFCFE" BorderBrush="#E2E8F2" BorderThickness="0,0,0,1">
                 <Grid Margin="24,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="SectionTitleText" Text="Перевод" FontSize="15" FontWeight="SemiBold" Foreground="#17233C"/>
                         <TextBlock Text="  ›  " Foreground="#94A0B5"/>
@@ -118,15 +102,11 @@
 
             <Grid Grid.Row="1" Margin="14">
                 <views:TranslationPage x:Name="TranslationPage"/>
+                <views:ProjectPage x:Name="ProjectPage" Visibility="Collapsed"/>
+                <views:SearchPage x:Name="SearchPage" Visibility="Collapsed"/>
                 <views:QaPage x:Name="QaPage" Visibility="Collapsed"/>
                 <views:StatisticsPage x:Name="StatisticsPage" Visibility="Collapsed"/>
                 <views:SettingsPage x:Name="SettingsPage" Visibility="Collapsed"/>
-                <Border x:Name="PlaceholderPanel" Visibility="Collapsed" Background="White" CornerRadius="12" BorderBrush="#E2E8F2" BorderThickness="1">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
-                        <TextBlock x:Name="PlaceholderTitle" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="PlaceholderDescription" Margin="0,10,0,0" Foreground="#73809A" TextWrapping="Wrap" TextAlignment="Center"/>
-                    </StackPanel>
-                </Border>
             </Grid>
 
             <Border x:Name="UpdatePanel" Grid.Row="2" Visibility="Collapsed" Background="#F8FAFD" BorderBrush="#E2E8F2" BorderThickness="0,1,0,0" Padding="18,8">
