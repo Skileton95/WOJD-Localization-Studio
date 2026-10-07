@@ -28,13 +28,16 @@ public partial class TranslationPage : UserControl
         InitializeComponent();
         _monitor.Changed += Monitor_Changed;
         DataObject.AddPastingHandler(TranslationBox, TranslationBox_Pasting);
-        Unloaded += TranslationPage_Unloaded;
     }
 
     public void Attach(MainViewModel viewModel)
     {
         if (ReferenceEquals(_viewModel, viewModel))
+        {
+            _attached = true;
+            RefreshSelection();
             return;
+        }
 
         if (_viewModel is not null)
             _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
@@ -45,6 +48,16 @@ public partial class TranslationPage : UserControl
         _attached = true;
         ApplySettings();
         RefreshSelection();
+    }
+
+    public void DisposePage()
+    {
+        _operationCts?.Cancel();
+        CaptureManualHistory();
+        if (_viewModel is not null)
+            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        _monitor.Dispose();
+        _attached = false;
     }
 
     public void ApplySettings()
@@ -106,15 +119,6 @@ public partial class TranslationPage : UserControl
 
         _viewModel.SelectedEntry = errors[nextIndex];
         ScrollToSelected();
-    }
-
-    private void TranslationPage_Unloaded(object sender, RoutedEventArgs e)
-    {
-        _operationCts?.Cancel();
-        CaptureManualHistory();
-        if (_viewModel is not null)
-            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-        _monitor.Dispose();
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
