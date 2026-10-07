@@ -27,188 +27,266 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="10"/>
         </Style>
+        <Style x:Key="MiniButton" TargetType="Button">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E0E6EF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="QaChip" TargetType="Border">
+            <Setter Property="Background" Value="#F2F6FB"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="370"/>
-            <ColumnDefinition Width="10"/>
-            <ColumnDefinition Width="*" MinWidth="430"/>
-            <ColumnDefinition Width="10"/>
-            <ColumnDefinition Width="320"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <Border Grid.Column="0" Style="{StaticResource Card}">
-            <Grid Margin="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <Border Background="#F6F8FC" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Height="42">
-                    <Grid>
-                        <TextBlock Text="⌕" FontSize="20" Foreground="#8B98AD" Margin="11,0,0,0" VerticalAlignment="Center"/>
-                        <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Padding="38,10,10,8" ToolTip="Поиск по тексту, ключу или Namespace"/>
-                    </Grid>
-                </Border>
-
-                <WrapPanel Grid.Row="1" Margin="0,10,0,10">
-                    <Button Style="{StaticResource FilterChip}" Command="{Binding FilterAllCommand}">
-                        <TextBlock><Run Text="Все "/><Run Text="{Binding TotalCount}" FontWeight="SemiBold"/></TextBlock>
-                    </Button>
-                    <Button Style="{StaticResource FilterChip}" Command="{Binding FilterUntranslatedCommand}">
-                        <TextBlock><Run Text="Без перевода "/><Run Text="{Binding UntranslatedCount}"/></TextBlock>
-                    </Button>
-                    <Button Style="{StaticResource FilterChip}" Command="{Binding FilterTranslatedCommand}">
-                        <TextBlock><Run Text="С переводом "/><Run Text="{Binding TranslatedCount}"/></TextBlock>
-                    </Button>
-                </WrapPanel>
-
-                <DataGrid x:Name="EntriesGrid"
-                          Grid.Row="2"
-                          ItemsSource="{Binding EntriesView}"
-                          SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                          AutoGenerateColumns="False"
-                          IsReadOnly="True"
-                          HeadersVisibility="Column"
-                          RowHeaderWidth="0"
-                          BorderThickness="0"
-                          Background="Transparent"
-                          GridLinesVisibility="Horizontal"
-                          HorizontalGridLinesBrush="#EDF1F6"
-                          AlternatingRowBackground="#FBFCFE"
-                          SelectionMode="Single"
-                          SelectionUnit="FullRow"
-                          EnableRowVirtualization="True"
-                          VirtualizingPanel.IsVirtualizing="True"
-                          VirtualizingPanel.VirtualizationMode="Recycling"
-                          SelectionChanged="EntriesGrid_SelectionChanged">
-                    <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Исходный текст / ключ" Width="*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="6,7">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding OriginalDisplay}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding Key}" FontSize="11" Foreground="#8290A7" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="1" Text="{Binding QaIndicator}" Margin="10,0,3,0" VerticalAlignment="Center" FontSize="16">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="#2CBF76"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding HasStructuralValidationIssues}" Value="True"><Setter Property="Foreground" Value="#E34C55"/></DataTrigger>
-                                                        <DataTrigger Binding="{Binding HasValidationIssues}" Value="True"><Setter Property="Foreground" Value="#E29A24"/></DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Grid>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
+        <Border x:Name="ExternalChangeBanner" Visibility="Collapsed" Grid.Row="0" Margin="0,0,0,10" Background="#FFF7E8" BorderBrush="#F0C36A" BorderThickness="1" CornerRadius="9" Padding="12,9">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock x:Name="ExternalChangeText" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#6B5221"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                    <Button Style="{StaticResource MiniButton}" Content="Сравнить" Click="ExternalCompare_Click"/>
+                    <Button Style="{StaticResource MiniButton}" Content="Перезагрузить" Click="ExternalReload_Click"/>
+                    <Button Style="{StaticResource MiniButton}" Content="Сохранить поверх" Click="ExternalOverwrite_Click"/>
+                    <Button Style="{StaticResource MiniButton}" Content="Игнорировать" Margin="0" Click="ExternalIgnore_Click"/>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <Border Grid.Column="2" Style="{StaticResource Card}">
-            <Grid Margin="18">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="370"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*" MinWidth="430"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
 
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="{Binding SelectedEntry.Key}" FontSize="22" FontWeight="SemiBold" Foreground="#17233C" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="EntryMetaText" Margin="0,4,0,0" Foreground="#71809A"/>
-                    </StackPanel>
-                    <TextBlock x:Name="PositionText" Grid.Column="1" Foreground="#71809A" VerticalAlignment="Top"/>
-                </Grid>
+            <Border Grid.Column="0" Style="{StaticResource Card}">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="1" Margin="0,20,0,0">
-                    <Grid Margin="0,0,0,7">
-                        <TextBlock Text="Исходный текст (CN)" FontWeight="SemiBold"/>
-                        <Button Content="⧉" HorizontalAlignment="Right" Width="28" Height="26" Background="Transparent" BorderThickness="0" ToolTip="Копировать Original" Click="CopyOriginal_Click"/>
-                    </Grid>
-                    <Border Background="#F7F9FC" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Padding="12" MinHeight="92">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock Text="{Binding SelectedEntry.OriginalDisplay}" TextWrapping="Wrap" FontSize="16"/></ScrollViewer>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel Grid.Row="2" Margin="0,18,0,0">
-                    <Grid Margin="0,0,0,7">
-                        <TextBlock Text="Перевод (RU)" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="CharacterCountText" HorizontalAlignment="Right" Foreground="#8190A7"/>
-                    </Grid>
-                    <Border x:Name="TranslationBorder" Background="White" BorderBrush="#7BA7F7" BorderThickness="1" CornerRadius="8" Padding="10" MinHeight="110">
-                        <TextBox x:Name="TranslationBox"
-                                 Text="{Binding SelectedEntry.Translation, Mode=TwoWay, UpdateSourceTrigger=Explicit, TargetNullValue=''}"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto"
-                                 TextChanged="TranslationBox_TextChanged"
-                                 LostKeyboardFocus="TranslationBox_LostKeyboardFocus"/>
-                    </Border>
-                </StackPanel>
-
-                <Border Grid.Row="3" Margin="0,18,0,0" Background="#F8FAFD" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
-                    <StackPanel>
-                        <TextBlock Text="Дополнительная информация" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <Border Background="#F6F8FC" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Height="42">
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                            <TextBlock Text="Namespace" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Column="1" Text="{Binding SelectedEntry.Namespace}" Margin="0,3"/>
-                            <TextBlock Grid.Row="1" Text="Статус" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.StatusText}" Margin="0,3"/>
-                            <TextBlock Grid.Row="2" Text="QA" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.QaStateText}" Margin="0,3"/>
-                            <TextBlock Grid.Row="3" Text="Файл" Foreground="#8190A7" Margin="0,3"/><TextBlock x:Name="FileInfoText" Grid.Row="3" Grid.Column="1" Margin="0,3" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="⌕" FontSize="20" Foreground="#8B98AD" Margin="11,0,0,0" VerticalAlignment="Center"/>
+                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Padding="38,10,10,8" ToolTip="Поиск по тексту, ключу или Namespace"/>
                         </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Grid Grid.Row="4" Margin="0,18,0,0">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <TextBlock Text="QA и структура" FontWeight="SemiBold"/>
-                    <Border Grid.Row="1" Margin="0,8,0,0" Background="#FBFCFE" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
-                        <TextBlock Text="{Binding SelectedEntry.ValidationSummary}" TextWrapping="Wrap" Foreground="#5F6F89"/>
                     </Border>
+
+                    <WrapPanel Grid.Row="1" Margin="0,10,0,10">
+                        <Button Style="{StaticResource FilterChip}" Command="{Binding FilterAllCommand}">
+                            <TextBlock><Run Text="Все "/><Run Text="{Binding TotalCount}" FontWeight="SemiBold"/></TextBlock>
+                        </Button>
+                        <Button Style="{StaticResource FilterChip}" Command="{Binding FilterUntranslatedCommand}">
+                            <TextBlock><Run Text="Без перевода "/><Run Text="{Binding UntranslatedCount}"/></TextBlock>
+                        </Button>
+                        <Button Style="{StaticResource FilterChip}" Command="{Binding FilterTranslatedCommand}">
+                            <TextBlock><Run Text="С переводом "/><Run Text="{Binding TranslatedCount}"/></TextBlock>
+                        </Button>
+                    </WrapPanel>
+
+                    <DataGrid x:Name="EntriesGrid"
+                              Grid.Row="2"
+                              ItemsSource="{Binding EntriesView}"
+                              SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              HeadersVisibility="Column"
+                              RowHeaderWidth="0"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#EDF1F6"
+                              AlternatingRowBackground="#FBFCFE"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              EnableRowVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              SelectionChanged="EntriesGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Исходный текст / ключ" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="6,7">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding OriginalDisplay}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Key}" FontSize="11" Foreground="#8290A7" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding QaIndicator}" Margin="10,0,3,0" VerticalAlignment="Center" FontSize="16">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#2CBF76"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasStructuralValidationIssues}" Value="True"><Setter Property="Foreground" Value="#E34C55"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding HasValidationIssues}" Value="True"><Setter Property="Foreground" Value="#E29A24"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
-            </Grid>
-        </Border>
+            </Border>
 
-        <Border Grid.Column="4" Style="{StaticResource Card}">
-            <Grid Margin="14">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="190"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Предпросмотр" FontWeight="SemiBold" Foreground="#2D70F5"/>
-                    <TextBlock Text="    Связанные строки" Foreground="#73809A"/>
-                </StackPanel>
-                <Border Grid.Row="1" Margin="0,12,0,0" Background="#182337" CornerRadius="9">
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <Grid Margin="18">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
                     <Grid>
-                        <TextBlock Text="Предпросмотр из игры" Foreground="#DDE6F5" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"/>
-                        <TextBlock Text="будет подключён на следующем этапе" Foreground="#91A1BB" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,34,0,0" FontSize="11"/>
-                    </Grid>
-                </Border>
-                <TextBlock Grid.Row="2" Text="Контекст" FontWeight="SemiBold" Margin="0,16,0,8"/>
-                <StackPanel Grid.Row="3">
-                    <Border Background="#F7F9FC" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Технический контекст" FontWeight="SemiBold"/>
-                            <TextBlock Text="Ключ, Namespace, QA и связанные данные будут собраны здесь без лишних кнопок." TextWrapping="Wrap" Foreground="#71809A" Margin="0,7,0,0"/>
+                            <TextBlock Text="{Binding SelectedEntry.Key}" FontSize="22" FontWeight="SemiBold" Foreground="#17233C" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="EntryMetaText" Margin="0,4,0,0" Foreground="#71809A"/>
                         </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock x:Name="PositionText" Foreground="#71809A" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <Button x:Name="MoreButton" Style="{StaticResource MiniButton}" Content="⋯" Margin="0" Padding="10,4" Click="More_Click">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="История строки…" Click="History_Click"/>
+                                        <MenuItem Header="Согласованность переводов…" Click="Consistency_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="Глоссарий…" Click="Glossary_Click"/>
+                                        <MenuItem Header="Снимки файла…" Click="Snapshots_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="Автоисправить текущую строку" Click="AutoCorrect_Click"/>
+                                        <MenuItem Header="Автоисправление текущего файла…" Click="BulkAutoCorrect_Click"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                        <Grid Margin="0,0,0,7">
+                            <TextBlock Text="Исходный текст (CN)" FontWeight="SemiBold"/>
+                            <Button Content="⧉" HorizontalAlignment="Right" Width="28" Height="26" Background="Transparent" BorderThickness="0" ToolTip="Копировать Original" Click="CopyOriginal_Click"/>
+                        </Grid>
+                        <Border Background="#F7F9FC" BorderBrush="#E0E6EF" BorderThickness="1" CornerRadius="8" Padding="12" MinHeight="92">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock Text="{Binding SelectedEntry.OriginalDisplay}" TextWrapping="Wrap" FontSize="16"/></ScrollViewer>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Margin="0,18,0,0">
+                        <Grid Margin="0,0,0,7">
+                            <TextBlock Text="Перевод (RU)" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="CharacterCountText" HorizontalAlignment="Right" Foreground="#8190A7"/>
+                        </Grid>
+                        <Border x:Name="TranslationBorder" Background="White" BorderBrush="#7BA7F7" BorderThickness="1" CornerRadius="8" Padding="10" MinHeight="110">
+                            <TextBox x:Name="TranslationBox"
+                                     Text="{Binding SelectedEntry.Translation, Mode=TwoWay, UpdateSourceTrigger=Explicit, TargetNullValue=''}"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     PreviewKeyDown="TranslationBox_PreviewKeyDown"
+                                     TextChanged="TranslationBox_TextChanged"
+                                     LostKeyboardFocus="TranslationBox_LostKeyboardFocus"/>
+                        </Border>
+                    </StackPanel>
+
+                    <WrapPanel Grid.Row="3" Margin="0,12,0,0">
+                        <Border x:Name="StructureChip" Style="{StaticResource QaChip}"><TextBlock x:Name="StructureChipText" Text="Структура"/></Border>
+                        <Border x:Name="TagsChip" Style="{StaticResource QaChip}" Visibility="Collapsed"><TextBlock x:Name="TagsChipText"/></Border>
+                        <Border x:Name="PlaceholdersChip" Style="{StaticResource QaChip}" Visibility="Collapsed"><TextBlock x:Name="PlaceholdersChipText"/></Border>
+                        <Border x:Name="NewLinesChip" Style="{StaticResource QaChip}" Visibility="Collapsed"><TextBlock x:Name="NewLinesChipText"/></Border>
+                    </WrapPanel>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button x:Name="RestoreStructureButton" Style="{StaticResource MiniButton}" Content="↺ Восстановить структуру" Visibility="Collapsed" Click="RestoreStructure_Click"/>
+                        <Button x:Name="AutoCorrectButton" Style="{StaticResource MiniButton}" Content="Автоисправить" Click="AutoCorrect_Click"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="5" Margin="0,18,0,0">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="Дополнительная информация" FontWeight="SemiBold"/>
+                        <Border Grid.Row="1" Margin="0,8,0,0" Background="#F8FAFD" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Text="Namespace" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Column="1" Text="{Binding SelectedEntry.Namespace}" Margin="0,3"/>
+                                <TextBlock Grid.Row="1" Text="Статус" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.StatusText}" Margin="0,3"/>
+                                <TextBlock Grid.Row="2" Text="QA" Foreground="#8190A7" Margin="0,3"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.QaStateText}" Margin="0,3"/>
+                                <TextBlock Grid.Row="3" Text="Файл" Foreground="#8190A7" Margin="0,3"/><TextBlock x:Name="FileInfoText" Grid.Row="3" Grid.Column="1" Margin="0,3" TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </Border>
+                        <Border Grid.Row="2" Margin="0,10,0,0" Background="#FBFCFE" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <TextBlock x:Name="QaDetailsText" TextWrapping="Wrap" Foreground="#5F6F89"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4" Style="{StaticResource Card}">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="190"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Контекст" FontWeight="SemiBold" Foreground="#2D70F5"/>
+                        <TextBlock Text="    Связанные данные" Foreground="#73809A"/>
+                    </StackPanel>
+                    <Border Grid.Row="1" Margin="0,12,0,0" Background="#182337" CornerRadius="9">
+                        <Grid>
+                            <TextBlock Text="Игровой предпросмотр" Foreground="#DDE6F5" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16"/>
+                            <TextBlock Text="появится, когда для строки будет доступен реальный контекст" Foreground="#91A1BB" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18,42,18,0" FontSize="11" TextWrapping="Wrap" TextAlignment="Center"/>
+                        </Grid>
                     </Border>
-                    <TextBlock Text="Заметки" FontWeight="SemiBold" Margin="0,16,0,8"/>
-                    <TextBox Height="120" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" Text="Заметки будут подключены после миграции основной редакторной логики." Foreground="#9AA6B9" Background="#FBFCFE" BorderBrush="#E4E9F1"/>
-                </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Технический контекст" FontWeight="SemiBold" Margin="0,16,0,8"/>
+                    <StackPanel Grid.Row="3">
+                        <Border Background="#F7F9FC" BorderBrush="#E4E9F1" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <StackPanel>
+                                <TextBlock Text="{Binding SelectedEntry.Namespace}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding SelectedEntry.Key}" TextWrapping="Wrap" Foreground="#71809A" Margin="0,5,0,0"/>
+                                <TextBlock x:Name="ContextQaText" TextWrapping="Wrap" Foreground="#71809A" Margin="0,9,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border x:Name="OperationPanel" Grid.Row="2" Visibility="Collapsed" Margin="0,10,0,0" Background="#F8FAFD" BorderBrush="#E2E8F2" BorderThickness="1" CornerRadius="8" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock x:Name="OperationText" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <ProgressBar x:Name="OperationProgress" Grid.Column="1" Height="6" Minimum="0" Maximum="100" VerticalAlignment="Center"/>
+                <Button Grid.Column="2" Style="{StaticResource MiniButton}" Content="Отмена" Margin="12,0,0,0" Click="CancelOperation_Click"/>
             </Grid>
         </Border>
     </Grid>
