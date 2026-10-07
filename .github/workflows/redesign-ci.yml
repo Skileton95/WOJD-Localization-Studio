@@ -1,0 +1,39 @@
+name: Redesign CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build application
+        shell: pwsh
+        run: dotnet build 'src/WOJD.LocalizationStudio/WOJD.LocalizationStudio.csproj' -c Release
+
+      - name: Build updater
+        shell: pwsh
+        run: dotnet build 'src/WOJD.LocalizationStudio.Updater/WOJD.LocalizationStudio.Updater.csproj' -c Release
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          if (Test-Path 'tests') {
+            $projects = Get-ChildItem 'tests' -Recurse -Filter '*.csproj'
+            foreach ($project in $projects) {
+              dotnet test $project.FullName -c Release --no-restore
+            }
+          }
