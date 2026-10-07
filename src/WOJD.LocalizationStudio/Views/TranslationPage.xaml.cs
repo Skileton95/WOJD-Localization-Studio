@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using WOJD.LocalizationStudio.Models;
+using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
 
 namespace WOJD.LocalizationStudio.Views;
