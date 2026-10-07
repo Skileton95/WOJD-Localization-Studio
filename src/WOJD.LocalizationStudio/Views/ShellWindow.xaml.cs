@@ -11,20 +11,31 @@ namespace WOJD.LocalizationStudio.Views;
 public partial class ShellWindow : Window
 {
     private readonly MainViewModel _viewModel = new();
+    private Button? _activeNavButton;
 
     public ShellWindow()
     {
         InitializeComponent();
         DataContext = _viewModel;
+
         TranslationPage.Attach(_viewModel);
+        ProjectPage.Attach(_viewModel);
+        SearchPage.Attach(_viewModel);
         QaPage.Attach(_viewModel);
         StatisticsPage.Attach(_viewModel);
+
+        SearchPage.OpenInEditorRequested += (_, _) =>
+        {
+            ShowTranslation();
+            TranslationPage.ScrollToSelected();
+        };
         QaPage.OpenInEditorRequested += (_, _) =>
         {
             ShowTranslation();
             TranslationPage.ScrollToSelected();
         };
         SettingsPage.SettingsSaved += (_, _) => TranslationPage.ApplySettings();
+
         Loaded += ShellWindow_Loaded;
         Closing += ShellWindow_Closing;
         PreviewKeyDown += ShellWindow_PreviewKeyDown;
@@ -37,6 +48,7 @@ public partial class ShellWindow : Window
     {
         Loaded -= ShellWindow_Loaded;
         await _viewModel.RestoreWorkspaceAsync();
+        ProjectPage.Refresh();
         QaPage.Refresh();
         StatisticsPage.Refresh();
         RefreshTopBar();
@@ -75,6 +87,20 @@ public partial class ShellWindow : Window
         RefreshTopBar();
     }
 
+    private void Project_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        ProjectPage.Refresh();
+        ShowPage(ProjectPage, "Проект", ProjectNavButton);
+    }
+
+    private void Search_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        ShowPage(SearchPage, "Поиск", SearchNavButton);
+        SearchPage.FocusSearch();
+    }
+
     private void Qa_Click(object sender, RoutedEventArgs e)
     {
         TranslationPage.CommitTranslation();
@@ -99,10 +125,11 @@ public partial class ShellWindow : Window
     private void ShowPage(UIElement page, string title, Button navButton)
     {
         TranslationPage.Visibility = Visibility.Collapsed;
+        ProjectPage.Visibility = Visibility.Collapsed;
+        SearchPage.Visibility = Visibility.Collapsed;
         QaPage.Visibility = Visibility.Collapsed;
         StatisticsPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
-        PlaceholderPanel.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
         SectionTitleText.Text = title;
         SetActiveNavigation(navButton);
@@ -111,6 +138,7 @@ public partial class ShellWindow : Window
 
     private void SetActiveNavigation(Button active)
     {
+        _activeNavButton = active;
         foreach (var button in new[]
                  {
                      ProjectNavButton,
@@ -129,56 +157,18 @@ public partial class ShellWindow : Window
         }
     }
 
-    private void Project_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button)
-            return;
-
-        var menu = new ContextMenu();
-        var openFile = new MenuItem { Header = "Открыть файл…", InputGestureText = "Ctrl+O" };
-        openFile.Click += (_, _) => _viewModel.OpenFileCommand.Execute(null);
-        var openFolder = new MenuItem { Header = "Открыть папку…", InputGestureText = "Ctrl+Shift+O" };
-        openFolder.Click += (_, _) => _viewModel.OpenFolderCommand.Execute(null);
-        var save = new MenuItem { Header = "Сохранить", InputGestureText = "Ctrl+S" };
-        save.Click += (_, _) => SaveCurrent();
-        var saveAll = new MenuItem { Header = "Сохранить всё", InputGestureText = "Ctrl+Shift+S" };
-        saveAll.Click += (_, _) => SaveAll();
-        menu.Items.Add(openFile);
-        menu.Items.Add(openFolder);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(save);
-        menu.Items.Add(saveAll);
-        button.ContextMenu = menu;
-        menu.PlacementTarget = button;
-        menu.IsOpen = true;
-    }
-
-    private void Search_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new ProjectSearchWindow(_viewModel) { Owner = this };
-        if (dialog.ShowDialog() == true)
-        {
-            ShowTranslation();
-            TranslationPage.ScrollToSelected();
-        }
-    }
-
     private void About_Click(object sender, RoutedEventArgs e)
     {
+        var previous = _activeNavButton;
         SetActiveNavigation(AboutNavButton);
         AppDialog.Show(
-            $"WOJD Localization Studio\n{_viewModel.AppVersion}\n\nНовая оболочка 0.2.0: Перевод, Проверка, Статистика и Настройки.",
+            $"WOJD Localization Studio\n{_viewModel.AppVersion}\n\nРедизайн 0.2.0 — единая оболочка перевода, поиска, QA, статистики и настроек.",
             "О программе",
             MessageBoxButton.OK,
             MessageBoxImage.Information,
             this);
-        SetActiveNavigation(TranslationPage.Visibility == Visibility.Visible
-            ? TranslationNavButton
-            : QaPage.Visibility == Visibility.Visible
-                ? QaNavButton
-                : StatisticsPage.Visibility == Visibility.Visible
-                    ? StatisticsNavButton
-                    : SettingsNavButton);
+        if (previous is not null)
+            SetActiveNavigation(previous);
     }
 
     private void SaveCurrent()
@@ -228,6 +218,14 @@ public partial class ShellWindow : Window
             return;
         }
 
+        if (ctrl && shift && e.Key == Key.F)
+        {
+            ShowPage(SearchPage, "Поиск", SearchNavButton);
+            SearchPage.FocusSearch();
+            e.Handled = true;
+            return;
+        }
+
         if (ctrl && !shift && e.Key == Key.F)
         {
             ShowTranslation();
@@ -264,9 +262,7 @@ public partial class ShellWindow : Window
         if (UpdateService.IsApplyingUpdate)
         {
             _viewModel.PersistWorkspaceState(includeDrafts: true);
-            TranslationPage.DisposePage();
-            QaPage.Detach();
-            StatisticsPage.Detach();
+            DisposePages();
             return;
         }
 
@@ -277,7 +273,13 @@ public partial class ShellWindow : Window
         }
 
         _viewModel.PersistWorkspaceState(includeDrafts: false);
+        DisposePages();
+    }
+
+    private void DisposePages()
+    {
         TranslationPage.DisposePage();
+        ProjectPage.Detach();
         QaPage.Detach();
         StatisticsPage.Detach();
         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
