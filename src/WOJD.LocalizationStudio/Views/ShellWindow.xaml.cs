@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Win32;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.ViewModels;
 
@@ -171,6 +172,172 @@ public partial class ShellWindow : Window
             SetActiveNavigation(previous);
     }
 
+    private void Tools_Click(object sender, RoutedEventArgs e)
+    {
+        if (ToolsButton.ContextMenu is null)
+            return;
+
+        ToolsButton.ContextMenu.PlacementTarget = ToolsButton;
+        ToolsButton.ContextMenu.IsOpen = true;
+    }
+
+    private async void GlossaryMenu_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        new GlossaryWindow { Owner = this }.ShowDialog();
+        GlossaryService.Reload();
+        await RefreshActiveValidationAsync("Обновление глоссария");
+    }
+
+    private async void QaProfilesMenu_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        new QaProfilesWindow { Owner = this }.ShowDialog();
+        QaProfileService.Reload();
+        await RefreshActiveValidationAsync("Обновление QA-профилей");
+    }
+
+    private void ProjectHistoryMenu_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        new ProjectHistoryWindow(_viewModel.ActiveDocument?.FilePath)
+        {
+            Owner = this
+        }.ShowDialog();
+    }
+
+    private void SnapshotsMenu_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        var document = _viewModel.ActiveDocument;
+        if (document is null)
+        {
+            AppDialog.Show(
+                "Сначала откройте файл.",
+                "Снимки файла",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                this);
+            return;
+        }
+
+        var dialog = new SnapshotManagerWindow(document) { Owner = this };
+        dialog.ShowDialog();
+        if (!dialog.Restored)
+            return;
+
+        TranslationMemoryService.Invalidate(document);
+        _viewModel.EntriesView.Refresh();
+        TranslationPage.Attach(_viewModel);
+        QaPage.Refresh();
+        StatisticsPage.Refresh();
+        ProjectPage.Refresh();
+    }
+
+    private async void CompareFileMenu_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        var current = _viewModel.ActiveDocument;
+        if (current is null)
+        {
+            AppDialog.Show(
+                "Сначала откройте текущую версию файла.",
+                "Сравнение файлов",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information,
+                this);
+            return;
+        }
+
+        var picker = new OpenFileDialog
+        {
+            Title = "Выберите старую версию файла",
+            Filter = "NDJSON/JSONL (*.ndjson;*.jsonl)|*.ndjson;*.jsonl|Все файлы (*.*)|*.*"
+        };
+        if (picker.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var oldDocument = await new NdjsonLocalizationAdapter().LoadAsync(picker.FileName);
+            var dialog = new FileComparisonWindow(
+                current,
+                oldDocument,
+                Path.GetFileName(picker.FileName))
+            {
+                Owner = this
+            };
+            dialog.ShowDialog();
+            TranslationPage.Attach(_viewModel);
+            QaPage.Refresh();
+            StatisticsPage.Refresh();
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(
+                ex.Message,
+                "Ошибка сравнения",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error,
+                this);
+        }
+    }
+
+    private void FaqMenu_Click(object sender, RoutedEventArgs e)
+        => ShowFaq();
+
+    private void ShowFaq()
+    {
+        new FaqHelpWindowV2 { Owner = this }.ShowDialog();
+    }
+
+    private async void CheckUpdatesMenu_Click(object sender, RoutedEventArgs e)
+    {
+        await UpdateService.CheckNowAsync(
+            this,
+            SetUpdateProgress,
+            _viewModel.ConfirmDiscardUnsaved);
+    }
+
+    private async Task RefreshActiveValidationAsync(string stage)
+    {
+        var document = _viewModel.ActiveDocument;
+        if (document is null)
+            return;
+
+        var entries = document.Entries;
+        SetUpdateProgress(new UpdateProgressState(true, 0, false, stage));
+        try
+        {
+            const int batchSize = 2000;
+            for (var start = 0; start < entries.Count; start += batchSize)
+            {
+                var end = Math.Min(start + batchSize, entries.Count);
+                for (var i = start; i < end; i++)
+                    entries[i].RefreshValidation();
+
+                var percent = entries.Count == 0
+                    ? 100d
+                    : end * 100d / entries.Count;
+                SetUpdateProgress(new UpdateProgressState(
+                    true,
+                    percent,
+                    false,
+                    $"{stage}: {end:N0} / {entries.Count:N0}"));
+                await Task.Yield();
+            }
+
+            _viewModel.EntriesView.Refresh();
+            TranslationPage.Attach(_viewModel);
+            QaPage.Refresh();
+            StatisticsPage.Refresh();
+        }
+        finally
+        {
+            SetUpdateProgress(new UpdateProgressState(false, 0, false, string.Empty));
+        }
+    }
+
     private void SaveCurrent()
     {
         TranslationPage.CommitTranslation();
@@ -189,6 +356,13 @@ public partial class ShellWindow : Window
     {
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+
+        if (e.Key == Key.F1 && !ctrl)
+        {
+            ShowFaq();
+            e.Handled = true;
+            return;
+        }
 
         if (ctrl && !shift && e.Key == Key.O)
         {
