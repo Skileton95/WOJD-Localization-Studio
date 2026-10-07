@@ -23,9 +23,7 @@
                             <ContentPresenter VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="NavBorder" Property="Background" Value="#EEF4FE"/>
-                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavBorder" Property="Background" Value="#EEF4FE"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -53,31 +51,17 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Margin="0,6,0,0">
-                    <Button x:Name="ProjectNavButton" Style="{StaticResource NavButton}" Click="Project_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="▣" Width="28"/><TextBlock Text="Проект"/></StackPanel>
-                    </Button>
-                    <Button x:Name="TranslationNavButton" Style="{StaticResource NavButtonActive}" Click="Translation_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="▤" Width="28"/><TextBlock Text="Перевод"/></StackPanel>
-                    </Button>
-                    <Button x:Name="SearchNavButton" Style="{StaticResource NavButton}" Click="Search_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="⌕" Width="28"/><TextBlock Text="Поиск"/></StackPanel>
-                    </Button>
-                    <Button x:Name="QaNavButton" Style="{StaticResource NavButton}" Click="Qa_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="✓" Width="28"/><TextBlock Text="Проверка"/></StackPanel>
-                    </Button>
-                    <Button x:Name="StatisticsNavButton" Style="{StaticResource NavButton}" Click="Statistics_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="▥" Width="28"/><TextBlock Text="Статистика"/></StackPanel>
-                    </Button>
+                    <Button x:Name="ProjectNavButton" Style="{StaticResource NavButton}" Click="Project_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="▣" Width="28"/><TextBlock Text="Проект"/></StackPanel></Button>
+                    <Button x:Name="TranslationNavButton" Style="{StaticResource NavButtonActive}" Click="Translation_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="▤" Width="28"/><TextBlock Text="Перевод"/></StackPanel></Button>
+                    <Button x:Name="SearchNavButton" Style="{StaticResource NavButton}" Click="Search_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="⌕" Width="28"/><TextBlock Text="Поиск"/></StackPanel></Button>
+                    <Button x:Name="QaNavButton" Style="{StaticResource NavButton}" Click="Qa_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="✓" Width="28"/><TextBlock Text="Проверка"/></StackPanel></Button>
+                    <Button x:Name="StatisticsNavButton" Style="{StaticResource NavButton}" Click="Statistics_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="▥" Width="28"/><TextBlock Text="Статистика"/></StackPanel></Button>
                 </StackPanel>
 
                 <StackPanel Grid.Row="2" Margin="0,0,0,16">
                     <Separator Margin="20,0,20,10" Background="#E2E8F2"/>
-                    <Button x:Name="SettingsNavButton" Style="{StaticResource NavButton}" Click="Settings_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="⚙" Width="28"/><TextBlock Text="Настройки"/></StackPanel>
-                    </Button>
-                    <Button x:Name="AboutNavButton" Style="{StaticResource NavButton}" Click="About_Click">
-                        <StackPanel Orientation="Horizontal"><TextBlock Text="ⓘ" Width="28"/><TextBlock Text="О программе"/></StackPanel>
-                    </Button>
+                    <Button x:Name="SettingsNavButton" Style="{StaticResource NavButton}" Click="Settings_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="⚙" Width="28"/><TextBlock Text="Настройки"/></StackPanel></Button>
+                    <Button x:Name="AboutNavButton" Style="{StaticResource NavButton}" Click="About_Click"><StackPanel Orientation="Horizontal"><TextBlock Text="ⓘ" Width="28"/><TextBlock Text="О программе"/></StackPanel></Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -93,6 +77,21 @@
                         <TextBlock x:Name="ActiveFileText" Text="Файл не открыт" Foreground="#66758F"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ToolsButton" Content="⋯" Width="34" Height="30" Margin="0,0,14,0" Background="Transparent" BorderBrush="#E0E6EF" BorderThickness="1" FontSize="18" Cursor="Hand" Click="Tools_Click" ToolTip="Инструменты и справка">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Глоссарий…" Click="GlossaryMenu_Click"/>
+                                    <MenuItem Header="QA-профили…" Click="QaProfilesMenu_Click"/>
+                                    <MenuItem Header="История проекта…" Click="ProjectHistoryMenu_Click"/>
+                                    <MenuItem Header="Снимки текущего файла…" Click="SnapshotsMenu_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Сравнить со старой версией…" Click="CompareFileMenu_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="FAQ и справка…" InputGestureText="F1" Click="FaqMenu_Click"/>
+                                    <MenuItem Header="Проверить обновления" Click="CheckUpdatesMenu_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
                         <TextBlock Text="ru" FontWeight="SemiBold" Foreground="#31415F" Margin="0,0,18,0"/>
                         <TextBlock x:Name="TopFileText" Foreground="#31415F" Margin="0,0,16,0"/>
                         <TextBlock x:Name="TopCountText" Foreground="#73809A"/>
