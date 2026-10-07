@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using WOJD.LocalizationStudio.Services;
+using WOJD.LocalizationStudio.Views;
 
 namespace WOJD.LocalizationStudio;
 
@@ -15,7 +16,7 @@ public partial class App : Application
 
         try
         {
-            var window = new MainWindow();
+            var window = new ShellWindow();
             MainWindow = window;
             ShutdownMode = ShutdownMode.OnMainWindowClose;
             window.Show();
