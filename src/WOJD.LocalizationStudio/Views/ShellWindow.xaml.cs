@@ -17,17 +17,28 @@ public partial class ShellWindow : Window
         InitializeComponent();
         DataContext = _viewModel;
         TranslationPage.Attach(_viewModel);
+        QaPage.Attach(_viewModel);
+        StatisticsPage.Attach(_viewModel);
+        QaPage.OpenInEditorRequested += (_, _) =>
+        {
+            ShowTranslation();
+            TranslationPage.ScrollToSelected();
+        };
+        SettingsPage.SettingsSaved += (_, _) => TranslationPage.ApplySettings();
         Loaded += ShellWindow_Loaded;
         Closing += ShellWindow_Closing;
         PreviewKeyDown += ShellWindow_PreviewKeyDown;
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         RefreshTopBar();
+        SetActiveNavigation(TranslationNavButton);
     }
 
     private async void ShellWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= ShellWindow_Loaded;
         await _viewModel.RestoreWorkspaceAsync();
+        QaPage.Refresh();
+        StatisticsPage.Refresh();
         RefreshTopBar();
         await UpdateService.StartAsync(
             this,
@@ -55,16 +66,67 @@ public partial class ShellWindow : Window
     }
 
     private void Translation_Click(object sender, RoutedEventArgs e)
-    {
-        ShowTranslation();
-    }
+        => ShowTranslation();
 
     private void ShowTranslation()
     {
-        SectionTitleText.Text = "Перевод";
-        TranslationPage.Visibility = Visibility.Visible;
-        PlaceholderPanel.Visibility = Visibility.Collapsed;
+        ShowPage(TranslationPage, "Перевод", TranslationNavButton);
+        TranslationPage.Attach(_viewModel);
         RefreshTopBar();
+    }
+
+    private void Qa_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        QaPage.Refresh();
+        ShowPage(QaPage, "Проверка", QaNavButton);
+    }
+
+    private void Statistics_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        StatisticsPage.Refresh();
+        ShowPage(StatisticsPage, "Статистика", StatisticsNavButton);
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        TranslationPage.CommitTranslation();
+        SettingsPage.Reload();
+        ShowPage(SettingsPage, "Настройки", SettingsNavButton);
+    }
+
+    private void ShowPage(UIElement page, string title, Button navButton)
+    {
+        TranslationPage.Visibility = Visibility.Collapsed;
+        QaPage.Visibility = Visibility.Collapsed;
+        StatisticsPage.Visibility = Visibility.Collapsed;
+        SettingsPage.Visibility = Visibility.Collapsed;
+        PlaceholderPanel.Visibility = Visibility.Collapsed;
+        page.Visibility = Visibility.Visible;
+        SectionTitleText.Text = title;
+        SetActiveNavigation(navButton);
+        RefreshTopBar();
+    }
+
+    private void SetActiveNavigation(Button active)
+    {
+        foreach (var button in new[]
+                 {
+                     ProjectNavButton,
+                     TranslationNavButton,
+                     SearchNavButton,
+                     QaNavButton,
+                     StatisticsNavButton,
+                     SettingsNavButton,
+                     AboutNavButton
+                 })
+        {
+            button.Style = (Style)FindResource(
+                ReferenceEquals(button, active)
+                    ? "NavButtonActive"
+                    : "NavButton");
+        }
     }
 
     private void Project_Click(object sender, RoutedEventArgs e)
@@ -101,43 +163,22 @@ public partial class ShellWindow : Window
         }
     }
 
-    private void Qa_Click(object sender, RoutedEventArgs e)
-    {
-        ShowPlaceholder(
-            "Проверка",
-            "Новый экран проверки будет следующим этапом 0.2.0. Сейчас QA продолжает работать в таблице и карточке выбранной строки; F7 переходит к следующей проблеме.");
-    }
-
-    private void Statistics_Click(object sender, RoutedEventArgs e)
-    {
-        ShowPlaceholder(
-            "Статистика",
-            "Раздел статистики подготовлен в новой навигации. На следующем этапе здесь появятся прогресс перевода, QA, Namespace и динамика изменений.");
-    }
-
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new EditorSettingsWindow { Owner = this };
-        dialog.ShowDialog();
-    }
-
     private void About_Click(object sender, RoutedEventArgs e)
     {
+        SetActiveNavigation(AboutNavButton);
         AppDialog.Show(
-            $"WOJD Localization Studio\n{_viewModel.AppVersion}\n\nРедизайн 0.2.0 — новая оболочка находится в активной разработке.",
+            $"WOJD Localization Studio\n{_viewModel.AppVersion}\n\nНовая оболочка 0.2.0: Перевод, Проверка, Статистика и Настройки.",
             "О программе",
             MessageBoxButton.OK,
             MessageBoxImage.Information,
             this);
-    }
-
-    private void ShowPlaceholder(string title, string description)
-    {
-        SectionTitleText.Text = title;
-        TranslationPage.Visibility = Visibility.Collapsed;
-        PlaceholderPanel.Visibility = Visibility.Visible;
-        PlaceholderTitle.Text = title;
-        PlaceholderDescription.Text = description;
+        SetActiveNavigation(TranslationPage.Visibility == Visibility.Visible
+            ? TranslationNavButton
+            : QaPage.Visibility == Visibility.Visible
+                ? QaNavButton
+                : StatisticsPage.Visibility == Visibility.Visible
+                    ? StatisticsNavButton
+                    : SettingsNavButton);
     }
 
     private void SaveCurrent()
@@ -201,6 +242,7 @@ public partial class ShellWindow : Window
             var command = shift ? _viewModel.PreviousUntranslatedCommand : _viewModel.NextUntranslatedCommand;
             if (command.CanExecute(null))
                 command.Execute(null);
+            ShowTranslation();
             TranslationPage.ScrollToSelected();
             e.Handled = true;
             return;
@@ -210,6 +252,7 @@ public partial class ShellWindow : Window
         {
             TranslationPage.CommitTranslation();
             TranslationPage.NavigateQaError(shift ? -1 : 1);
+            ShowTranslation();
             e.Handled = true;
         }
     }
@@ -221,6 +264,9 @@ public partial class ShellWindow : Window
         if (UpdateService.IsApplyingUpdate)
         {
             _viewModel.PersistWorkspaceState(includeDrafts: true);
+            TranslationPage.DisposePage();
+            QaPage.Detach();
+            StatisticsPage.Detach();
             return;
         }
 
@@ -231,6 +277,10 @@ public partial class ShellWindow : Window
         }
 
         _viewModel.PersistWorkspaceState(includeDrafts: false);
+        TranslationPage.DisposePage();
+        QaPage.Detach();
+        StatisticsPage.Detach();
+        _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
     }
 
     private void SetUpdateProgress(UpdateProgressState state)
