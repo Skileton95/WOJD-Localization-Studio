@@ -1,0 +1,139 @@
+<Window x:Class="WOJD.LocalizationStudio.Views.ShellWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:WOJD.LocalizationStudio.Views"
+        Title="WOJD Localization Studio 0.2"
+        Width="1560" Height="960" MinWidth="1180" MinHeight="720"
+        WindowStartupLocation="CenterScreen"
+        Background="#F4F7FB">
+    <Window.Resources>
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Height" Value="46"/>
+            <Setter Property="Margin" Value="12,3"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#31415F"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavBorder" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#EEF4FE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="NavButtonActive" TargetType="Button" BasedOn="{StaticResource NavButton}">
+            <Setter Property="Background" Value="#E4EEFF"/>
+            <Setter Property="Foreground" Value="#1767E8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="#FBFCFE" BorderBrush="#E2E8F2" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="92"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Margin="24,18,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✦" FontSize="28" Foreground="#2D70F5" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="WOJD" FontSize="25" FontWeight="Bold" Foreground="#17233C" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="Localization Studio" FontSize="12" Foreground="#73809A" Margin="38,-2,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Margin="0,6,0,0">
+                    <Button Style="{StaticResource NavButton}" Click="Project_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="▣" Width="28"/><TextBlock Text="Проект"/></StackPanel>
+                    </Button>
+                    <Button x:Name="TranslationNavButton" Style="{StaticResource NavButtonActive}" Click="Translation_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="▤" Width="28"/><TextBlock Text="Перевод"/></StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButton}" Click="Search_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="⌕" Width="28"/><TextBlock Text="Поиск"/></StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButton}" Click="Qa_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="✓" Width="28"/><TextBlock Text="Проверка"/></StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButton}" Click="Statistics_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="▥" Width="28"/><TextBlock Text="Статистика"/></StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Margin="0,0,0,16">
+                    <Separator Margin="20,0,20,10" Background="#E2E8F2"/>
+                    <Button Style="{StaticResource NavButton}" Click="Settings_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="⚙" Width="28"/><TextBlock Text="Настройки"/></StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButton}" Click="About_Click">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="ⓘ" Width="28"/><TextBlock Text="О программе"/></StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="58"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Background="#FBFCFE" BorderBrush="#E2E8F2" BorderThickness="0,0,0,1">
+                <Grid Margin="24,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="SectionTitleText" Text="Перевод" FontSize="15" FontWeight="SemiBold" Foreground="#17233C"/>
+                        <TextBlock Text="  ›  " Foreground="#94A0B5"/>
+                        <TextBlock x:Name="ActiveFileText" Text="Файл не открыт" Foreground="#66758F"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="ru" FontWeight="SemiBold" Foreground="#31415F" Margin="0,0,18,0"/>
+                        <TextBlock x:Name="TopFileText" Foreground="#31415F" Margin="0,0,16,0"/>
+                        <TextBlock x:Name="TopCountText" Foreground="#73809A"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="14">
+                <views:TranslationPage x:Name="TranslationPage"/>
+                <Border x:Name="PlaceholderPanel" Visibility="Collapsed" Background="White" CornerRadius="12" BorderBrush="#E2E8F2" BorderThickness="1">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                        <TextBlock x:Name="PlaceholderTitle" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="PlaceholderDescription" Margin="0,10,0,0" Foreground="#73809A" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border x:Name="UpdatePanel" Grid.Row="2" Visibility="Collapsed" Background="#F8FAFD" BorderBrush="#E2E8F2" BorderThickness="0,1,0,0" Padding="18,8">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="UpdateStatusText" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <ProgressBar x:Name="UpdateProgressBar" Grid.Column="1" Height="6" Minimum="0" Maximum="100" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="UpdatePercentText" Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
