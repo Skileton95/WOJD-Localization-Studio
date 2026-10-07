@@ -34,6 +34,6 @@ jobs:
           if (Test-Path 'tests') {
             $projects = Get-ChildItem 'tests' -Recurse -Filter '*.csproj'
             foreach ($project in $projects) {
-              dotnet test $project.FullName -c Release --no-restore
+              dotnet test $project.FullName -c Release
             }
           }
