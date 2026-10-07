@@ -61,29 +61,29 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Margin="0,6,0,0">
-                    <Button Style="{StaticResource NavButton}" Click="Project_Click">
+                    <Button x:Name="ProjectNavButton" Style="{StaticResource NavButton}" Click="Project_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="▣" Width="28"/><TextBlock Text="Проект"/></StackPanel>
                     </Button>
                     <Button x:Name="TranslationNavButton" Style="{StaticResource NavButtonActive}" Click="Translation_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="▤" Width="28"/><TextBlock Text="Перевод"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="Search_Click">
+                    <Button x:Name="SearchNavButton" Style="{StaticResource NavButton}" Click="Search_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="⌕" Width="28"/><TextBlock Text="Поиск"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="Qa_Click">
+                    <Button x:Name="QaNavButton" Style="{StaticResource NavButton}" Click="Qa_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="✓" Width="28"/><TextBlock Text="Проверка"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="Statistics_Click">
+                    <Button x:Name="StatisticsNavButton" Style="{StaticResource NavButton}" Click="Statistics_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="▥" Width="28"/><TextBlock Text="Статистика"/></StackPanel>
                     </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Row="2" Margin="0,0,0,16">
                     <Separator Margin="20,0,20,10" Background="#E2E8F2"/>
-                    <Button Style="{StaticResource NavButton}" Click="Settings_Click">
+                    <Button x:Name="SettingsNavButton" Style="{StaticResource NavButton}" Click="Settings_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="⚙" Width="28"/><TextBlock Text="Настройки"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="About_Click">
+                    <Button x:Name="AboutNavButton" Style="{StaticResource NavButton}" Click="About_Click">
                         <StackPanel Orientation="Horizontal"><TextBlock Text="ⓘ" Width="28"/><TextBlock Text="О программе"/></StackPanel>
                     </Button>
                 </StackPanel>
@@ -118,6 +118,9 @@
 
             <Grid Grid.Row="1" Margin="14">
                 <views:TranslationPage x:Name="TranslationPage"/>
+                <views:QaPage x:Name="QaPage" Visibility="Collapsed"/>
+                <views:StatisticsPage x:Name="StatisticsPage" Visibility="Collapsed"/>
+                <views:SettingsPage x:Name="SettingsPage" Visibility="Collapsed"/>
                 <Border x:Name="PlaceholderPanel" Visibility="Collapsed" Background="White" CornerRadius="12" BorderBrush="#E2E8F2" BorderThickness="1">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
                         <TextBlock x:Name="PlaceholderTitle" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center"/>
