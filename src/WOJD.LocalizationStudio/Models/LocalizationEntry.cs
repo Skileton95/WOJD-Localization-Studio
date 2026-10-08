@@ -123,6 +123,9 @@ public sealed class LocalizationEntry : ObservableObject
                         : "Проверено";
 
     public void RefreshValidation()
+        => RefreshValidationCore(notifyChanges: true);
+
+    private void RefreshValidationCore(bool notifyChanges)
     {
         var configurationVersion = TranslationValidator.ConfigurationVersion;
         if (_validationInitialized &&
@@ -141,6 +144,14 @@ public sealed class LocalizationEntry : ObservableObject
         _validatedTranslation = Translation;
         _validatedConfigurationVersion = configurationVersion;
         _validationInitialized = true;
+
+        if (!notifyChanges)
+        {
+            _validationIssueCount = result.IssueCount;
+            _validationSummary = result.Summary;
+            _validationKinds = result.Kinds;
+            return;
+        }
 
         var issueCountChanged = SetProperty(
             ref _validationIssueCount,
@@ -177,15 +188,14 @@ public sealed class LocalizationEntry : ObservableObject
 
     public void InitializeSavedTranslation(string value)
     {
-        _translation = value;
-        _savedTranslation = value;
+        _translation = value ?? string.Empty;
+        _savedTranslation = _translation;
         _validationInitialized = false;
 
-        OnPropertyChanged(nameof(Translation));
-        OnPropertyChanged(nameof(Status));
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(CharacterCount));
-        RefreshValidation();
+        // This method is used while the adapter is constructing a document, before
+        // UI listeners exist. Avoid ~10 PropertyChanged notifications per row — at
+        // 600k rows those notifications were pure overhead during file opening.
+        RefreshValidationCore(notifyChanges: false);
     }
 
     public void MarkSaved(string? rawLine = null)
