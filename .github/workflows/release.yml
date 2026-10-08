@@ -46,6 +46,11 @@ jobs:
           Copy-Item 'publish/updater/WOJD-Localization-Studio.Updater.exe' 'publish/app/Updater/WOJD-Localization-Studio.Updater.exe' -Force
           Set-Content -Path 'publish/app/version.txt' -Value $env:VERSION -NoNewline
 
+      - name: Updater end-to-end smoke test
+        shell: pwsh
+        run: |
+          ./tests/updater-smoke.ps1 -UpdaterExe 'publish/updater/WOJD-Localization-Studio.Updater.exe'
+
       - name: Pack release
         shell: pwsh
         run: |
