@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using WOJD.LocalizationStudio.Infrastructure;
 using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Views;
