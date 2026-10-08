@@ -25,6 +25,7 @@ public sealed class MainViewModel : ObservableObject
 
     private readonly DispatcherTimer _searchDebounceTimer;
     private readonly DispatcherTimer _workspaceSaveTimer;
+    private readonly ICollectionView _allEntriesView;
 
     private readonly Dictionary<string, DraftFileState> _recoveryDrafts =
         new(StringComparer.OrdinalIgnoreCase);
@@ -42,23 +43,29 @@ public sealed class MainViewModel : ObservableObject
     private string _busyText = string.Empty;
     private bool _workspaceRestoreInProgress;
     private int _restoredDraftEntries;
+    private ICollectionView _entriesView;
+    private CancellationTokenSource? _filterCts;
+    private int _filterGeneration;
+    private DocumentSession? _lastFilterSession;
+    private EntryFilterCriteria _lastFilterCriteria =
+        new("Все", null, string.Empty);
+    private IReadOnlyList<LocalizationEntry>? _lastFilterResult;
 
     public MainViewModel()
     {
-        EntriesView =
+        _allEntriesView =
             CollectionViewSource.GetDefaultView(Entries);
-
-        EntriesView.Filter = FilterEntry;
+        _entriesView = _allEntriesView;
 
         _searchDebounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(220)
         };
 
-        _searchDebounceTimer.Tick += (_, _) =>
+        _searchDebounceTimer.Tick += async (_, _) =>
         {
             _searchDebounceTimer.Stop();
-            EntriesView.Refresh();
+            await RefreshEntryFilterAsync();
         };
 
         _workspaceSaveTimer = new DispatcherTimer
@@ -196,7 +203,7 @@ public sealed class MainViewModel : ObservableObject
     public BulkObservableCollection<FileNode>
         FileTree { get; } = new();
 
-    public ICollectionView EntriesView { get; }
+    public ICollectionView EntriesView => _entriesView;
 
     public string AppVersion
         => $"v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"}";
@@ -251,8 +258,7 @@ public sealed class MainViewModel : ObservableObject
             if (!SetProperty(ref _searchText, value))
                 return;
 
-            _searchDebounceTimer.Stop();
-            _searchDebounceTimer.Start();
+            RestartFilterDebounce();
             ReplaceCurrentCommand.RaiseCanExecuteChanged();
             ReplaceAllCommand.RaiseCanExecuteChanged();
         }
@@ -276,7 +282,7 @@ public sealed class MainViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _statusFilter, value))
-                EntriesView.Refresh();
+                RefreshEntryFilter();
         }
     }
 
@@ -288,7 +294,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _namespaceFilter, value))
             {
                 OnPropertyChanged(nameof(NamespaceFilterLabel));
-                EntriesView.Refresh();
+                RefreshEntryFilter();
                 ClearNamespaceFilterCommand.RaiseCanExecuteChanged();
             }
         }
@@ -452,15 +458,14 @@ public sealed class MainViewModel : ObservableObject
         }
 
         ActivateSession(session);
-
-        StatusFilter = "Все";
-        NamespaceFilter = null;
-        SearchText = string.Empty;
-        EntriesView.Refresh();
+        ClearFiltersAndShowAll();
 
         SelectedEntry = result.Entry;
         EntriesView.MoveCurrentTo(result.Entry);
     }
+
+    public void RefreshEntryFilter()
+        => _ = RefreshEntryFilterAsync();
 
     private void RememberProjectSearchQuery(
         string query)
@@ -633,8 +638,8 @@ public sealed class MainViewModel : ObservableObject
                 foreach (var session in _sessions.Values)
                 {
                     var entries =
-                        session.Document.Entries
-                            .Where(x => x.Status == TranslationStatus.Modified)
+                        session.ModifiedEntries
+                            .OrderBy(x => x.Index)
                             .Select(
                                 x =>
                                     new DraftEntryState(
@@ -789,6 +794,8 @@ public sealed class MainViewModel : ObservableObject
 
                 if (entry.HasValidationIssues)
                     session.ValidationErrorCount++;
+                if (status == TranslationStatus.Modified)
+                    session.ModifiedEntries.Add(entry);
 
                 ChangeStatusCounter(
                     session,
@@ -848,6 +855,8 @@ public sealed class MainViewModel : ObservableObject
         DocumentSession session)
     {
         _activeSession = session;
+        CancelFilter();
+        ResetFilterCache();
 
         foreach (var node in FileTree)
             SetActiveNode(node, session.Node);
@@ -855,13 +864,14 @@ public sealed class MainViewModel : ObservableObject
         Entries.ReplaceAll(
             session.Document.Entries);
 
-        EntriesView.Refresh();
+        SetEntriesView(_allEntriesView);
 
         SelectedEntry =
             session.SelectedEntry
-            ?? EntriesView
-                .Cast<LocalizationEntry>()
-                .FirstOrDefault();
+            ?? session.Document.Entries.FirstOrDefault();
+
+        if (SelectedEntry is not null)
+            EntriesView.MoveCurrentTo(SelectedEntry);
 
         RaiseStatsChanged();
         RaiseHistoryCommandStates();
@@ -870,6 +880,7 @@ public sealed class MainViewModel : ObservableObject
         PreviousUntranslatedCommand.RaiseCanExecuteChanged();
         ReplaceAllCommand.RaiseCanExecuteChanged();
         ScheduleWorkspaceSave();
+        RefreshEntryFilter();
     }
 
     private static void SetActiveNode(
@@ -1238,6 +1249,8 @@ public sealed class MainViewModel : ObservableObject
                     _activeSession))
             {
                 _activeSession = null;
+                CancelFilter();
+                ResetFilterCache();
 
                 var next =
                     _sessions.Values.FirstOrDefault();
@@ -1249,6 +1262,7 @@ public sealed class MainViewModel : ObservableObject
                 else
                 {
                     Entries.ReplaceAll([]);
+                    SetEntriesView(_allEntriesView);
                     SelectedEntry = null;
                     RaiseStatsChanged();
                     RaiseHistoryCommandStates();
@@ -1364,10 +1378,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        StatusFilter = "Все";
-        NamespaceFilter = null;
-        SearchText = string.Empty;
-        EntriesView.Refresh();
+        ClearFiltersAndShowAll();
 
         SelectedEntry = target;
         EntriesView.MoveCurrentTo(target);
@@ -1446,57 +1457,63 @@ public sealed class MainViewModel : ObservableObject
         if (session is null)
             return;
 
-        var candidates =
-            session.Document.Entries
-                .Where(
-                    x =>
-                        x.Status == TranslationStatus.Untranslated &&
-                        (string.IsNullOrWhiteSpace(NamespaceFilter) ||
-                         string.Equals(
-                             x.Namespace,
-                             NamespaceFilter,
-                             StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-        if (candidates.Count == 0)
+        var entries = session.Document.Entries;
+        if (entries.Count == 0 || session.UntranslatedCount == 0)
         {
             AppDialog.Show(
                 "Непереведённых строк в текущей области нет.",
                 "Навигация",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
-
             return;
         }
 
-        var currentIndex =
-            SelectedEntry is null
-                ? -1
-                : candidates.IndexOf(SelectedEntry);
+        var start = SelectedEntry is null
+            ? (direction > 0 ? -1 : 0)
+            : entries.IndexOf(SelectedEntry);
+        LocalizationEntry? target = null;
 
-        var nextIndex =
-            direction > 0
-                ? (currentIndex + 1 + candidates.Count) % candidates.Count
-                : (currentIndex <= 0 ? candidates.Count - 1 : currentIndex - 1);
+        for (var step = 1; step <= entries.Count; step++)
+        {
+            var index = direction > 0
+                ? (start + step + entries.Count) % entries.Count
+                : (start - step + entries.Count * 2) % entries.Count;
+            var candidate = entries[index];
+
+            if (candidate.Status != TranslationStatus.Untranslated)
+                continue;
+            if (!string.IsNullOrWhiteSpace(NamespaceFilter)
+                && !string.Equals(candidate.Namespace, NamespaceFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            target = candidate;
+            break;
+        }
+
+        if (target is null)
+        {
+            AppDialog.Show(
+                "Непереведённых строк в текущей области нет.",
+                "Навигация",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
 
         StatusFilter = "Все";
         SearchText = string.Empty;
-        EntriesView.Refresh();
-
-        var target = candidates[nextIndex];
         SelectedEntry = target;
-        EntriesView.MoveCurrentTo(target);
+        RefreshEntryFilter();
     }
 
     private void ApplyCurrent()
     {
-        if (StatusFilter != "Все" ||
-            !string.IsNullOrWhiteSpace(SearchText))
-        {
-            EntriesView.Refresh();
-        }
-
         MoveSelection(1);
+
+        if (!CurrentFilterCriteria().IsDefault)
+            RestartFilterDebounce();
     }
 
     private void MoveSelection(
@@ -1520,51 +1537,6 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private bool FilterEntry(
-        object obj)
-    {
-        if (obj is not LocalizationEntry entry)
-            return false;
-
-        if (StatusFilter == "Ошибки")
-        {
-            if (!entry.HasValidationIssues)
-                return false;
-        }
-        else if (StatusFilter != "Все" &&
-                 entry.StatusText != StatusFilter)
-        {
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(NamespaceFilter) &&
-            !string.Equals(
-                entry.Namespace,
-                NamespaceFilter,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(SearchText))
-            return true;
-
-        var q = SearchText.Trim();
-
-        return entry.Namespace.Contains(
-                   q,
-                   StringComparison.OrdinalIgnoreCase)
-               || entry.Key.Contains(
-                   q,
-                   StringComparison.OrdinalIgnoreCase)
-               || entry.Original.Contains(
-                   q,
-                   StringComparison.OrdinalIgnoreCase)
-               || entry.Translation.Contains(
-                   q,
-                   StringComparison.OrdinalIgnoreCase);
-    }
-
     private void SetStatusFilter(
         string status,
         bool clearNamespace = false)
@@ -1573,6 +1545,137 @@ public sealed class MainViewModel : ObservableObject
             NamespaceFilter = null;
 
         StatusFilter = status;
+    }
+
+    private void RestartFilterDebounce()
+    {
+        _searchDebounceTimer.Stop();
+        _searchDebounceTimer.Start();
+    }
+
+    private EntryFilterCriteria CurrentFilterCriteria()
+        => new(
+            StatusFilter,
+            NamespaceFilter,
+            SearchText);
+
+    private async Task RefreshEntryFilterAsync()
+    {
+        var session = _activeSession;
+        if (session is null)
+        {
+            CancelFilter();
+            ResetFilterCache();
+            SetEntriesView(_allEntriesView);
+            return;
+        }
+
+        var criteria = CurrentFilterCriteria();
+        if (criteria.IsDefault)
+        {
+            CancelFilter();
+            ResetFilterCache();
+            SetEntriesView(_allEntriesView);
+            MoveCurrentToSelection();
+            return;
+        }
+
+        var generation = ++_filterGeneration;
+        var cts = new CancellationTokenSource();
+        var previousCts = _filterCts;
+        _filterCts = cts;
+        previousCts?.Cancel();
+
+        IReadOnlyList<LocalizationEntry> source = session.Document.Entries;
+        if (ReferenceEquals(_lastFilterSession, session)
+            && _lastFilterResult is not null
+            && EntryFilterService.CanNarrow(_lastFilterCriteria, criteria))
+        {
+            source = _lastFilterResult;
+        }
+
+        try
+        {
+            var filtered = await Task.Run(
+                () => EntryFilterService.Filter(source, criteria, cts.Token),
+                cts.Token);
+
+            if (cts.IsCancellationRequested
+                || generation != _filterGeneration
+                || !ReferenceEquals(session, _activeSession))
+            {
+                return;
+            }
+
+            _lastFilterSession = session;
+            _lastFilterCriteria = criteria;
+            _lastFilterResult = filtered;
+
+            SetEntriesView(
+                CollectionViewSource.GetDefaultView(filtered));
+
+            if (SelectedEntry is not null
+                && EntryFilterService.Matches(SelectedEntry, criteria))
+            {
+                EntriesView.MoveCurrentTo(SelectedEntry);
+            }
+            else
+            {
+                SelectedEntry = filtered.Count > 0 ? filtered[0] : null;
+                MoveCurrentToSelection();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_filterCts, cts))
+                _filterCts = null;
+            cts.Dispose();
+        }
+    }
+
+    private void MoveCurrentToSelection()
+    {
+        if (SelectedEntry is not null)
+            EntriesView.MoveCurrentTo(SelectedEntry);
+        else
+            EntriesView.MoveCurrentToFirst();
+    }
+
+    private void ClearFiltersAndShowAll()
+    {
+        StatusFilter = "Все";
+        NamespaceFilter = null;
+        SearchText = string.Empty;
+        _searchDebounceTimer.Stop();
+        CancelFilter();
+        ResetFilterCache();
+        SetEntriesView(_allEntriesView);
+    }
+
+    private void CancelFilter()
+    {
+        _filterGeneration++;
+        _filterCts?.Cancel();
+        _filterCts = null;
+    }
+
+    private void ResetFilterCache()
+    {
+        _lastFilterSession = null;
+        _lastFilterCriteria = new EntryFilterCriteria("Все", null, string.Empty);
+        _lastFilterResult = null;
+    }
+
+    private void SetEntriesView(ICollectionView view)
+    {
+        if (ReferenceEquals(_entriesView, view))
+            return;
+
+        _entriesView = view;
+        OnPropertyChanged(nameof(EntriesView));
     }
 
     private void UndoTranslation()
@@ -1655,8 +1758,6 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        entry.RefreshValidation();
-
         var currentValidation =
             entry.HasValidationIssues;
 
@@ -1732,6 +1833,11 @@ public sealed class MainViewModel : ObservableObject
                 current;
         }
 
+        if (current == TranslationStatus.Modified)
+            session.ModifiedEntries.Add(entry);
+        else
+            session.ModifiedEntries.Remove(entry);
+
         session.Node.IsModified =
             session.HasUnsavedChanges;
 
@@ -1742,11 +1848,8 @@ public sealed class MainViewModel : ObservableObject
             RaiseStatsChanged();
             RaiseHistoryCommandStates();
 
-            if (StatusFilter != "Все" ||
-                !string.IsNullOrWhiteSpace(SearchText))
-            {
-                EntriesView.Refresh();
-            }
+            if (!CurrentFilterCriteria().IsDefault)
+                RestartFilterDebounce();
         }
 
         RaiseGlobalCommandStates();
@@ -1759,6 +1862,7 @@ public sealed class MainViewModel : ObservableObject
         session.KnownStatuses.Clear();
         session.KnownTranslations.Clear();
         session.KnownValidationStates.Clear();
+        session.ModifiedEntries.Clear();
         session.TranslatedCount = 0;
         session.UntranslatedCount = 0;
         session.ModifiedCount = 0;
@@ -1783,6 +1887,8 @@ public sealed class MainViewModel : ObservableObject
 
             if (entry.HasValidationIssues)
                 session.ValidationErrorCount++;
+            if (status == TranslationStatus.Modified)
+                session.ModifiedEntries.Add(entry);
 
             ChangeStatusCounter(
                 session,
