@@ -4,13 +4,23 @@ namespace WOJD.LocalizationStudio.Models;
 
 /// <summary>
 /// Ordered entry storage with constant-time IndexOf for the normal append-only
-/// localization document workload. This keeps position display cheap even for
-/// documents containing hundreds of thousands of rows.
+/// localization document workload. Optional callbacks let document-level indexes
+/// grow while a file is being parsed on its background loading thread.
 /// </summary>
 public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyList<LocalizationEntry>
 {
     private readonly List<LocalizationEntry> _items = [];
     private readonly Dictionary<LocalizationEntry, int> _positions = new();
+    private readonly Action<LocalizationEntry>? _onAppend;
+    private readonly Action? _onStructureChanged;
+
+    public LocalizationEntryList(
+        Action<LocalizationEntry>? onAppend = null,
+        Action? onStructureChanged = null)
+    {
+        _onAppend = onAppend;
+        _onStructureChanged = onStructureChanged;
+    }
 
     public int Count => _items.Count;
     public bool IsReadOnly => false;
@@ -23,6 +33,7 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
             ArgumentNullException.ThrowIfNull(value);
             _items[index] = value;
             ReindexFrom(index);
+            _onStructureChanged?.Invoke();
         }
     }
 
@@ -31,6 +42,7 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
         ArgumentNullException.ThrowIfNull(item);
         _positions[item] = _items.Count;
         _items.Add(item);
+        _onAppend?.Invoke(item);
     }
 
     public void AddRange(IEnumerable<LocalizationEntry> items)
@@ -41,8 +53,12 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
 
     public void Clear()
     {
+        if (_items.Count == 0)
+            return;
+
         _items.Clear();
         _positions.Clear();
+        _onStructureChanged?.Invoke();
     }
 
     public bool Contains(LocalizationEntry item)
@@ -62,6 +78,7 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
         ArgumentNullException.ThrowIfNull(item);
         _items.Insert(index, item);
         ReindexFrom(index);
+        _onStructureChanged?.Invoke();
     }
 
     public bool Remove(LocalizationEntry item)
@@ -72,6 +89,7 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
         _items.RemoveAt(index);
         _positions.Remove(item);
         ReindexFrom(index);
+        _onStructureChanged?.Invoke();
         return true;
     }
 
@@ -81,6 +99,7 @@ public sealed class LocalizationEntryList : IList<LocalizationEntry>, IReadOnlyL
         _items.RemoveAt(index);
         _positions.Remove(removed);
         ReindexFrom(index);
+        _onStructureChanged?.Invoke();
     }
 
     IEnumerator IEnumerable.GetEnumerator()
