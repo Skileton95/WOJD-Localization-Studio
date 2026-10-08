@@ -13,6 +13,8 @@ public sealed class EntryRelationIndexTests
         Assert.Equal("450_0", EntryRelationIndex.GetKeyFamily("450_0-SkillDesc"));
         Assert.Equal("450", EntryRelationIndex.GetSeriesFamily("450_0"));
         Assert.Equal("UI.Common", EntryRelationIndex.GetKeyFamily("UI.Common.Confirm"));
+        Assert.Equal("SkillComplexDesc", EntryRelationIndex.GetSemanticRole("450_0-SkillComplexDesc", "450_0"));
+        Assert.Equal("Confirm", EntryRelationIndex.GetSemanticRole("UI.Common.Confirm", "UI.Common"));
     }
 
     [Fact]
@@ -35,6 +37,27 @@ public sealed class EntryRelationIndexTests
         Assert.DoesNotContain(unrelated, related);
         Assert.Equal("группа 450_0", index.DescribeRelation(name, description));
         Assert.Equal("тот же Original", index.DescribeRelation(name, sameOriginal));
+    }
+
+    [Fact]
+    public void VisualGroups_ShowSkillRolesWithoutReorderingDocument()
+    {
+        var document = new LocalizationDocument { FilePath = "skills.ndjson" };
+        var name = Entry(1, "Skill", "450_0-SkillName", "斩击", "Удар");
+        var description = Entry(2, "Skill", "450_0-SkillDesc", "造成伤害", "Наносит урон");
+        var cooldown = Entry(3, "Skill", "450_0-SkillCooldown", "冷却", "Перезарядка");
+        var variant = Entry(4, "Skill", "450_1-SkillName", "重斩", "Тяжёлый удар");
+        document.Entries.AddRange([name, description, cooldown, variant]);
+        var before = document.Entries.ToArray();
+
+        var index = EntryRelationIndex.For(document);
+        var groups = index.GetVisualGroups(name, 20);
+
+        var group450 = Assert.Single(groups.Where(x => x.Label == "450_0"));
+        Assert.Equal(new[] { "SkillName", "SkillDesc", "SkillCooldown" }, group450.Items.Select(x => x.Role));
+        Assert.True(group450.Items[0].IsCurrent);
+        Assert.Contains(groups, x => x.Label == "450_1");
+        Assert.Equal(before, document.Entries);
     }
 
     [Fact]

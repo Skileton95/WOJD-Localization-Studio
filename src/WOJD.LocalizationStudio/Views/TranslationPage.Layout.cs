@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using WOJD.LocalizationStudio.Models;
@@ -252,7 +253,7 @@ public partial class TranslationPage
             GetRelationIndex() is not { } index)
         {
             ContextQaText.Text = "Выберите строку, чтобы увидеть контекст.";
-            UpdateRelatedEntries(null, null, []);
+            UpdateRelatedEntries(null, null, [], []);
             return;
         }
 
@@ -265,11 +266,12 @@ public partial class TranslationPage
             .Take(6)
             .ToList();
         var family = index.GetFamily(entry);
-        var related = index.GetRelated(entry, 24);
+        var compareCandidates = index.GetRelated(entry, 64);
+        var groups = index.GetVisualGroups(entry, 32);
 
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(family))
-            parts.Add($"Группа ключа: {family} · связанных строк: {related.Count:N0}.");
+            parts.Add($"Группа ключа: {family} · связанных строк: {compareCandidates.Count:N0}.");
 
         if (string.IsNullOrWhiteSpace(entry.Original))
         {
@@ -291,26 +293,28 @@ public partial class TranslationPage
             parts.Add("QA: ошибок не найдено.");
 
         ContextQaText.Text = string.Join("\n\n", parts);
-        UpdateRelatedEntries(entry, index, related);
+        UpdateRelatedEntries(entry, index, groups, compareCandidates);
     }
 
     private void UpdateRelatedEntries(
         LocalizationEntry? current,
         EntryRelationIndex? index,
-        IReadOnlyList<LocalizationEntry> related)
+        IReadOnlyList<RelatedEntryGroup> groups,
+        IReadOnlyList<LocalizationEntry> compareCandidates)
     {
         if (_relatedEntriesPanel is null || _relatedEntriesHeading is null)
             return;
 
         _relatedEntriesPanel.Children.Clear();
-        _relatedEntriesHeading.Text = related.Count == 0
+        var relatedCount = groups.Sum(x => x.Items.Count(y => !y.IsCurrent));
+        _relatedEntriesHeading.Text = relatedCount == 0
             ? "Связанные строки"
-            : $"Связанные строки · {related.Count:N0}";
+            : $"Связанные строки · {relatedCount:N0}";
 
         if (current is null || index is null)
             return;
 
-        if (related.Count == 0)
+        if (relatedCount == 0)
         {
             _relatedEntriesPanel.Children.Add(new TextBlock
             {
@@ -322,73 +326,243 @@ public partial class TranslationPage
             return;
         }
 
-        foreach (var candidate in related)
-            _relatedEntriesPanel.Children.Add(CreateRelatedEntryCard(current, candidate, index));
+        foreach (var group in groups)
+            _relatedEntriesPanel.Children.Add(CreateRelatedGroupCard(current, group, index, compareCandidates));
     }
 
-    private UIElement CreateRelatedEntryCard(
+    private UIElement CreateRelatedGroupCard(
         LocalizationEntry current,
-        LocalizationEntry candidate,
-        EntryRelationIndex index)
+        RelatedEntryGroup group,
+        EntryRelationIndex index,
+        IReadOnlyList<LocalizationEntry> compareCandidates)
     {
         var card = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 253)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(228, 233, 241)),
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(224, 230, 239)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(9),
             Padding = new Thickness(10),
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 10)
         };
 
         var root = new StackPanel();
-        root.Children.Add(new TextBlock
+        var header = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(new TextBlock
         {
-            Text = candidate.Key,
+            Text = group.Label,
             FontWeight = FontWeights.SemiBold,
+            FontSize = 14,
+            Foreground = new SolidColorBrush(Color.FromRgb(23, 35, 60)),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            ToolTip = candidate.Key
+            ToolTip = group.Label
         });
-        root.Children.Add(new TextBlock
+        var count = new TextBlock
         {
-            Text = index.DescribeRelation(current, candidate),
-            Foreground = new SolidColorBrush(Color.FromRgb(47, 112, 245)),
+            Text = group.Items.Count.ToString("N0"),
             FontSize = 11,
-            Margin = new Thickness(0, 2, 0, 0)
-        });
-        root.Children.Add(new TextBlock
-        {
-            Text = candidate.OriginalDisplay,
             Foreground = new SolidColorBrush(Color.FromRgb(113, 128, 154)),
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 5, 0, 0),
-            ToolTip = candidate.OriginalDisplay
-        });
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 8, 0, 0)
+            VerticalAlignment = VerticalAlignment.Center
         };
-        var openButton = CreateRelatedButton("Открыть");
-        openButton.Click += (_, _) => OpenRelatedEntry(candidate);
-        buttons.Children.Add(openButton);
+        Grid.SetColumn(count, 1);
+        header.Children.Add(count);
+        root.Children.Add(header);
 
-        var compareButton = CreateRelatedButton("Сравнить");
-        compareButton.Click += (_, _) =>
+        for (var i = 0; i < group.Items.Count; i++)
         {
-            var dialog = new EntryComparisonWindow(current, candidate)
-            {
-                Owner = Window.GetWindow(this)
-            };
-            dialog.ShowDialog();
-        };
-        buttons.Children.Add(compareButton);
-        root.Children.Add(buttons);
+            var item = group.Items[i];
+            root.Children.Add(CreateRelatedEntryRow(
+                current,
+                item,
+                i == group.Items.Count - 1,
+                index,
+                compareCandidates));
+        }
 
         card.Child = root;
         return card;
+    }
+
+    private UIElement CreateRelatedEntryRow(
+        LocalizationEntry current,
+        RelatedEntryItem item,
+        bool isLast,
+        EntryRelationIndex index,
+        IReadOnlyList<LocalizationEntry> compareCandidates)
+    {
+        var row = new Border
+        {
+            Background = item.IsCurrent
+                ? new SolidColorBrush(Color.FromRgb(239, 245, 255))
+                : new SolidColorBrush(Color.FromRgb(248, 250, 253)),
+            BorderBrush = item.IsCurrent
+                ? new SolidColorBrush(Color.FromRgb(181, 207, 252))
+                : new SolidColorBrush(Color.FromRgb(235, 239, 245)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, isLast ? 0 : 6)
+        };
+
+        var stack = new StackPanel();
+        var title = new Grid();
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        title.Children.Add(new TextBlock
+        {
+            Text = isLast ? "└" : "├",
+            Foreground = new SolidColorBrush(Color.FromRgb(139, 151, 171)),
+            Margin = new Thickness(0, 0, 5, 0)
+        });
+        var role = new TextBlock
+        {
+            Text = item.Role,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ToolTip = item.Entry.Key
+        };
+        Grid.SetColumn(role, 1);
+        title.Children.Add(role);
+        if (item.IsCurrent)
+        {
+            var currentBadge = new TextBlock
+            {
+                Text = "A",
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(47, 112, 245)),
+                Padding = new Thickness(5, 1, 5, 1),
+                Margin = new Thickness(6, 0, 0, 0)
+            };
+            Grid.SetColumn(currentBadge, 2);
+            title.Children.Add(currentBadge);
+        }
+        stack.Children.Add(title);
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = item.Entry.OriginalDisplay,
+            Foreground = new SolidColorBrush(Color.FromRgb(113, 128, 154)),
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(18, 4, 0, 0),
+            ToolTip = item.Entry.OriginalDisplay
+        });
+
+        var translationBox = new TextBox
+        {
+            Text = item.Entry.Translation ?? string.Empty,
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            MinHeight = 44,
+            MaxHeight = 90,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(218, 225, 236)),
+            BorderThickness = new Thickness(1),
+            Background = Brushes.White,
+            Padding = new Thickness(6),
+            Margin = new Thickness(18, 6, 0, 0),
+            IsReadOnly = item.IsCurrent,
+            ToolTip = item.IsCurrent
+                ? "Текущая строка редактируется в основном поле перевода."
+                : "Редактирование связанной строки без перехода. Ctrl+Enter — применить, Esc — отменить."
+        };
+
+        if (!item.IsCurrent)
+        {
+            translationBox.Tag = new RelatedEditState(item.Entry, item.Entry.Translation ?? string.Empty);
+            translationBox.LostKeyboardFocus += RelatedTranslation_LostKeyboardFocus;
+            translationBox.PreviewKeyDown += RelatedTranslation_PreviewKeyDown;
+        }
+        stack.Children.Add(translationBox);
+
+        if (!item.IsCurrent)
+        {
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(18, 7, 0, 0)
+            };
+            var compareButton = CreateRelatedButton("Сравнить A / B");
+            compareButton.Click += (_, _) =>
+            {
+                CommitRelatedTranslation(translationBox);
+                var dialog = new EntryComparisonWindow(current, item.Entry, compareCandidates, index)
+                {
+                    Owner = Window.GetWindow(this)
+                };
+                dialog.ShowDialog();
+            };
+            buttons.Children.Add(compareButton);
+
+            var openButton = CreateRelatedButton("Открыть");
+            openButton.Click += (_, _) =>
+            {
+                CommitRelatedTranslation(translationBox);
+                OpenRelatedEntry(item.Entry);
+            };
+            buttons.Children.Add(openButton);
+            stack.Children.Add(buttons);
+        }
+
+        row.Child = stack;
+        return row;
+    }
+
+    private void RelatedTranslation_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox box)
+            CommitRelatedTranslation(box);
+    }
+
+    private void RelatedTranslation_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox box || box.Tag is not RelatedEditState state)
+            return;
+
+        if (e.Key == Key.Escape)
+        {
+            box.Text = state.Baseline;
+            box.CaretIndex = box.Text.Length;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            CommitRelatedTranslation(box);
+            e.Handled = true;
+        }
+    }
+
+    private void CommitRelatedTranslation(TextBox box)
+    {
+        if (box.Tag is not RelatedEditState state)
+            return;
+
+        var after = box.Text ?? string.Empty;
+        if (string.Equals(state.Baseline, after, StringComparison.Ordinal))
+            return;
+
+        var before = state.Baseline;
+        state.Entry.Translation = after;
+        state.Baseline = after;
+        EntryHistoryService.Record(state.Entry, before, after, "Правка связанной строки");
+
+        if (_viewModel?.ActiveDocument is LocalizationDocument document)
+        {
+            ProjectHistoryService.Record(
+                document.FilePath,
+                "Правка связанной строки",
+                1,
+                state.Entry.Key);
+            TranslationMemoryService.Invalidate(document);
+        }
     }
 
     private static Button CreateRelatedButton(string text)
@@ -400,7 +574,7 @@ public partial class TranslationPage
             BorderThickness = new Thickness(1),
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(0, 0, 6, 0),
-            Cursor = System.Windows.Input.Cursors.Hand
+            Cursor = Cursors.Hand
         };
 
     private void OpenRelatedEntry(LocalizationEntry entry)
@@ -408,8 +582,17 @@ public partial class TranslationPage
         if (_viewModel is null)
             return;
 
+        if (_viewModel.FilterAllCommand.CanExecute(null))
+            _viewModel.FilterAllCommand.Execute(null);
+        _viewModel.SearchText = string.Empty;
         _viewModel.SelectedEntry = entry;
         _viewModel.EntriesView.MoveCurrentTo(entry);
         ScrollToSelected();
+    }
+
+    private sealed class RelatedEditState(LocalizationEntry entry, string baseline)
+    {
+        public LocalizationEntry Entry { get; } = entry;
+        public string Baseline { get; set; } = baseline;
     }
 }

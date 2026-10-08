@@ -3,6 +3,17 @@ using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Services;
 
+public sealed record RelatedEntryItem(
+    LocalizationEntry Entry,
+    string Role,
+    string Relation,
+    bool IsCurrent);
+
+public sealed record RelatedEntryGroup(
+    string Id,
+    string Label,
+    IReadOnlyList<RelatedEntryItem> Items);
+
 /// <summary>
 /// Lookup index for relationships based on stable localization metadata.
 /// LocalizationDocument initializes the index before its entries are loaded, so the
@@ -100,9 +111,8 @@ public sealed class EntryRelationIndex
             return [];
 
         // Every index bucket is populated in source-file order. Merge the few sorted
-        // buckets and stop as soon as maxCount unique rows are found. The old code
-        // materialized and sorted the entire union, which made a click on a very
-        // common Original (thousands of rows) unexpectedly expensive.
+        // buckets and stop as soon as maxCount unique rows are found. This keeps a
+        // selection cheap even when an Original is shared by thousands of rows.
         var sources = new List<IReadOnlyList<LocalizationEntry>>(3);
 
         var sameFamily = GetSameFamily(entry);
@@ -171,6 +181,66 @@ public sealed class EntryRelationIndex
         return result;
     }
 
+    /// <summary>
+    /// Builds a presentation-only grouping for the context pane. The underlying
+    /// LocalizationDocument is never reordered. Groups are ordered by the first
+    /// source-file position represented in them and rows inside each group preserve
+    /// source-file order.
+    /// </summary>
+    public IReadOnlyList<RelatedEntryGroup> GetVisualGroups(
+        LocalizationEntry current,
+        int maxRelated = 32)
+    {
+        var rows = GetRelated(current, maxRelated)
+            .Append(current)
+            .Distinct()
+            .OrderBy(GetPosition)
+            .ToList();
+
+        if (rows.Count == 0)
+            return [];
+
+        var groups = new List<(string Id, string Label, List<RelatedEntryItem> Items)>();
+        var groupLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            var family = GetFamily(row);
+            var sameOriginal = !string.IsNullOrEmpty(current.Original) &&
+                               string.Equals(current.Original, row.Original, StringComparison.Ordinal);
+            var id = !string.IsNullOrEmpty(family)
+                ? $"family:{family}"
+                : sameOriginal
+                    ? "same-original"
+                    : $"key:{row.Key}";
+            var label = !string.IsNullOrEmpty(family)
+                ? family
+                : sameOriginal
+                    ? "Тот же Original"
+                    : row.Key;
+
+            if (!groupLookup.TryGetValue(id, out var groupIndex))
+            {
+                groupIndex = groups.Count;
+                groupLookup[id] = groupIndex;
+                groups.Add((id, label, []));
+            }
+
+            groups[groupIndex].Items.Add(
+                new RelatedEntryItem(
+                    row,
+                    GetSemanticRole(row.Key, family),
+                    ReferenceEquals(row, current)
+                        ? "текущая строка"
+                        : DescribeRelation(current, row),
+                    ReferenceEquals(row, current)));
+        }
+
+        return groups
+            .Select(x => new RelatedEntryGroup(x.Id, x.Label, x.Items))
+            .ToList();
+    }
+
     public string DescribeRelation(LocalizationEntry current, LocalizationEntry candidate)
     {
         var currentFamily = GetFamily(current);
@@ -197,6 +267,32 @@ public sealed class EntryRelationIndex
         }
 
         return "связанный ключ";
+    }
+
+    public static string GetSemanticRole(string? key, string? family = null)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return "Ключ";
+
+        key = key.Trim();
+        family ??= GetKeyFamily(key);
+        if (string.IsNullOrEmpty(family))
+            return key;
+        if (string.Equals(key, family, StringComparison.OrdinalIgnoreCase))
+            return "Ключ";
+
+        if (key.StartsWith(family, StringComparison.OrdinalIgnoreCase) && key.Length > family.Length)
+        {
+            var separator = key[family.Length];
+            if (separator is '-' or ':' or '/' or '|' or '.')
+            {
+                var role = key[(family.Length + 1)..].Trim();
+                if (!string.IsNullOrEmpty(role))
+                    return role;
+            }
+        }
+
+        return key;
     }
 
     public static string GetKeyFamily(string? key)
