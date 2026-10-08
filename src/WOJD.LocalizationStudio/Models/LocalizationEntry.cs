@@ -27,6 +27,10 @@ public sealed class LocalizationEntry : ObservableObject
             : Original;
     public string TranslationField { get; init; } = "translation";
 
+    public string VisualGroupLabel { get; private set; } = string.Empty;
+    public string SemanticRole { get; private set; } = string.Empty;
+    public bool StartsVisualGroup { get; private set; }
+
     public string RawLine { get; set; } = string.Empty;
 
     public string Translation
@@ -121,6 +125,16 @@ public sealed class LocalizationEntry : ObservableObject
                     : HasValidationIssues
                         ? "Предупреждение"
                         : "Проверено";
+
+    internal void SetVisualGroupMetadata(
+        string groupLabel,
+        string semanticRole,
+        bool startsVisualGroup)
+    {
+        VisualGroupLabel = groupLabel ?? string.Empty;
+        SemanticRole = semanticRole ?? string.Empty;
+        StartsVisualGroup = startsVisualGroup;
+    }
 
     public void RefreshValidation()
         => RefreshValidationCore(notifyChanges: true);
