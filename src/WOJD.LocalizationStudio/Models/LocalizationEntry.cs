@@ -5,12 +5,14 @@ namespace WOJD.LocalizationStudio.Models;
 
 public sealed class LocalizationEntry : ObservableObject
 {
+    private static readonly IReadOnlySet<TranslationIssueKind> NoValidationKinds =
+        new HashSet<TranslationIssueKind>();
+
     private string _translation = string.Empty;
     private string _savedTranslation = string.Empty;
     private int _validationIssueCount;
     private string _validationSummary = string.Empty;
-    private IReadOnlySet<TranslationIssueKind> _validationKinds =
-        new HashSet<TranslationIssueKind>();
+    private IReadOnlySet<TranslationIssueKind> _validationKinds = NoValidationKinds;
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
