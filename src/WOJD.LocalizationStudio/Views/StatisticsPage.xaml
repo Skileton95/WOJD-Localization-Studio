@@ -52,18 +52,22 @@
             </Border>
 
             <Grid Margin="0,12,0,0">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <Border Grid.Column="0" Style="{StaticResource Card}">
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                        <TextBlock Text="Namespace" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,12"/>
-                        <DataGrid x:Name="NamespaceGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" RowHeaderWidth="0" BorderThickness="0" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6" MinHeight="300">
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Text="Namespace — где осталось больше всего работы" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Text="Сначала показываются Namespace с наибольшим числом непереведённых строк." Foreground="#71809A" Margin="0,4,0,0"/>
+                        </StackPanel>
+                        <DataGrid x:Name="NamespaceGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" RowHeaderWidth="0" BorderThickness="0" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6" MinHeight="320">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Namespace" Binding="{Binding Name}" Width="*"/>
-                                <DataGridTextColumn Header="Всего" Binding="{Binding Total, StringFormat=N0}" Width="100"/>
-                                <DataGridTextColumn Header="Переведено" Binding="{Binding Translated, StringFormat=N0}" Width="120"/>
-                                <DataGridTextColumn Header="QA" Binding="{Binding Errors, StringFormat=N0}" Width="80"/>
-                                <DataGridTextColumn Header="%" Binding="{Binding Percent, StringFormat={}{0:0.0}%}" Width="80"/>
+                                <DataGridTextColumn Header="Всего" Binding="{Binding Total, StringFormat=N0}" Width="85"/>
+                                <DataGridTextColumn Header="Переведено" Binding="{Binding Translated, StringFormat=N0}" Width="105"/>
+                                <DataGridTextColumn Header="Осталось" Binding="{Binding Untranslated, StringFormat=N0}" Width="95"/>
+                                <DataGridTextColumn Header="QA" Binding="{Binding Errors, StringFormat=N0}" Width="75"/>
+                                <DataGridTextColumn Header="%" Binding="{Binding Percent, StringFormat={}{0:0.0}%}" Width="72"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
@@ -71,13 +75,22 @@
 
                 <Border Grid.Column="2" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Текущее состояние" FontSize="17" FontWeight="SemiBold"/>
-                        <TextBlock Text="Изменено после сохранения" Foreground="#71809A" Margin="0,18,0,0"/>
-                        <TextBlock x:Name="ModifiedText" FontSize="22" FontWeight="SemiBold"/>
-                        <TextBlock Text="Структурные ошибки" Foreground="#71809A" Margin="0,18,0,0"/>
-                        <TextBlock x:Name="StructuralText" FontSize="22" FontWeight="SemiBold" Foreground="#D94C55"/>
-                        <TextBlock Text="Предупреждения глоссария" Foreground="#71809A" Margin="0,18,0,0"/>
-                        <TextBlock x:Name="GlossaryText" FontSize="22" FontWeight="SemiBold" Foreground="#D47B19"/>
+                        <TextBlock Text="Проблемы текущего файла" FontSize="17" FontWeight="SemiBold"/>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Изменено после сохранения" Margin="0,6"/><TextBlock x:Name="ModifiedText" Grid.Column="1" FontWeight="SemiBold" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="1" Text="Структурные ошибки" Margin="0,6"/><TextBlock x:Name="StructuralText" Grid.Row="1" Grid.Column="1" FontWeight="SemiBold" Foreground="#D94C55" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="2" Text="Теги" Margin="0,6"/><TextBlock x:Name="TagsText" Grid.Row="2" Grid.Column="1" FontWeight="SemiBold" Foreground="#D94C55" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="3" Text="Плейсхолдеры" Margin="0,6"/><TextBlock x:Name="PlaceholdersText" Grid.Row="3" Grid.Column="1" FontWeight="SemiBold" Foreground="#D94C55" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="4" Text="Переносы строк" Margin="0,6"/><TextBlock x:Name="NewLinesText" Grid.Row="4" Grid.Column="1" FontWeight="SemiBold" Foreground="#D47B19" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="5" Text="Глоссарий" Margin="0,6"/><TextBlock x:Name="GlossaryText" Grid.Row="5" Grid.Column="1" FontWeight="SemiBold" Foreground="#D47B19" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="6" Text="Нет Original" Margin="0,6"/><TextBlock x:Name="MissingSourceText" Grid.Row="6" Grid.Column="1" FontWeight="SemiBold" Foreground="#7B899F" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="7" Text="Несогласованный Original" Margin="0,6"/><TextBlock x:Name="ConsistencyText" Grid.Row="7" Grid.Column="1" FontWeight="SemiBold" Foreground="#D47B19" Margin="10,6,0,6"/>
+                            <TextBlock Grid.Row="8" Text="Совпадает с Original" Margin="0,6"/><TextBlock x:Name="SameSourceText" Grid.Row="8" Grid.Column="1" FontWeight="SemiBold" Margin="10,6,0,6"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </Grid>
