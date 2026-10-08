@@ -43,27 +43,58 @@ public static class GlossaryService
         source ??= string.Empty;
         translation ??= string.Empty;
 
-        return GetEntries()
-            .Where(x =>
-                !string.IsNullOrWhiteSpace(x.Source) &&
-                source.Contains(x.Source, StringComparison.OrdinalIgnoreCase))
-            .Select(x => new GlossaryMatch(
-                x.Source,
-                x.Target,
-                x.Required,
-                string.IsNullOrWhiteSpace(x.Target) ||
-                translation.Contains(x.Target, StringComparison.OrdinalIgnoreCase),
-                x.Notes))
-            .ToList();
+        var entries = GetEntries();
+        if (entries.Count == 0 || source.Length == 0)
+            return [];
+
+        List<GlossaryMatch>? matches = null;
+        foreach (var entry in entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Source) ||
+                !source.Contains(entry.Source, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            matches ??= [];
+            matches.Add(new GlossaryMatch(
+                entry.Source,
+                entry.Target,
+                entry.Required,
+                string.IsNullOrWhiteSpace(entry.Target) ||
+                translation.Contains(entry.Target, StringComparison.OrdinalIgnoreCase),
+                entry.Notes));
+        }
+
+        return matches ?? [];
     }
 
     public static IReadOnlyList<string> Validate(
         string source,
         string translation)
-        => Match(source, translation)
-            .Where(x => x.Required && !x.IsSatisfied && !string.IsNullOrWhiteSpace(x.Target))
-            .Select(x => $"Глоссарий: «{x.Source}» должно переводиться как «{x.Target}»")
-            .ToList();
+    {
+        var entries = GetEntries();
+        if (entries.Count == 0 || string.IsNullOrEmpty(source))
+            return [];
+
+        List<string>? issues = null;
+        foreach (var entry in entries)
+        {
+            if (!entry.Required ||
+                string.IsNullOrWhiteSpace(entry.Source) ||
+                string.IsNullOrWhiteSpace(entry.Target) ||
+                !source.Contains(entry.Source, StringComparison.OrdinalIgnoreCase) ||
+                translation.Contains(entry.Target, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            issues ??= [];
+            issues.Add($"Глоссарий: «{entry.Source}» должно переводиться как «{entry.Target}»");
+        }
+
+        return issues ?? [];
+    }
 
     public static void Save(IEnumerable<GlossaryEntry> entries)
     {
