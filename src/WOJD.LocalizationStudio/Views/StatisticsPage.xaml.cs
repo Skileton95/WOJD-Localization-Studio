@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.IO;
 using System.Windows.Controls;
 using WOJD.LocalizationStudio.Models;
@@ -17,51 +16,105 @@ public partial class StatisticsPage : UserControl
 
     public void Attach(MainViewModel viewModel)
     {
-        if (!ReferenceEquals(_viewModel, viewModel))
-        {
-            if (_viewModel is not null)
-                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-            _viewModel = viewModel;
-            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
-        }
-
+        _viewModel = viewModel;
         Refresh();
     }
 
     public void Detach()
     {
-        if (_viewModel is not null)
-            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        _viewModel = null;
     }
 
     public void Refresh()
     {
         var document = _viewModel?.ActiveDocument;
-        var entries = document?.Entries ?? [];
-        var total = entries.Count;
-        var translated = entries.Count(x => !string.IsNullOrWhiteSpace(x.Translation));
+        var entries = document?.Entries;
+        var total = entries?.Count ?? 0;
+
+        var translated = 0;
+        var errors = 0;
+        var modified = 0;
+        var structural = 0;
+        var tags = 0;
+        var placeholders = 0;
+        var newLines = 0;
+        var glossary = 0;
+        var missingSource = 0;
+        var sameSource = 0;
+
+        var namespaceStats = new Dictionary<string, NamespaceAccumulator>(StringComparer.Ordinal);
+        var firstTranslationByOriginal = new Dictionary<string, string>(StringComparer.Ordinal);
+        var inconsistentOriginals = new HashSet<string>(StringComparer.Ordinal);
+
+        if (entries is not null)
+        {
+            foreach (var entry in entries)
+            {
+                var hasTranslation = !string.IsNullOrWhiteSpace(entry.Translation);
+                if (hasTranslation)
+                    translated++;
+                if (entry.HasValidationIssues)
+                    errors++;
+                if (entry.Status == TranslationStatus.Modified)
+                    modified++;
+                if (entry.HasStructuralValidationIssues)
+                    structural++;
+                if (entry.HasTagIssues)
+                    tags++;
+                if (entry.HasPlaceholderIssues)
+                    placeholders++;
+                if (entry.HasNewLineIssues)
+                    newLines++;
+                if (entry.HasGlossaryIssue)
+                    glossary++;
+                if (entry.HasSourceMissingIssue || string.IsNullOrWhiteSpace(entry.Original))
+                    missingSource++;
+                if (entry.HasSameAsSourceIssue)
+                    sameSource++;
+
+                var ns = entry.Namespace ?? string.Empty;
+                if (!namespaceStats.TryGetValue(ns, out var stat))
+                {
+                    stat = new NamespaceAccumulator(ns);
+                    namespaceStats[ns] = stat;
+                }
+
+                stat.Total++;
+                if (hasTranslation)
+                    stat.Translated++;
+                else
+                    stat.Untranslated++;
+                if (entry.HasValidationIssues)
+                    stat.Errors++;
+
+                if (!string.IsNullOrWhiteSpace(entry.Original) && hasTranslation)
+                {
+                    if (!firstTranslationByOriginal.TryGetValue(entry.Original, out var first))
+                    {
+                        firstTranslationByOriginal[entry.Original] = entry.Translation;
+                    }
+                    else if (!string.Equals(first, entry.Translation, StringComparison.Ordinal))
+                    {
+                        inconsistentOriginals.Add(entry.Original);
+                    }
+                }
+            }
+        }
+
+        var consistencyRows = 0;
+        if (entries is not null && inconsistentOriginals.Count > 0)
+        {
+            foreach (var entry in entries)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Original)
+                    && inconsistentOriginals.Contains(entry.Original))
+                {
+                    consistencyRows++;
+                }
+            }
+        }
+
         var untranslated = total - translated;
-        var errors = entries.Count(x => x.HasValidationIssues);
-        var modified = entries.Count(x => x.Status == TranslationStatus.Modified);
-        var structural = entries.Count(x => x.HasStructuralValidationIssues);
-        var tags = entries.Count(x => x.HasTagIssues);
-        var placeholders = entries.Count(x => x.HasPlaceholderIssues);
-        var newLines = entries.Count(x => x.HasNewLineIssues);
-        var glossary = entries.Count(x => x.HasGlossaryIssue);
-        var missingSource = entries.Count(x => x.HasSourceMissingIssue || string.IsNullOrWhiteSpace(x.Original));
-        var sameSource = entries.Count(x => x.HasSameAsSourceIssue);
-        var inconsistentOriginals = entries
-            .Where(x => !string.IsNullOrWhiteSpace(x.Original))
-            .GroupBy(x => x.Original, StringComparer.Ordinal)
-            .Where(group => group
-                .Select(x => x.Translation)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.Ordinal)
-                .Take(2)
-                .Count() > 1)
-            .Select(group => group.Key)
-            .ToHashSet(StringComparer.Ordinal);
-        var consistencyRows = entries.Count(x => !string.IsNullOrWhiteSpace(x.Original) && inconsistentOriginals.Contains(x.Original));
         var percent = total == 0 ? 0d : translated * 100d / total;
 
         TotalText.Text = $"{total:N0}";
@@ -83,21 +136,8 @@ public partial class StatisticsPage : UserControl
             ? "Файл не открыт"
             : Path.GetFileName(document.FilePath);
 
-        NamespaceGrid.ItemsSource = entries
-            .GroupBy(x => x.Namespace ?? string.Empty, StringComparer.Ordinal)
-            .Select(group =>
-            {
-                var list = group.ToList();
-                var groupTranslated = list.Count(x => !string.IsNullOrWhiteSpace(x.Translation));
-                var groupUntranslated = list.Count - groupTranslated;
-                return new NamespaceStat(
-                    string.IsNullOrWhiteSpace(group.Key) ? "— без Namespace —" : group.Key,
-                    list.Count,
-                    groupTranslated,
-                    groupUntranslated,
-                    list.Count(x => x.HasValidationIssues),
-                    list.Count == 0 ? 0d : groupTranslated * 100d / list.Count);
-            })
+        NamespaceGrid.ItemsSource = namespaceStats.Values
+            .Select(x => x.ToStat())
             .OrderByDescending(x => x.Untranslated)
             .ThenByDescending(x => x.Errors)
             .ThenByDescending(x => x.Total)
@@ -105,16 +145,22 @@ public partial class StatisticsPage : UserControl
             .ToList();
     }
 
-    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private sealed class NamespaceAccumulator(string name)
     {
-        if (e.PropertyName is nameof(MainViewModel.TotalCount)
-            or nameof(MainViewModel.TranslatedCount)
-            or nameof(MainViewModel.UntranslatedCount)
-            or nameof(MainViewModel.ModifiedCount)
-            or nameof(MainViewModel.ErrorCount))
-        {
-            Refresh();
-        }
+        public string Name { get; } = name;
+        public int Total { get; set; }
+        public int Translated { get; set; }
+        public int Untranslated { get; set; }
+        public int Errors { get; set; }
+
+        public NamespaceStat ToStat()
+            => new(
+                string.IsNullOrWhiteSpace(Name) ? "— без Namespace —" : Name,
+                Total,
+                Translated,
+                Untranslated,
+                Errors,
+                Total == 0 ? 0d : Translated * 100d / Total);
     }
 
     private sealed record NamespaceStat(
