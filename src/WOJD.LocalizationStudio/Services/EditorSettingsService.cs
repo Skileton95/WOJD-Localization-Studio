@@ -25,6 +25,8 @@ public sealed class EditorSettings
     public bool ShowContextPane { get; set; } = true;
     public bool CompactEntryList { get; set; }
 
+    // AI settings. API keys are intentionally not persisted here.
+    public string AiModel { get; set; } = "gpt-5.6-sol";
     public int AiConcurrency { get; set; } = 2;
     public int AiRetryCount { get; set; } = 2;
     public int AiBatchLimit { get; set; } = 100;
@@ -104,6 +106,9 @@ public static class EditorSettingsService
             : "Horizontal";
         settings.TranslationListWidth = Math.Clamp(settings.TranslationListWidth, 250, 700);
         settings.ContextPaneWidth = Math.Clamp(settings.ContextPaneWidth, 240, 620);
+        settings.AiModel = string.IsNullOrWhiteSpace(settings.AiModel)
+            ? "gpt-5.6-sol"
+            : settings.AiModel.Trim();
         settings.AiConcurrency = Math.Clamp(settings.AiConcurrency, 1, 6);
         settings.AiRetryCount = Math.Clamp(settings.AiRetryCount, 0, 5);
         settings.AiBatchLimit = Math.Clamp(settings.AiBatchLimit, 1, 500);
