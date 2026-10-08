@@ -1,23 +1,17 @@
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Services;
 
 /// <summary>
-/// Immutable lookup index for relationships based on stable localization metadata.
-/// The index avoids full-document scans when the selected row changes while keeping
-/// memory overhead bounded for very large documents.
+/// Lookup index for relationships based on stable localization metadata.
+/// LocalizationDocument initializes the index before its entries are loaded, so the
+/// normal NDJSON background parser extends it incrementally instead of causing a
+/// full-document scan on the UI thread when the first row is selected.
 /// </summary>
 public sealed class EntryRelationIndex
 {
     private static readonly ConditionalWeakTable<LocalizationDocument, EntryRelationIndex> Cache = new();
-    private static readonly Regex NumericFamilyPattern = new(
-        @"^(?<family>[\p{L}]*\d+(?:_\d+)+)(?=$|[-.:/|])",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex NumericSeriesPattern = new(
-        @"^(?<series>.+)_\d+$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     // Most Originals occur once. Keep one direct reference for the common case and
     // allocate a List only when an Original is actually duplicated.
@@ -40,6 +34,21 @@ public sealed class EntryRelationIndex
 
     public static EntryRelationIndex For(LocalizationDocument document)
         => Cache.GetValue(document, static value => new EntryRelationIndex(value));
+
+    internal static void Initialize(LocalizationDocument document)
+        => _ = Cache.GetValue(document, static value => new EntryRelationIndex(value));
+
+    internal static void AppendLoadedEntry(LocalizationDocument document, LocalizationEntry entry)
+    {
+        // During normal file loading Initialize() has already created the empty
+        // index. If a caller structurally changed a document and invalidated it,
+        // leave it invalid and let For() rebuild from the complete list later.
+        if (Cache.TryGetValue(document, out var index))
+            index.AddEntry(entry);
+    }
+
+    internal static void Invalidate(LocalizationDocument document)
+        => Cache.Remove(document);
 
     public int GetPosition(LocalizationEntry entry)
         => Document.Entries.IndexOf(entry);
@@ -144,19 +153,26 @@ public sealed class EntryRelationIndex
 
         key = key.Trim();
 
-        var numeric = NumericFamilyPattern.Match(key);
-        if (numeric.Success)
-            return numeric.Groups["family"].Value;
-
+        // Common WOJD keys use a stable prefix followed by a semantic suffix,
+        // e.g. 450_0-SkillName / 450_0-SkillDesc. Parse this without Regex because
+        // the method runs for every row in very large files.
         var delimiterIndex = key.IndexOfAny(['-', ':', '/', '|']);
         if (delimiterIndex > 0)
             return key[..delimiterIndex];
 
-        var dotParts = key.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (dotParts.Length >= 3)
-            return string.Join('.', dotParts.Take(dotParts.Length - 1));
+        var firstDot = key.IndexOf('.');
+        if (firstDot <= 0)
+            return string.Empty;
 
-        return string.Empty;
+        var firstPart = key[..firstDot];
+        if (LooksLikeNumericFamily(firstPart))
+            return firstPart;
+
+        // UI.Common.Confirm -> UI.Common
+        var lastDot = key.LastIndexOf('.');
+        return lastDot > firstDot
+            ? key[..lastDot]
+            : string.Empty;
     }
 
     public static string GetSeriesFamily(string? family)
@@ -164,31 +180,83 @@ public sealed class EntryRelationIndex
         if (string.IsNullOrWhiteSpace(family))
             return string.Empty;
 
-        var match = NumericSeriesPattern.Match(family);
-        return match.Success
-            ? match.Groups["series"].Value
-            : string.Empty;
+        var separator = family.LastIndexOf('_');
+        if (separator <= 0 || separator == family.Length - 1)
+            return string.Empty;
+
+        for (var i = separator + 1; i < family.Length; i++)
+        {
+            if (!char.IsDigit(family[i]))
+                return string.Empty;
+        }
+
+        return family[..separator];
+    }
+
+    private static bool LooksLikeNumericFamily(string value)
+    {
+        var separator = value.IndexOf('_');
+        if (separator <= 0 || separator == value.Length - 1)
+            return false;
+
+        var sawDigitBeforeSeparator = false;
+        for (var i = 0; i < separator; i++)
+        {
+            var ch = value[i];
+            if (char.IsDigit(ch))
+            {
+                sawDigitBeforeSeparator = true;
+                continue;
+            }
+
+            if (!char.IsLetter(ch))
+                return false;
+        }
+
+        if (!sawDigitBeforeSeparator)
+            return false;
+
+        var needDigit = true;
+        for (var i = separator + 1; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (ch == '_')
+            {
+                if (needDigit)
+                    return false;
+                needDigit = true;
+                continue;
+            }
+
+            if (!char.IsDigit(ch))
+                return false;
+
+            needDigit = false;
+        }
+
+        return !needDigit;
     }
 
     private void Build(IReadOnlyList<LocalizationEntry> entries)
     {
         for (var i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
+            AddEntry(entries[i]);
+    }
 
-            if (!string.IsNullOrEmpty(entry.Original))
-                AddOriginal(entry.Original, entry);
+    private void AddEntry(LocalizationEntry entry)
+    {
+        if (!string.IsNullOrEmpty(entry.Original))
+            AddOriginal(entry.Original, entry);
 
-            var family = GetKeyFamily(entry.Key);
-            if (string.IsNullOrEmpty(family))
-                continue;
+        var family = GetKeyFamily(entry.Key);
+        if (string.IsNullOrEmpty(family))
+            return;
 
-            Add(_byFamily, family, entry);
+        Add(_byFamily, family, entry);
 
-            var series = GetSeriesFamily(family);
-            if (!string.IsNullOrEmpty(series))
-                Add(_bySeries, series, entry);
-        }
+        var series = GetSeriesFamily(family);
+        if (!string.IsNullOrEmpty(series))
+            Add(_bySeries, series, entry);
     }
 
     private void AddOriginal(string original, LocalizationEntry entry)
