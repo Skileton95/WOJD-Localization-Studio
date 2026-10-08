@@ -29,13 +29,21 @@ public sealed class LocalizationEntry : ObservableObject
         get => _translation;
         set
         {
-            if (SetProperty(ref _translation, value))
-            {
-                OnPropertyChanged(nameof(Status));
-                OnPropertyChanged(nameof(StatusText));
-                OnPropertyChanged(nameof(CharacterCount));
-                RefreshValidation();
-            }
+            value ??= string.Empty;
+            if (string.Equals(_translation, value, StringComparison.Ordinal))
+                return;
+
+            _translation = value;
+
+            // Validate exactly once, before Translation is announced. MainViewModel
+            // can then consume the current QA state without re-running every regex,
+            // glossary rule and QA profile a second time for the same keystroke.
+            RefreshValidation();
+
+            OnPropertyChanged(nameof(Translation));
+            OnPropertyChanged(nameof(Status));
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(CharacterCount));
         }
     }
 
