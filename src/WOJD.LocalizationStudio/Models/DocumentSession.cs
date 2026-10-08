@@ -9,12 +9,6 @@ internal sealed class DocumentSession
     public Dictionary<LocalizationEntry, string> KnownTranslations { get; } = new();
     public Dictionary<LocalizationEntry, bool> KnownValidationStates { get; } = new();
 
-    // Hot-path indexes. They let workspace persistence and keyboard navigation work
-    // from the handful of affected rows instead of traversing a 600k+ document.
-    public HashSet<LocalizationEntry> ModifiedEntries { get; } = [];
-    public SortedSet<int> UntranslatedPositions { get; } = [];
-    public SortedSet<int> ValidationErrorPositions { get; } = [];
-
     public Stack<TranslationEdit> UndoStack { get; } = new();
     public Stack<TranslationEdit> RedoStack { get; } = new();
 
