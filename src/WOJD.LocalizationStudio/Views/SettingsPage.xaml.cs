@@ -12,6 +12,7 @@ public partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
+        InstallAiSettings();
         LoadSettings();
         ShowPanel("General");
     }
@@ -20,6 +21,7 @@ public partial class SettingsPage : UserControl
     {
         EditorSettingsService.Reload();
         LoadSettings();
+        LoadAiSettingsValues();
         SavedText.Text = string.Empty;
     }
 
