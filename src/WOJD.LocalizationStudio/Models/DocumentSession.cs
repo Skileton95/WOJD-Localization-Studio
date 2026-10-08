@@ -8,6 +8,7 @@ internal sealed class DocumentSession
     public Dictionary<LocalizationEntry, TranslationStatus> KnownStatuses { get; } = new();
     public Dictionary<LocalizationEntry, string> KnownTranslations { get; } = new();
     public Dictionary<LocalizationEntry, bool> KnownValidationStates { get; } = new();
+    public HashSet<LocalizationEntry> ModifiedEntries { get; } = new();
 
     public Stack<TranslationEdit> UndoStack { get; } = new();
     public Stack<TranslationEdit> RedoStack { get; } = new();
