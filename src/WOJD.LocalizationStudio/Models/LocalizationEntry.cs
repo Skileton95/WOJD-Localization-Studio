@@ -43,10 +43,6 @@ public sealed class LocalizationEntry : ObservableObject
                 return;
 
             _translation = value;
-
-            // Validate exactly once, before Translation is announced. MainViewModel
-            // can then consume the current QA state without re-running every regex,
-            // glossary rule and QA profile a second time for the same edit.
             RefreshValidation();
 
             OnPropertyChanged(nameof(Translation));
@@ -131,9 +127,26 @@ public sealed class LocalizationEntry : ObservableObject
         string semanticRole,
         bool startsVisualGroup)
     {
-        VisualGroupLabel = groupLabel ?? string.Empty;
-        SemanticRole = semanticRole ?? string.Empty;
-        StartsVisualGroup = startsVisualGroup;
+        groupLabel ??= string.Empty;
+        semanticRole ??= string.Empty;
+
+        if (!string.Equals(VisualGroupLabel, groupLabel, StringComparison.Ordinal))
+        {
+            VisualGroupLabel = groupLabel;
+            OnPropertyChanged(nameof(VisualGroupLabel));
+        }
+
+        if (!string.Equals(SemanticRole, semanticRole, StringComparison.Ordinal))
+        {
+            SemanticRole = semanticRole;
+            OnPropertyChanged(nameof(SemanticRole));
+        }
+
+        if (StartsVisualGroup != startsVisualGroup)
+        {
+            StartsVisualGroup = startsVisualGroup;
+            OnPropertyChanged(nameof(StartsVisualGroup));
+        }
     }
 
     public void RefreshValidation()
@@ -205,10 +218,6 @@ public sealed class LocalizationEntry : ObservableObject
         _translation = value ?? string.Empty;
         _savedTranslation = _translation;
         _validationInitialized = false;
-
-        // This method is used while the adapter is constructing a document, before
-        // UI listeners exist. Avoid ~10 PropertyChanged notifications per row — at
-        // 600k rows those notifications were pure overhead during file opening.
         RefreshValidationCore(notifyChanges: false);
     }
 
