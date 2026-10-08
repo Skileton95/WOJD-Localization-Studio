@@ -23,9 +23,18 @@ Set-Content -Path (Join-Path $payload 'nested\proof.txt') -Value 'ok' -NoNewline
 Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $zip -Force
 
 Write-Host "Starting updater smoke test from $updater"
-& $updater --install-dir $install --package-file $zip --version 9.9.9
-if ($LASTEXITCODE -ne 0) {
-    throw "Updater staging process exited with code $LASTEXITCODE"
+$process = Start-Process `
+    -FilePath $updater `
+    -ArgumentList @(
+        '--install-dir', $install,
+        '--package-file', $zip,
+        '--version', '9.9.9'
+    ) `
+    -PassThru `
+    -Wait
+
+if ($process.ExitCode -ne 0) {
+    throw "Updater staging process exited with code $($process.ExitCode)"
 }
 
 $deadline = (Get-Date).AddSeconds(30)
