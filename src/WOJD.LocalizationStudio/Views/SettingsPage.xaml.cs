@@ -69,6 +69,10 @@ public partial class SettingsPage : UserControl
         settings.ContextPaneWidth = contextWidth;
         EditorSettingsService.Save(settings);
         SavedText.Text = "Настройки сохранены";
+
+        if (Window.GetWindow(this) is ShellWindow shell)
+            shell.ApplyAppearanceSettings();
+
         SettingsSaved?.Invoke(this, EventArgs.Empty);
     }
 
