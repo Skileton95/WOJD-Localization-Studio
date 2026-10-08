@@ -21,9 +21,9 @@ public static class TextDiffService
 
         if (string.Equals(left, right, StringComparison.Ordinal))
         {
-            var unchanged = left.Length == 0
+            IReadOnlyList<TextDiffSegment> unchanged = left.Length == 0
                 ? Array.Empty<TextDiffSegment>()
-                : [new TextDiffSegment(left, false)];
+                : new[] { new TextDiffSegment(left, false) };
             return new TextDiffPair(unchanged, unchanged);
         }
 
@@ -81,7 +81,7 @@ public static class TextDiffService
     private static IReadOnlyList<string> Tokenize(string text)
     {
         if (text.Length == 0)
-            return [];
+            return Array.Empty<string>();
 
         var tokens = new List<string>();
         var start = 0;
@@ -92,7 +92,7 @@ public static class TextDiffService
             var nextMode = GetMode(text[i]);
             if (nextMode == TokenMode.Cjk || nextMode == TokenMode.Punctuation)
             {
-                FlushBuffered(text, tokens, ref start, i, mode);
+                FlushBuffered(text, tokens, start, i, mode);
                 tokens.Add(text[i].ToString());
                 start = i + 1;
                 mode = TokenMode.None;
@@ -123,7 +123,7 @@ public static class TextDiffService
     private static void FlushBuffered(
         string text,
         List<string> tokens,
-        ref int start,
+        int start,
         int end,
         TokenMode mode)
     {
@@ -143,9 +143,9 @@ public static class TextDiffService
     }
 
     private static bool IsCjk(char ch)
-        => ch is >= '\u3400' and <= '\u4DBF'
-           or >= '\u4E00' and <= '\u9FFF'
-           or >= '\uF900' and <= '\uFAFF';
+        => (ch >= '\u3400' && ch <= '\u4DBF')
+           || (ch >= '\u4E00' && ch <= '\u9FFF')
+           || (ch >= '\uF900' && ch <= '\uFAFF');
 
     private static void Append(List<TextDiffSegment> segments, string text, bool changed)
     {
