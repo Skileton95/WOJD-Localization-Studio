@@ -27,6 +27,14 @@ public static partial class TranslationValidator
     private static readonly TranslationValidationResult EmptyResult =
         new(0, string.Empty, EmptyKinds);
 
+    private static int _configurationVersion;
+
+    public static int ConfigurationVersion
+        => Volatile.Read(ref _configurationVersion);
+
+    public static void NotifyConfigurationChanged()
+        => Interlocked.Increment(ref _configurationVersion);
+
     public static TranslationValidationResult Validate(
         string source,
         string translation)
