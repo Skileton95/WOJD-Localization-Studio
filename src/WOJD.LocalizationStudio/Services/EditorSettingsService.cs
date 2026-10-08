@@ -18,6 +18,13 @@ public sealed class EditorSettings
     public string EditorPaneLayout { get; set; } = "Horizontal";
     public bool TranslationOnlyMode { get; set; }
     public bool FocusMode { get; set; }
+
+    // 0.2.x shell layout.
+    public double TranslationListWidth { get; set; } = 370;
+    public double ContextPaneWidth { get; set; } = 320;
+    public bool ShowContextPane { get; set; } = true;
+    public bool CompactEntryList { get; set; }
+
     public int AiConcurrency { get; set; } = 2;
     public int AiRetryCount { get; set; } = 2;
     public int AiBatchLimit { get; set; } = 100;
@@ -95,6 +102,8 @@ public static class EditorSettingsService
             StringComparison.OrdinalIgnoreCase)
             ? "Vertical"
             : "Horizontal";
+        settings.TranslationListWidth = Math.Clamp(settings.TranslationListWidth, 250, 700);
+        settings.ContextPaneWidth = Math.Clamp(settings.ContextPaneWidth, 240, 620);
         settings.AiConcurrency = Math.Clamp(settings.AiConcurrency, 1, 6);
         settings.AiRetryCount = Math.Clamp(settings.AiRetryCount, 0, 5);
         settings.AiBatchLimit = Math.Clamp(settings.AiBatchLimit, 1, 500);
