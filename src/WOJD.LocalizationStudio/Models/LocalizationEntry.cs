@@ -14,6 +14,7 @@ public sealed class LocalizationEntry : ObservableObject
     private string _validationSummary = string.Empty;
     private IReadOnlySet<TranslationIssueKind> _validationKinds = NoValidationKinds;
     private string _validatedTranslation = string.Empty;
+    private int _validatedConfigurationVersion = -1;
     private bool _validationInitialized;
 
     public int Index { get; init; }
@@ -123,7 +124,9 @@ public sealed class LocalizationEntry : ObservableObject
 
     public void RefreshValidation()
     {
+        var configurationVersion = TranslationValidator.ConfigurationVersion;
         if (_validationInitialized &&
+            _validatedConfigurationVersion == configurationVersion &&
             string.Equals(_validatedTranslation, Translation, StringComparison.Ordinal))
         {
             return;
@@ -136,6 +139,7 @@ public sealed class LocalizationEntry : ObservableObject
             Translation);
 
         _validatedTranslation = Translation;
+        _validatedConfigurationVersion = configurationVersion;
         _validationInitialized = true;
 
         var issueCountChanged = SetProperty(
