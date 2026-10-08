@@ -72,6 +72,47 @@ public sealed class LargeFilePerformanceTests
     }
 
     [Fact]
+    public void InitializeSavedTranslation_DoesNotRaiseUiNotifications()
+    {
+        var entry = new LocalizationEntry
+        {
+            Index = 1,
+            Namespace = "Perf",
+            Key = "Perf.Row",
+            Original = "测试文本"
+        };
+        var notifications = 0;
+        entry.PropertyChanged += (_, _) => notifications++;
+
+        entry.InitializeSavedTranslation("Перевод");
+
+        Assert.Equal(0, notifications);
+        Assert.Equal("Перевод", entry.Translation);
+    }
+
+    [Fact]
+    public void ValidationCache_RevalidatesAfterQaConfigurationChanges()
+    {
+        var entry = new LocalizationEntry
+        {
+            Index = 1,
+            Namespace = "Perf",
+            Key = "Perf.Row",
+            Original = "测试文本"
+        };
+        entry.InitializeSavedTranslation("Перевод");
+
+        var notifications = 0;
+        entry.PropertyChanged += (_, _) => notifications++;
+        entry.RefreshValidation();
+        Assert.Equal(0, notifications);
+
+        TranslationValidator.NotifyConfigurationChanged();
+        entry.RefreshValidation();
+        Assert.True(notifications > 0);
+    }
+
+    [Fact]
     public void Validator_FastPathsPreserveStructuralAndSameSourceQa()
     {
         var structural = TranslationValidator.Validate(
