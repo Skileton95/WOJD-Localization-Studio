@@ -28,6 +28,11 @@ public partial class SettingsPage : UserControl
         var settings = EditorSettingsService.Current;
         FontSizeBox.Text = settings.EditorFontSize.ToString("0.#", CultureInfo.InvariantCulture);
         WrapCheckBox.IsChecked = settings.WrapTranslation;
+        QaDetailsCheckBox.IsChecked = settings.ShowQaDetails;
+        ShowContextCheckBox.IsChecked = settings.ShowContextPane;
+        CompactListCheckBox.IsChecked = settings.CompactEntryList;
+        ListWidthBox.Text = settings.TranslationListWidth.ToString("0", CultureInfo.InvariantCulture);
+        ContextWidthBox.Text = settings.ContextPaneWidth.ToString("0", CultureInfo.InvariantCulture);
     }
 
     private void Category_Click(object sender, RoutedEventArgs e)
@@ -47,26 +52,50 @@ public partial class SettingsPage : UserControl
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (!double.TryParse(
-                FontSizeBox.Text.Replace(',', '.'),
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out var fontSize))
+        if (!TryReadNumber(FontSizeBox.Text, 10, 28, "размер шрифта", out var fontSize) ||
+            !TryReadNumber(ListWidthBox.Text, 250, 700, "ширину списка строк", out var listWidth) ||
+            !TryReadNumber(ContextWidthBox.Text, 240, 620, "ширину панели контекста", out var contextWidth))
         {
-            AppDialog.Show(
-                "Проверьте размер шрифта.",
-                "Настройки",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning,
-                Window.GetWindow(this));
             return;
         }
 
         var settings = EditorSettingsService.Current;
         settings.EditorFontSize = fontSize;
         settings.WrapTranslation = WrapCheckBox.IsChecked == true;
+        settings.ShowQaDetails = QaDetailsCheckBox.IsChecked == true;
+        settings.ShowContextPane = ShowContextCheckBox.IsChecked == true;
+        settings.CompactEntryList = CompactListCheckBox.IsChecked == true;
+        settings.TranslationListWidth = listWidth;
+        settings.ContextPaneWidth = contextWidth;
         EditorSettingsService.Save(settings);
         SavedText.Text = "Настройки сохранены";
         SettingsSaved?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool TryReadNumber(
+        string text,
+        double min,
+        double max,
+        string label,
+        out double value)
+    {
+        if (double.TryParse(
+                text.Replace(',', '.'),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out value) &&
+            value >= min &&
+            value <= max)
+        {
+            return true;
+        }
+
+        AppDialog.Show(
+            $"Проверьте {label}. Допустимый диапазон: {min:0}–{max:0}.",
+            "Настройки",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning,
+            Window.GetWindow(this));
+        return false;
     }
 }
