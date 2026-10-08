@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Controls;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.ViewModels;
@@ -8,25 +9,40 @@ namespace WOJD.LocalizationStudio.Views;
 public partial class StatisticsPage : UserControl
 {
     private MainViewModel? _viewModel;
+    private bool _refreshPending = true;
 
     public StatisticsPage()
     {
         InitializeComponent();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible && _refreshPending)
+                Refresh();
+        };
     }
 
     public void Attach(MainViewModel viewModel)
     {
         _viewModel = viewModel;
-        Refresh();
+        _refreshPending = true;
+        if (IsVisible)
+            Refresh();
     }
 
     public void Detach()
     {
         _viewModel = null;
+        _refreshPending = true;
     }
 
     public void Refresh()
     {
+        if (!IsVisible)
+        {
+            _refreshPending = true;
+            return;
+        }
+
         var document = _viewModel?.ActiveDocument;
         var entries = document?.Entries;
         var total = entries?.Count ?? 0;
@@ -143,6 +159,8 @@ public partial class StatisticsPage : UserControl
             .ThenByDescending(x => x.Total)
             .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        _refreshPending = false;
     }
 
     private sealed class NamespaceAccumulator(string name)

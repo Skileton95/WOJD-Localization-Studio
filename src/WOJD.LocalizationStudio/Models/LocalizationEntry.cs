@@ -5,12 +5,17 @@ namespace WOJD.LocalizationStudio.Models;
 
 public sealed class LocalizationEntry : ObservableObject
 {
+    private static readonly IReadOnlySet<TranslationIssueKind> NoValidationKinds =
+        new HashSet<TranslationIssueKind>();
+
     private string _translation = string.Empty;
     private string _savedTranslation = string.Empty;
     private int _validationIssueCount;
     private string _validationSummary = string.Empty;
-    private IReadOnlySet<TranslationIssueKind> _validationKinds =
-        new HashSet<TranslationIssueKind>();
+    private IReadOnlySet<TranslationIssueKind> _validationKinds = NoValidationKinds;
+    private string _validatedTranslation = string.Empty;
+    private int _validatedConfigurationVersion = -1;
+    private bool _validationInitialized;
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
@@ -29,13 +34,21 @@ public sealed class LocalizationEntry : ObservableObject
         get => _translation;
         set
         {
-            if (SetProperty(ref _translation, value))
-            {
-                OnPropertyChanged(nameof(Status));
-                OnPropertyChanged(nameof(StatusText));
-                OnPropertyChanged(nameof(CharacterCount));
-                RefreshValidation();
-            }
+            value ??= string.Empty;
+            if (string.Equals(_translation, value, StringComparison.Ordinal))
+                return;
+
+            _translation = value;
+
+            // Validate exactly once, before Translation is announced. MainViewModel
+            // can then consume the current QA state without re-running every regex,
+            // glossary rule and QA profile a second time for the same edit.
+            RefreshValidation();
+
+            OnPropertyChanged(nameof(Translation));
+            OnPropertyChanged(nameof(Status));
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(CharacterCount));
         }
     }
 
@@ -110,12 +123,35 @@ public sealed class LocalizationEntry : ObservableObject
                         : "Проверено";
 
     public void RefreshValidation()
+        => RefreshValidationCore(notifyChanges: true);
+
+    private void RefreshValidationCore(bool notifyChanges)
     {
+        var configurationVersion = TranslationValidator.ConfigurationVersion;
+        if (_validationInitialized &&
+            _validatedConfigurationVersion == configurationVersion &&
+            string.Equals(_validatedTranslation, Translation, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         var result = TranslationValidator.Validate(
             Namespace,
             Key,
             Original,
             Translation);
+
+        _validatedTranslation = Translation;
+        _validatedConfigurationVersion = configurationVersion;
+        _validationInitialized = true;
+
+        if (!notifyChanges)
+        {
+            _validationIssueCount = result.IssueCount;
+            _validationSummary = result.Summary;
+            _validationKinds = result.Kinds;
+            return;
+        }
 
         var issueCountChanged = SetProperty(
             ref _validationIssueCount,
@@ -145,16 +181,21 @@ public sealed class LocalizationEntry : ObservableObject
             OnPropertyChanged(nameof(HasValidationIssues));
     }
 
+    public void InvalidateValidation()
+    {
+        _validationInitialized = false;
+    }
+
     public void InitializeSavedTranslation(string value)
     {
-        _translation = value;
-        _savedTranslation = value;
+        _translation = value ?? string.Empty;
+        _savedTranslation = _translation;
+        _validationInitialized = false;
 
-        OnPropertyChanged(nameof(Translation));
-        OnPropertyChanged(nameof(Status));
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(CharacterCount));
-        RefreshValidation();
+        // This method is used while the adapter is constructing a document, before
+        // UI listeners exist. Avoid ~10 PropertyChanged notifications per row — at
+        // 600k rows those notifications were pure overhead during file opening.
+        RefreshValidationCore(notifyChanges: false);
     }
 
     public void MarkSaved(string? rawLine = null)

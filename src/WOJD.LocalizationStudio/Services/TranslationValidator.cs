@@ -21,6 +21,20 @@ public sealed record TranslationValidationResult(
 
 public static partial class TranslationValidator
 {
+    private static readonly IReadOnlySet<TranslationIssueKind> EmptyKinds =
+        new HashSet<TranslationIssueKind>();
+
+    private static readonly TranslationValidationResult EmptyResult =
+        new(0, string.Empty, EmptyKinds);
+
+    private static int _configurationVersion;
+
+    public static int ConfigurationVersion
+        => Volatile.Read(ref _configurationVersion);
+
+    public static void NotifyConfigurationChanged()
+        => Interlocked.Increment(ref _configurationVersion);
+
     public static TranslationValidationResult Validate(
         string source,
         string translation)
@@ -51,12 +65,7 @@ public static partial class TranslationValidator
         bool applyProfiles)
     {
         if (string.IsNullOrWhiteSpace(translation))
-        {
-            return new TranslationValidationResult(
-                0,
-                string.Empty,
-                new HashSet<TranslationIssueKind>());
-        }
+            return EmptyResult;
 
         var issues = new List<(TranslationIssueKind Kind, string Message)>();
 
@@ -68,29 +77,41 @@ public static partial class TranslationValidator
         }
         else
         {
-            CompareTokens(
-                source,
-                translation,
-                BracePlaceholderRegex(),
-                TranslationIssueKind.Placeholder,
-                "Плейсхолдеры {…} не совпадают",
-                issues);
+            // Regex signatures are comparatively expensive at 600k+ rows. Most game
+            // strings do not contain structure at all, so reject them with a cheap
+            // marker check before invoking the regex engine.
+            if (ContainsEither(source, translation, '{'))
+            {
+                CompareTokens(
+                    source,
+                    translation,
+                    BracePlaceholderRegex(),
+                    TranslationIssueKind.Placeholder,
+                    "Плейсхолдеры {…} не совпадают",
+                    issues);
+            }
 
-            CompareTokens(
-                source,
-                translation,
-                PercentPlaceholderRegex(),
-                TranslationIssueKind.Placeholder,
-                "Плейсхолдеры %… не совпадают",
-                issues);
+            if (ContainsEither(source, translation, '%'))
+            {
+                CompareTokens(
+                    source,
+                    translation,
+                    PercentPlaceholderRegex(),
+                    TranslationIssueKind.Placeholder,
+                    "Плейсхолдеры %… не совпадают",
+                    issues);
+            }
 
-            CompareTokens(
-                source,
-                translation,
-                TagRegex(),
-                TranslationIssueKind.Tag,
-                "Теги <…> не совпадают",
-                issues);
+            if (ContainsEither(source, translation, '<'))
+            {
+                CompareTokens(
+                    source,
+                    translation,
+                    TagRegex(),
+                    TranslationIssueKind.Tag,
+                    "Теги <…> не совпадают",
+                    issues);
+            }
 
             var sourceNewLines = CountNewLines(source);
             var targetNewLines = CountNewLines(translation);
@@ -159,11 +180,17 @@ public static partial class TranslationValidator
             }
         }
 
+        if (issues.Count == 0)
+            return EmptyResult;
+
         return new TranslationValidationResult(
             issues.Count,
             string.Join(" • ", issues.Select(x => x.Message)),
             issues.Select(x => x.Kind).ToHashSet());
     }
+
+    private static bool ContainsEither(string left, string right, char marker)
+        => left.IndexOf(marker) >= 0 || right.IndexOf(marker) >= 0;
 
     private static void CompareTokens(
         string source,
@@ -199,6 +226,17 @@ public static partial class TranslationValidator
         if (string.IsNullOrEmpty(text))
             return 0;
 
+        if (text.IndexOfAny(['{', '%', '<']) < 0)
+        {
+            var visible = 0;
+            foreach (var ch in text)
+            {
+                if (!char.IsWhiteSpace(ch))
+                    visible++;
+            }
+            return visible;
+        }
+
         var value = BracePlaceholderRegex().Replace(text, string.Empty);
         value = PercentPlaceholderRegex().Replace(value, string.Empty);
         value = TagRegex().Replace(value, string.Empty);
@@ -207,7 +245,19 @@ public static partial class TranslationValidator
     }
 
     private static bool ContainsCjk(string text)
-        => CjkRegex().IsMatch(text);
+    {
+        foreach (var ch in text)
+        {
+            if ((ch >= '\u3400' && ch <= '\u4DBF') ||
+                (ch >= '\u4E00' && ch <= '\u9FFF') ||
+                (ch >= '\uF900' && ch <= '\uFAFF'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static int CountNewLines(string text)
     {
@@ -251,7 +301,4 @@ public static partial class TranslationValidator
 
     [GeneratedRegex(@"<\/?[^<>]+?>", RegexOptions.CultureInvariant)]
     private static partial Regex TagRegex();
-
-    [GeneratedRegex(@"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]", RegexOptions.CultureInvariant)]
-    private static partial Regex CjkRegex();
 }

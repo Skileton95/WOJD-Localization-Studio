@@ -258,6 +258,7 @@ public partial class TranslationPage
 
         var sameSource = index.GetSameOriginal(entry);
         var variants = sameSource
+            .Take(256)
             .Select(x => x.Translation)
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
@@ -279,7 +280,7 @@ public partial class TranslationPage
             parts.Add($"Строк с тем же Original: {sameSource.Count:N0}.");
             if (variants.Count > 1)
             {
-                parts.Add($"Вариантов перевода: {variants.Count}. Требуется проверка согласованности.");
+                parts.Add($"Вариантов перевода в быстрой выборке: {variants.Count}. Требуется проверка согласованности.");
                 parts.Add("Переводы: " + string.Join(" | ", variants));
             }
         }

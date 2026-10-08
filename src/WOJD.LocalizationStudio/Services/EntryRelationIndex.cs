@@ -99,23 +99,76 @@ public sealed class EntryRelationIndex
         if (maxCount <= 0)
             return [];
 
-        var result = new HashSet<LocalizationEntry>();
+        // Every index bucket is populated in source-file order. Merge the few sorted
+        // buckets and stop as soon as maxCount unique rows are found. The old code
+        // materialized and sorted the entire union, which made a click on a very
+        // common Original (thousands of rows) unexpectedly expensive.
+        var sources = new List<IReadOnlyList<LocalizationEntry>>(3);
 
-        AddRange(result, GetSameFamily(entry), entry);
-        AddRange(result, GetSameOriginal(entry), entry);
+        var sameFamily = GetSameFamily(entry);
+        if (sameFamily.Count > 0)
+            sources.Add(sameFamily);
+
+        var sameOriginal = GetSameOriginal(entry);
+        if (sameOriginal.Count > 0)
+            sources.Add(sameOriginal);
 
         var family = GetFamily(entry);
         var series = GetSeriesFamily(family);
         if (!string.IsNullOrEmpty(series) &&
-            _bySeries.TryGetValue(series, out var seriesEntries))
+            _bySeries.TryGetValue(series, out var seriesEntries) &&
+            seriesEntries.Count > 0)
         {
-            AddRange(result, seriesEntries, entry);
+            sources.Add(seriesEntries);
         }
 
-        return result
-            .OrderBy(x => GetPosition(x))
-            .Take(maxCount)
-            .ToArray();
+        if (sources.Count == 0)
+            return [];
+
+        var cursors = new int[sources.Count];
+        var seen = new HashSet<LocalizationEntry>();
+        var result = new List<LocalizationEntry>(Math.Min(maxCount, 32));
+
+        while (result.Count < maxCount)
+        {
+            LocalizationEntry? best = null;
+            var bestSource = -1;
+            var bestPosition = int.MaxValue;
+
+            for (var sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
+            {
+                var source = sources[sourceIndex];
+                var cursor = cursors[sourceIndex];
+
+                while (cursor < source.Count &&
+                       (ReferenceEquals(source[cursor], entry) || seen.Contains(source[cursor])))
+                {
+                    cursor++;
+                }
+
+                cursors[sourceIndex] = cursor;
+                if (cursor >= source.Count)
+                    continue;
+
+                var candidate = source[cursor];
+                var position = GetPosition(candidate);
+                if (position >= 0 && position < bestPosition)
+                {
+                    best = candidate;
+                    bestSource = sourceIndex;
+                    bestPosition = position;
+                }
+            }
+
+            if (best is null || bestSource < 0)
+                break;
+
+            cursors[bestSource]++;
+            if (seen.Add(best))
+                result.Add(best);
+        }
+
+        return result;
     }
 
     public string DescribeRelation(LocalizationEntry current, LocalizationEntry candidate)
@@ -288,17 +341,5 @@ public sealed class EntryRelationIndex
         }
 
         values.Add(entry);
-    }
-
-    private static void AddRange(
-        HashSet<LocalizationEntry> target,
-        IEnumerable<LocalizationEntry> source,
-        LocalizationEntry except)
-    {
-        foreach (var item in source)
-        {
-            if (!ReferenceEquals(item, except))
-                target.Add(item);
-        }
     }
 }

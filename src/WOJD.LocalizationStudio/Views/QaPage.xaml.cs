@@ -18,6 +18,7 @@ public partial class QaPage : UserControl
     private bool _suppressSelectionEvents;
     private bool _updatingDetails;
     private bool _cacheDirty;
+    private bool _refreshPending = true;
 
     public event EventHandler? OpenInEditorRequested;
 
@@ -25,23 +26,37 @@ public partial class QaPage : UserControl
     {
         InitializeComponent();
         CategoryList.ItemsSource = _categories;
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible && (_refreshPending || _cacheDirty))
+                Refresh();
+        };
     }
 
     public void Attach(MainViewModel viewModel)
     {
         _viewModel = viewModel;
-        Refresh();
+        _refreshPending = true;
+        if (IsVisible)
+            Refresh();
     }
 
     public void Detach()
     {
         CommitQaTranslation();
         _viewModel = null;
+        _refreshPending = true;
     }
 
     public void Refresh()
     {
         CommitQaTranslation();
+
+        if (!IsVisible)
+        {
+            _refreshPending = true;
+            return;
+        }
 
         var document = _viewModel?.ActiveDocument;
         var entries = document?.Entries;
@@ -73,6 +88,7 @@ public partial class QaPage : UserControl
         }
 
         _cacheDirty = false;
+        _refreshPending = false;
         RefreshIssues();
     }
 
