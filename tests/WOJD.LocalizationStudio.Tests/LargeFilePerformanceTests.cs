@@ -39,6 +39,39 @@ public sealed class LargeFilePerformanceTests
     }
 
     [Fact]
+    public void RelatedLookup_CommonOriginalDoesNotSortEntireBucket()
+    {
+        const int duplicateCount = 100_000;
+        var document = new LocalizationDocument();
+        LocalizationEntry? selected = null;
+
+        for (var i = 0; i < duplicateCount; i++)
+        {
+            var entry = new LocalizationEntry
+            {
+                Index = i + 1,
+                Namespace = "Perf",
+                Key = "Common-Key",
+                Original = "确定",
+                TranslationField = "translation"
+            };
+            entry.InitializeSavedTranslation("Подтвердить");
+            document.Entries.Add(entry);
+            selected ??= entry;
+        }
+
+        var index = EntryRelationIndex.For(document);
+        var stopwatch = Stopwatch.StartNew();
+        var related = index.GetRelated(selected!, 24);
+        stopwatch.Stop();
+
+        Assert.Equal(24, related.Count);
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(2),
+            $"Related lookup over a {duplicateCount:N0}-row duplicate bucket took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
     public void Validator_FastPathsPreserveStructuralAndSameSourceQa()
     {
         var structural = TranslationValidator.Validate(
