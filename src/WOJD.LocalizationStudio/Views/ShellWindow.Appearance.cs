@@ -6,6 +6,7 @@ public partial class ShellWindow
     {
         base.OnContentRendered(e);
         ApplyAppearanceSettings();
+        InstallLegacyParityCommands();
     }
 
     public void ApplyAppearanceSettings()
