@@ -1,7 +1,8 @@
 <UserControl x:Class="WOJD.LocalizationStudio.Views.QaPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             MinWidth="860" MinHeight="520">
+             MinWidth="860" MinHeight="520"
+             Loaded="QaPage_Loaded">
     <UserControl.Resources>
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="White"/>
