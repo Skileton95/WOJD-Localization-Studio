@@ -28,7 +28,9 @@ jobs:
       - name: Test
         shell: pwsh
         run: |
-          dotnet test 'tests/WOJD.LocalizationStudio.Tests/WOJD.LocalizationStudio.Tests.csproj' -c Release --results-directory "$env:GITHUB_WORKSPACE\TestResults" --logger 'trx;LogFileName=test-results.trx'
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\TestResults" | Out-Null
+          dotnet test 'tests/WOJD.LocalizationStudio.Tests/WOJD.LocalizationStudio.Tests.csproj' -c Release --results-directory "$env:GITHUB_WORKSPACE\TestResults" --logger 'trx;LogFileName=test-results.trx' 2>&1 | Tee-Object -FilePath "$env:GITHUB_WORKSPACE\TestResults\test-output.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test diagnostics
         if: always()
