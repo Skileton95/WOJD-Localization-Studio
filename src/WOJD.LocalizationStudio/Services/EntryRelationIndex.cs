@@ -5,9 +5,9 @@ using WOJD.LocalizationStudio.Models;
 namespace WOJD.LocalizationStudio.Services;
 
 /// <summary>
-/// Immutable lookup index for relationships that are based on stable localization
-/// metadata (Key / Namespace / Original). Building it once avoids rescanning very
-/// large documents whenever the selected row changes.
+/// Immutable lookup index for relationships based on stable localization metadata.
+/// The index avoids full-document scans when the selected row changes while keeping
+/// memory overhead bounded for very large documents.
 /// </summary>
 public sealed class EntryRelationIndex
 {
@@ -19,15 +19,16 @@ public sealed class EntryRelationIndex
         @"^(?<series>.+)_\d+$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private readonly Dictionary<string, List<LocalizationEntry>> _byOriginal =
+    // Most Originals occur once. Keep one direct reference for the common case and
+    // allocate a List only when an Original is actually duplicated.
+    private readonly Dictionary<string, LocalizationEntry> _firstByOriginal =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<LocalizationEntry>> _duplicateOriginals =
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<LocalizationEntry>> _byFamily =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<LocalizationEntry>> _bySeries =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<LocalizationEntry, int> _positions = new();
-    private readonly Dictionary<LocalizationEntry, string> _families = new();
-    private readonly HashSet<LocalizationEntry> _groupStarts = [];
 
     private EntryRelationIndex(LocalizationDocument document)
     {
@@ -41,21 +42,35 @@ public sealed class EntryRelationIndex
         => Cache.GetValue(document, static value => new EntryRelationIndex(value));
 
     public int GetPosition(LocalizationEntry entry)
-        => _positions.TryGetValue(entry, out var value) ? value : -1;
+        => Document.Entries.IndexOf(entry);
 
     public string GetFamily(LocalizationEntry entry)
-        => _families.TryGetValue(entry, out var value) ? value : GetKeyFamily(entry.Key);
+        => GetKeyFamily(entry.Key);
 
     public bool StartsVisualGroup(LocalizationEntry entry)
-        => _groupStarts.Contains(entry);
+    {
+        var family = GetFamily(entry);
+        if (string.IsNullOrEmpty(family))
+            return false;
+
+        var position = GetPosition(entry);
+        if (position <= 0)
+            return true;
+
+        var previousFamily = GetFamily(Document.Entries[position - 1]);
+        return !string.Equals(family, previousFamily, StringComparison.OrdinalIgnoreCase);
+    }
 
     public IReadOnlyList<LocalizationEntry> GetSameOriginal(LocalizationEntry entry)
     {
         if (string.IsNullOrEmpty(entry.Original))
             return [];
 
-        return _byOriginal.TryGetValue(entry.Original, out var values)
-            ? values
+        if (_duplicateOriginals.TryGetValue(entry.Original, out var duplicates))
+            return duplicates;
+
+        return _firstByOriginal.TryGetValue(entry.Original, out var first)
+            ? [first]
             : [];
     }
 
@@ -157,33 +172,40 @@ public sealed class EntryRelationIndex
 
     private void Build(IReadOnlyList<LocalizationEntry> entries)
     {
-        string? previousFamily = null;
-
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            _positions[entry] = i;
 
             if (!string.IsNullOrEmpty(entry.Original))
-                Add(_byOriginal, entry.Original, entry);
+                AddOriginal(entry.Original, entry);
 
             var family = GetKeyFamily(entry.Key);
-            _families[entry] = family;
+            if (string.IsNullOrEmpty(family))
+                continue;
 
-            if (!string.IsNullOrEmpty(family))
-            {
-                Add(_byFamily, family, entry);
+            Add(_byFamily, family, entry);
 
-                var series = GetSeriesFamily(family);
-                if (!string.IsNullOrEmpty(series))
-                    Add(_bySeries, series, entry);
-
-                if (!string.Equals(previousFamily, family, StringComparison.OrdinalIgnoreCase))
-                    _groupStarts.Add(entry);
-            }
-
-            previousFamily = family;
+            var series = GetSeriesFamily(family);
+            if (!string.IsNullOrEmpty(series))
+                Add(_bySeries, series, entry);
         }
+    }
+
+    private void AddOriginal(string original, LocalizationEntry entry)
+    {
+        if (!_firstByOriginal.TryGetValue(original, out var first))
+        {
+            _firstByOriginal[original] = entry;
+            return;
+        }
+
+        if (!_duplicateOriginals.TryGetValue(original, out var duplicates))
+        {
+            duplicates = [first];
+            _duplicateOriginals[original] = duplicates;
+        }
+
+        duplicates.Add(entry);
     }
 
     private static void Add(
