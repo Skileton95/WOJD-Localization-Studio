@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Windows.Controls;
 using WOJD.LocalizationStudio.Services;
 using WOJD.LocalizationStudio.Views;
 using Xunit;
@@ -28,6 +29,68 @@ public sealed class ShellSmokeTests
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "ShellWindow smoke test timed out.");
+
+        if (captured is not null)
+            ExceptionDispatchInfo.Capture(captured).Throw();
+    }
+
+    [Fact]
+    public void QaPage_UsesEditableTranslationBox()
+    {
+        Exception? captured = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var page = new QaPage();
+                var box = Assert.IsType<TextBox>(page.FindName("DetailTranslationBox"));
+                Assert.False(box.IsReadOnly);
+                Assert.True(box.AcceptsReturn);
+            }
+            catch (Exception ex)
+            {
+                captured = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "QaPage smoke test timed out.");
+
+        if (captured is not null)
+            ExceptionDispatchInfo.Capture(captured).Throw();
+    }
+
+    [Fact]
+    public void TranslationPage_HidesGroupingStripAndHasNoResizeSplitters()
+    {
+        Exception? captured = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var page = new TranslationPage();
+                page.ApplyWorkspaceLayoutSettings();
+
+                var grid = Assert.IsType<DataGrid>(page.FindName("EntriesGrid"));
+                Assert.Equal(DataGridHeadersVisibility.Column, grid.HeadersVisibility);
+                Assert.Equal(0d, grid.RowHeaderWidth);
+
+                var root = Assert.IsType<Grid>(page.Content);
+                var workspace = root.Children
+                    .OfType<Grid>()
+                    .First(x => Grid.GetRow(x) == 1 && x.ColumnDefinitions.Count >= 5);
+                Assert.Empty(workspace.Children.OfType<GridSplitter>());
+            }
+            catch (Exception ex)
+            {
+                captured = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "TranslationPage layout smoke test timed out.");
 
         if (captured is not null)
             ExceptionDispatchInfo.Capture(captured).Throw();

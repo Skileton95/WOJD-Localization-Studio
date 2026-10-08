@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using WOJD.LocalizationStudio.Models;
@@ -12,8 +11,6 @@ public partial class TranslationPage
 {
     private Grid? _workspaceGrid;
     private FrameworkElement? _contextElement;
-    private GridSplitter? _listSplitter;
-    private GridSplitter? _contextSplitter;
     private StackPanel? _relatedEntriesPanel;
     private TextBlock? _relatedEntriesHeading;
     private bool _layoutHooked;
@@ -35,16 +32,14 @@ public partial class TranslationPage
             return;
 
         columns[0].Width = new GridLength(settings.TranslationListWidth);
-        columns[1].Width = new GridLength(8);
+        columns[1].Width = new GridLength(10);
 
         if (settings.ShowContextPane)
         {
-            columns[3].Width = new GridLength(8);
+            columns[3].Width = new GridLength(10);
             columns[4].Width = new GridLength(settings.ContextPaneWidth);
             if (_contextElement is not null)
                 _contextElement.Visibility = Visibility.Visible;
-            if (_contextSplitter is not null)
-                _contextSplitter.Visibility = Visibility.Visible;
         }
         else
         {
@@ -52,8 +47,6 @@ public partial class TranslationPage
             columns[4].Width = new GridLength(0);
             if (_contextElement is not null)
                 _contextElement.Visibility = Visibility.Collapsed;
-            if (_contextSplitter is not null)
-                _contextSplitter.Visibility = Visibility.Collapsed;
         }
 
         EntriesGrid.RowHeight = settings.CompactEntryList ? 40 : double.NaN;
@@ -92,31 +85,14 @@ public partial class TranslationPage
 
         SimplifyContextPane();
 
-        if (_listSplitter is null)
-        {
-            _listSplitter = CreateSplitter(1, "Изменить ширину списка строк");
-            _listSplitter.DragCompleted += Splitter_DragCompleted;
-            _workspaceGrid.Children.Add(_listSplitter);
-        }
-
-        if (_contextSplitter is null)
-        {
-            _contextSplitter = CreateSplitter(3, "Изменить ширину панели контекста");
-            _contextSplitter.DragCompleted += Splitter_DragCompleted;
-            _workspaceGrid.Children.Add(_contextSplitter);
-        }
-
         if (!_layoutHooked)
         {
-            // The XAML selection handler called ScrollIntoView for every mouse click.
-            // That is useful for programmatic navigation but needlessly expensive for
-            // ordinary selection in very large virtualized lists.
+            // Ordinary selection must stay cheap on 600k+ virtualized rows.
             EntriesGrid.SelectionChanged -= EntriesGrid_SelectionChanged;
             EntriesGrid.SelectionChanged += LayoutSelectionChanged;
-            EntriesGrid.LoadingRow += EntriesGrid_LoadingRow;
             EntriesGrid.EnableColumnVirtualization = true;
-            EntriesGrid.HeadersVisibility = DataGridHeadersVisibility.All;
-            EntriesGrid.RowHeaderWidth = 72;
+            EntriesGrid.HeadersVisibility = DataGridHeadersVisibility.Column;
+            EntriesGrid.RowHeaderWidth = 0;
             ScrollViewer.SetCanContentScroll(EntriesGrid, true);
             VirtualizingPanel.SetIsVirtualizing(EntriesGrid, true);
             VirtualizingPanel.SetVirtualizationMode(EntriesGrid, VirtualizationMode.Recycling);
@@ -231,37 +207,6 @@ public partial class TranslationPage
         }
     }
 
-    private static GridSplitter CreateSplitter(int column, string toolTip)
-    {
-        var splitter = new GridSplitter
-        {
-            Width = 8,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            ResizeDirection = GridResizeDirection.Columns,
-            ResizeBehavior = GridResizeBehavior.PreviousAndNext,
-            Background = Brushes.Transparent,
-            ShowsPreview = true,
-            ToolTip = toolTip
-        };
-        Grid.SetColumn(splitter, column);
-        Grid.SetRow(splitter, 0);
-        Panel.SetZIndex(splitter, 20);
-        return splitter;
-    }
-
-    private void Splitter_DragCompleted(object? sender, DragCompletedEventArgs e)
-    {
-        if (_workspaceGrid is null || _workspaceGrid.ColumnDefinitions.Count < 5)
-            return;
-
-        var settings = EditorSettingsService.Current;
-        settings.TranslationListWidth = _workspaceGrid.ColumnDefinitions[0].ActualWidth;
-        if (settings.ShowContextPane)
-            settings.ContextPaneWidth = _workspaceGrid.ColumnDefinitions[4].ActualWidth;
-        EditorSettingsService.Save(settings);
-    }
-
     private void LayoutSelectionChanged(object sender, SelectionChangedEventArgs e)
         => ScheduleContextRefresh();
 
@@ -300,43 +245,10 @@ public partial class TranslationPage
         return _relationIndex;
     }
 
-    private void EntriesGrid_LoadingRow(object? sender, DataGridRowEventArgs e)
-    {
-        e.Row.Header = null;
-        e.Row.BorderBrush = new SolidColorBrush(Color.FromRgb(237, 241, 246));
-        e.Row.BorderThickness = new Thickness(0, 0, 0, 1);
-
-        if (e.Row.Item is not LocalizationEntry entry || GetRelationIndex() is not { } index)
-            return;
-
-        var family = index.GetFamily(entry);
-        if (string.IsNullOrWhiteSpace(family))
-            return;
-
-        var visualIndex = e.Row.GetIndex();
-        var previous = visualIndex > 0
-            ? EntriesGrid.Items[visualIndex - 1] as LocalizationEntry
-            : null;
-        var previousFamily = previous is null ? string.Empty : index.GetFamily(previous);
-        var startsGroup = !string.Equals(family, previousFamily, StringComparison.OrdinalIgnoreCase);
-
-        if (startsGroup)
-        {
-            e.Row.Header = family;
-            e.Row.BorderBrush = new SolidColorBrush(Color.FromRgb(117, 166, 247));
-            e.Row.BorderThickness = new Thickness(0, 2, 0, 1);
-            e.Row.ToolTip = $"Группа связанных ключей: {family}";
-        }
-        else
-        {
-            e.Row.ToolTip = $"Группа {family}";
-        }
-    }
-
     private void UpdateContextSummary()
     {
         if (_viewModel?.SelectedEntry is not LocalizationEntry entry ||
-            _viewModel.ActiveDocument is not LocalizationDocument document ||
+            _viewModel.ActiveDocument is not LocalizationDocument ||
             GetRelationIndex() is not { } index)
         {
             ContextQaText.Text = "Выберите строку, чтобы увидеть контекст.";

@@ -53,36 +53,13 @@ internal static class EditorWorkspaceHost
         if (legacyRow < 0 || legacyRow >= contentGrid.RowDefinitions.Count)
             return;
 
-        contentGrid.RowDefinitions[legacyRow].Height = new GridLength(6);
-        var editorRow = new RowDefinition();
-        contentGrid.RowDefinitions.Add(editorRow);
-        var editorRowIndex = contentGrid.RowDefinitions.Count - 1;
-
-        var splitter = new GridSplitter
-        {
-            Height = 6,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            ResizeDirection = GridResizeDirection.Rows,
-            ResizeBehavior = GridResizeBehavior.PreviousAndNext,
-            Background = Brushes.Transparent,
-            Cursor = Cursors.SizeNS,
-            ToolTip = "Изменить высоту редактора"
-        };
-        Grid.SetRow(splitter, legacyRow);
-        contentGrid.Children.Add(splitter);
-
-        var workspace = new EditorWorkspaceControl
-        {
-            Margin = new Thickness(0, 6, 0, 0)
-        };
-        Grid.SetRow(workspace, editorRowIndex);
+        var editorRow = contentGrid.RowDefinitions[legacyRow];
+        var workspace = new EditorWorkspaceControl();
+        Grid.SetRow(workspace, legacyRow);
         contentGrid.Children.Add(workspace);
 
         var state = new HostState(
-            contentGrid,
             editorRow,
-            splitter,
             workspace,
             entriesGrid,
             viewModel);
@@ -92,11 +69,6 @@ internal static class EditorWorkspaceHost
         workspace.CollapseRequested += (_, _) => ApplyLayout(state);
         workspace.SettingsChanged += (_, _) => ApplyLayout(state);
         workspace.FocusModeRequested += (_, _) => ToggleFocusMode(window, state);
-        splitter.DragCompleted += (_, _) =>
-        {
-            if (!workspace.IsCollapsed)
-                workspace.SetExpandedHeight(editorRow.ActualHeight);
-        };
 
         window.PreviewKeyDown += (_, args) =>
         {
@@ -120,11 +92,6 @@ internal static class EditorWorkspaceHost
     {
         var settings = EditorSettingsService.Current;
         state.EditorRow.Height = new GridLength(state.Workspace.DesiredEditorHeight);
-        state.Splitter.Visibility = state.Workspace.IsCollapsed
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        state.ContentGrid.RowDefinitions[Grid.GetRow(state.Splitter)].Height =
-            state.Workspace.IsCollapsed ? new GridLength(0) : new GridLength(6);
 
         SetColumnVisibility(state.EntriesGrid, "Namespace", settings.ShowNamespaceColumn);
         SetColumnVisibility(state.EntriesGrid, "Оригинал", settings.ShowOriginalColumn);
@@ -316,9 +283,7 @@ internal static class EditorWorkspaceHost
     }
 
     private sealed record HostState(
-        Grid ContentGrid,
         RowDefinition EditorRow,
-        GridSplitter Splitter,
         EditorWorkspaceControl Workspace,
         DataGrid EntriesGrid,
         MainViewModel ViewModel)
