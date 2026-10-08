@@ -163,10 +163,45 @@ public static class QaProfileService
         ];
 
     private static bool Matches(string pattern, string value)
-        => FileSystemName.MatchesSimpleExpression(
-            string.IsNullOrWhiteSpace(pattern) ? "*" : pattern,
-            value ?? string.Empty,
+    {
+        pattern = string.IsNullOrWhiteSpace(pattern) ? "*" : pattern;
+        value ??= string.Empty;
+
+        if (pattern == "*")
+            return true;
+
+        var firstWildcard = pattern.IndexOfAny(['*', '?']);
+        if (firstWildcard < 0)
+        {
+            return string.Equals(
+                pattern,
+                value,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (pattern[0] == '*' &&
+            pattern.Length > 1 &&
+            pattern.AsSpan(1).IndexOfAny('*', '?') < 0)
+        {
+            return value.EndsWith(
+                pattern[1..],
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (pattern[^1] == '*' &&
+            pattern.Length > 1 &&
+            pattern.AsSpan(0, pattern.Length - 1).IndexOfAny('*', '?') < 0)
+        {
+            return value.StartsWith(
+                pattern[..^1],
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return FileSystemName.MatchesSimpleExpression(
+            pattern,
+            value,
             ignoreCase: true);
+    }
 
     private static bool ContainsNewLine(string value)
         => value.Contains('\n') ||
