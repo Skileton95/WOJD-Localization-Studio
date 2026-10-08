@@ -123,12 +123,16 @@ public static class GlossaryService
             File.Move(temp, SettingsPath, true);
             _entries = normalized;
         }
+
+        TranslationValidator.NotifyConfigurationChanged();
     }
 
     public static void Reload()
     {
         lock (Sync)
             _entries = null;
+
+        TranslationValidator.NotifyConfigurationChanged();
     }
 
     private static IReadOnlyList<GlossaryEntry> LoadCore()
