@@ -106,12 +106,39 @@
                     <TextBlock x:Name="DetailReasonText" Foreground="#5F6F89" TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Row="3" Margin="0,16,0,0">
-                    <TextBlock Text="Перевод" FontWeight="SemiBold"/>
-                    <Border Background="#F8FAFD" BorderBrush="#E3E8F0" BorderThickness="1" CornerRadius="8" Padding="11" Margin="0,7,0,0">
-                        <TextBlock x:Name="DetailTranslationText" TextWrapping="Wrap"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Перевод" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Ctrl+Enter — применить" Foreground="#8A96A8" FontSize="11" VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border Background="White" BorderBrush="#AFC3E8" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,7,0,0">
+                        <TextBox x:Name="DetailTranslationBox"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 MinHeight="130"
+                                 IsEnabled="False"
+                                 LostKeyboardFocus="DetailTranslationBox_LostKeyboardFocus"
+                                 PreviewKeyDown="DetailTranslationBox_PreviewKeyDown"/>
                     </Border>
                 </StackPanel>
-                <Button Grid.Row="4" x:Name="OpenInEditorButton" Style="{StaticResource ActionButton}" Content="Открыть в редакторе" HorizontalAlignment="Left" IsEnabled="False" Click="OpenInEditor_Click"/>
+                <StackPanel Grid.Row="4" Orientation="Horizontal">
+                    <Button x:Name="ApplyTranslationButton"
+                            Style="{StaticResource ActionButton}"
+                            Content="Применить"
+                            HorizontalAlignment="Left"
+                            IsEnabled="False"
+                            Click="ApplyTranslation_Click"/>
+                    <Button x:Name="OpenInEditorButton"
+                            Margin="8,0,0,0"
+                            Padding="14,8"
+                            Content="Открыть в редакторе"
+                            HorizontalAlignment="Left"
+                            IsEnabled="False"
+                            Click="OpenInEditor_Click"/>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>
