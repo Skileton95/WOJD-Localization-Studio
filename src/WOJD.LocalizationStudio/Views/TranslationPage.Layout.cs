@@ -1,10 +1,8 @@
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using WOJD.LocalizationStudio.Models;
 using WOJD.LocalizationStudio.Services;
-using WOJD.LocalizationStudio.ViewModels;
 
 namespace WOJD.LocalizationStudio.Views;
 
@@ -15,6 +13,7 @@ public partial class TranslationPage
     private GridSplitter? _listSplitter;
     private GridSplitter? _contextSplitter;
     private bool _layoutHooked;
+    private bool _quickLayoutMenuInstalled;
 
     public void ApplyWorkspaceLayoutSettings()
     {
@@ -55,6 +54,7 @@ public partial class TranslationPage
         if (QaDetailsText.Parent is FrameworkElement qaContainer)
             qaContainer.Visibility = settings.ShowQaDetails ? Visibility.Visible : Visibility.Collapsed;
 
+        UpdateQuickLayoutMenuChecks();
         UpdateContextSummary();
     }
 
@@ -82,6 +82,8 @@ public partial class TranslationPage
             .OfType<FrameworkElement>()
             .FirstOrDefault(x => Grid.GetColumn(x) == 4);
 
+        SimplifyContextPane();
+
         if (_listSplitter is null)
         {
             _listSplitter = CreateSplitter(1, "Изменить ширину списка строк");
@@ -100,6 +102,78 @@ public partial class TranslationPage
         {
             EntriesGrid.SelectionChanged += LayoutSelectionChanged;
             _layoutHooked = true;
+        }
+
+        InstallQuickLayoutMenu();
+    }
+
+    private void SimplifyContextPane()
+    {
+        if (_contextElement is not Border contextBorder || contextBorder.Child is not Grid contextGrid)
+            return;
+
+        if (contextGrid.RowDefinitions.Count >= 4)
+        {
+            contextGrid.RowDefinitions[1].Height = new GridLength(0);
+            var preview = contextGrid.Children
+                .OfType<FrameworkElement>()
+                .FirstOrDefault(x => Grid.GetRow(x) == 1);
+            if (preview is not null)
+                preview.Visibility = Visibility.Collapsed;
+        }
+
+        var heading = contextGrid.Children
+            .OfType<TextBlock>()
+            .FirstOrDefault(x => Grid.GetRow(x) == 2);
+        if (heading is not null)
+            heading.Text = "Контекст строки";
+    }
+
+    private void InstallQuickLayoutMenu()
+    {
+        if (_quickLayoutMenuInstalled || MoreButton.ContextMenu is null)
+            return;
+
+        MoreButton.ContextMenu.Items.Add(new Separator());
+        var contextItem = new MenuItem
+        {
+            Header = "Показывать правую панель",
+            IsCheckable = true,
+            Tag = "ContextToggle"
+        };
+        contextItem.Click += (_, _) => ToggleContextPane();
+        MoreButton.ContextMenu.Items.Add(contextItem);
+
+        var compactItem = new MenuItem
+        {
+            Header = "Компактный список строк",
+            IsCheckable = true,
+            Tag = "CompactToggle"
+        };
+        compactItem.Click += (_, _) =>
+        {
+            var settings = EditorSettingsService.Current;
+            settings.CompactEntryList = !settings.CompactEntryList;
+            EditorSettingsService.Save(settings);
+            ApplyWorkspaceLayoutSettings();
+        };
+        MoreButton.ContextMenu.Items.Add(compactItem);
+        _quickLayoutMenuInstalled = true;
+        UpdateQuickLayoutMenuChecks();
+    }
+
+    private void UpdateQuickLayoutMenuChecks()
+    {
+        if (MoreButton.ContextMenu is null)
+            return;
+
+        var settings = EditorSettingsService.Current;
+        foreach (var item in MoreButton.ContextMenu.Items.OfType<MenuItem>())
+        {
+            if (Equals(item.Tag, "ContextToggle"))
+                item.IsChecked = settings.ShowContextPane;
+            else if (Equals(item.Tag, "CompactToggle"))
+                item.IsChecked = settings.CompactEntryList;
         }
     }
 
@@ -142,6 +216,7 @@ public partial class TranslationPage
         if (_viewModel?.SelectedEntry is not LocalizationEntry entry ||
             _viewModel.ActiveDocument is not LocalizationDocument document)
         {
+            ContextQaText.Text = "Выберите строку, чтобы увидеть контекст.";
             return;
         }
 
@@ -157,6 +232,12 @@ public partial class TranslationPage
             .Distinct(StringComparer.Ordinal)
             .Take(6)
             .ToList();
+        var relatedKeys = sameSource
+            .Where(x => !ReferenceEquals(x, entry))
+            .Select(x => string.IsNullOrWhiteSpace(x.Namespace) ? x.Key : $"{x.Namespace} / {x.Key}")
+            .Distinct(StringComparer.Ordinal)
+            .Take(5)
+            .ToList();
 
         var parts = new List<string>();
         if (string.IsNullOrWhiteSpace(source))
@@ -167,14 +248,19 @@ public partial class TranslationPage
         {
             parts.Add($"Строк с тем же Original: {sameSource.Count:N0}.");
             if (variants.Count > 1)
-                parts.Add($"Вариантов перевода: {variants.Count} — требуется проверка согласованности.");
+            {
+                parts.Add($"Вариантов перевода: {variants.Count}. Требуется проверка согласованности.");
+                parts.Add("Переводы: " + string.Join(" | ", variants));
+            }
+            if (relatedKeys.Count > 0)
+                parts.Add("Связанные ключи:\n• " + string.Join("\n• ", relatedKeys));
         }
 
         if (entry.HasValidationIssues && !string.IsNullOrWhiteSpace(entry.ValidationSummary))
-            parts.Add(entry.ValidationSummary);
+            parts.Add("QA: " + entry.ValidationSummary);
         else if (!entry.HasValidationIssues)
             parts.Add("QA: ошибок не найдено.");
 
-        ContextQaText.Text = string.Join("\n", parts);
+        ContextQaText.Text = string.Join("\n\n", parts);
     }
 }
