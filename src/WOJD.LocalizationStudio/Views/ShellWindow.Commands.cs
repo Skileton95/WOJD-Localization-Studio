@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using WOJD.LocalizationStudio.Infrastructure;
 using WOJD.LocalizationStudio.Models;
 
 namespace WOJD.LocalizationStudio.Views;
@@ -115,12 +114,12 @@ public partial class ShellWindow
         var document = _viewModel.ActiveDocument;
         if (document is null)
         {
-            AppDialog.Show(
+            MessageBox.Show(
+                this,
                 "Сначала откройте файл.",
                 "Переход",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information,
-                this);
+                MessageBoxImage.Information);
             return;
         }
 
