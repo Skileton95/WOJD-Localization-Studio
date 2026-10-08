@@ -13,6 +13,8 @@ public sealed class LocalizationEntry : ObservableObject
     private int _validationIssueCount;
     private string _validationSummary = string.Empty;
     private IReadOnlySet<TranslationIssueKind> _validationKinds = NoValidationKinds;
+    private string _validatedTranslation = string.Empty;
+    private bool _validationInitialized;
 
     public int Index { get; init; }
     public string Namespace { get; init; } = string.Empty;
@@ -39,7 +41,7 @@ public sealed class LocalizationEntry : ObservableObject
 
             // Validate exactly once, before Translation is announced. MainViewModel
             // can then consume the current QA state without re-running every regex,
-            // glossary rule and QA profile a second time for the same keystroke.
+            // glossary rule and QA profile a second time for the same edit.
             RefreshValidation();
 
             OnPropertyChanged(nameof(Translation));
@@ -121,11 +123,20 @@ public sealed class LocalizationEntry : ObservableObject
 
     public void RefreshValidation()
     {
+        if (_validationInitialized &&
+            string.Equals(_validatedTranslation, Translation, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         var result = TranslationValidator.Validate(
             Namespace,
             Key,
             Original,
             Translation);
+
+        _validatedTranslation = Translation;
+        _validationInitialized = true;
 
         var issueCountChanged = SetProperty(
             ref _validationIssueCount,
@@ -155,10 +166,16 @@ public sealed class LocalizationEntry : ObservableObject
             OnPropertyChanged(nameof(HasValidationIssues));
     }
 
+    public void InvalidateValidation()
+    {
+        _validationInitialized = false;
+    }
+
     public void InitializeSavedTranslation(string value)
     {
         _translation = value;
         _savedTranslation = value;
+        _validationInitialized = false;
 
         OnPropertyChanged(nameof(Translation));
         OnPropertyChanged(nameof(Status));
