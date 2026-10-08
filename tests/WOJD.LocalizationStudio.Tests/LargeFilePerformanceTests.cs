@@ -39,6 +39,61 @@ public sealed class LargeFilePerformanceTests
     }
 
     [Fact]
+    public void EntryFilter_BackgroundScanAcross200kRows_StaysFast()
+    {
+        const int rowCount = 200_000;
+        var entries = new LocalizationEntry[rowCount];
+
+        for (var i = 0; i < rowCount; i++)
+        {
+            var entry = new LocalizationEntry
+            {
+                Index = i + 1,
+                Namespace = i % 2 == 0 ? "UI" : "Skill",
+                Key = i == rowCount - 1 ? "Needle-Key" : "Perf.Row",
+                Original = "测试文本",
+                TranslationField = "translation"
+            };
+            entry.InitializeSavedTranslation(i % 3 == 0 ? "Перевод" : string.Empty);
+            entries[i] = entry;
+        }
+
+        var criteria = new EntryFilterCriteria("Все", null, "Needle-Key");
+        var stopwatch = Stopwatch.StartNew();
+        var filtered = EntryFilterService.Filter(entries, criteria);
+        stopwatch.Stop();
+
+        var match = Assert.Single(filtered);
+        Assert.Equal(rowCount, match.Index);
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Filtering {rowCount:N0} rows took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
+    public void EntryFilter_CanNarrowExtendedSearchAndHonorsCancellation()
+    {
+        var previous = new EntryFilterCriteria("Все", "UI", "skill");
+        var next = new EntryFilterCriteria("Все", "UI", "skillname");
+        Assert.True(EntryFilterService.CanNarrow(previous, next));
+        Assert.False(EntryFilterService.CanNarrow(previous, next with { Namespace = "Other" }));
+
+        var entry = new LocalizationEntry
+        {
+            Index = 1,
+            Namespace = "UI",
+            Key = "SkillName",
+            Original = "技能"
+        };
+        entry.InitializeSavedTranslation("Навык");
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Throws<OperationCanceledException>(
+            () => EntryFilterService.Filter([entry], next, cts.Token));
+    }
+
+    [Fact]
     public void RelatedLookup_CommonOriginalDoesNotSortEntireBucket()
     {
         const int duplicateCount = 100_000;
