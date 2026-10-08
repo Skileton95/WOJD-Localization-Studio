@@ -26,7 +26,7 @@ internal sealed class DocumentSession
     public int ModifiedCount { get; set; }
     public int ValidationErrorCount { get; set; }
 
-    public bool HasUnsavedChanges => ModifiedEntries.Count > 0;
+    public bool HasUnsavedChanges => ModifiedCount > 0;
 }
 
 internal sealed record TranslationEdit(
