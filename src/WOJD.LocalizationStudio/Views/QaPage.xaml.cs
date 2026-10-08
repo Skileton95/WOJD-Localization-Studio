@@ -13,6 +13,7 @@ public partial class QaPage : UserControl
     private MainViewModel? _viewModel;
     private readonly ObservableCollection<QaCategory> _categories = [];
     private readonly ObservableCollection<LocalizationEntry> _issues = [];
+    private readonly HashSet<string> _inconsistentOriginals = new(StringComparer.Ordinal);
     private LocalizationEntry? _selectedIssue;
 
     public event EventHandler? OpenInEditorRequested;
@@ -49,16 +50,40 @@ public partial class QaPage : UserControl
         var entries = document?.Entries ?? [];
         var currentId = (CategoryList.SelectedItem as QaCategory)?.Id ?? "all";
 
+        BuildConsistencyIndex(entries);
+
         _categories.Clear();
         _categories.Add(new QaCategory("all", "Все проблемы", entries.Count(IsAnyProblem)));
-        _categories.Add(new QaCategory("untranslated", "Отсутствующие переводы", entries.Count(x => string.IsNullOrWhiteSpace(x.Translation))));
-        _categories.Add(new QaCategory("structure", "Теги и плейсхолдеры", entries.Count(x => x.HasTagIssues || x.HasPlaceholderIssues)));
+        _categories.Add(new QaCategory("untranslated", "Без перевода", entries.Count(x => string.IsNullOrWhiteSpace(x.Translation))));
+        _categories.Add(new QaCategory("sourceMissing", "Нет Original", entries.Count(x => x.HasSourceMissingIssue || string.IsNullOrWhiteSpace(x.Original))));
+        _categories.Add(new QaCategory("tags", "Теги", entries.Count(x => x.HasTagIssues)));
+        _categories.Add(new QaCategory("placeholders", "Плейсхолдеры", entries.Count(x => x.HasPlaceholderIssues)));
         _categories.Add(new QaCategory("newlines", "Переносы строк", entries.Count(x => x.HasNewLineIssues)));
         _categories.Add(new QaCategory("glossary", "Глоссарий", entries.Count(x => x.HasGlossaryIssue)));
-        _categories.Add(new QaCategory("potential", "Потенциальные ошибки", entries.Count(IsPotentialProblem)));
+        _categories.Add(new QaCategory("consistency", "Разные переводы одного Original", entries.Count(IsConsistencyProblem)));
+        _categories.Add(new QaCategory("sameSource", "Перевод совпадает с Original", entries.Count(x => x.HasSameAsSourceIssue)));
+        _categories.Add(new QaCategory("suspicious", "Длина и QA-профили", entries.Count(x => x.HasSuspiciousLengthIssue || x.HasProfileRuleIssue)));
 
         CategoryList.SelectedItem = _categories.FirstOrDefault(x => x.Id == currentId) ?? _categories.FirstOrDefault();
         RefreshIssues();
+    }
+
+    private void BuildConsistencyIndex(IEnumerable<LocalizationEntry> entries)
+    {
+        _inconsistentOriginals.Clear();
+        foreach (var group in entries
+                     .Where(x => !string.IsNullOrWhiteSpace(x.Original))
+                     .GroupBy(x => x.Original, StringComparer.Ordinal))
+        {
+            var variants = group
+                .Select(x => x.Translation)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .Take(2)
+                .Count();
+            if (variants > 1)
+                _inconsistentOriginals.Add(group.Key);
+        }
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -101,25 +126,29 @@ public partial class QaPage : UserControl
         ShowDetails(IssueGrid.SelectedItem as LocalizationEntry);
     }
 
-    private static bool Matches(string id, LocalizationEntry entry)
+    private bool Matches(string id, LocalizationEntry entry)
         => id switch
         {
             "untranslated" => string.IsNullOrWhiteSpace(entry.Translation),
-            "structure" => entry.HasTagIssues || entry.HasPlaceholderIssues,
+            "sourceMissing" => entry.HasSourceMissingIssue || string.IsNullOrWhiteSpace(entry.Original),
+            "tags" => entry.HasTagIssues,
+            "placeholders" => entry.HasPlaceholderIssues,
             "newlines" => entry.HasNewLineIssues,
             "glossary" => entry.HasGlossaryIssue,
-            "potential" => IsPotentialProblem(entry),
+            "consistency" => IsConsistencyProblem(entry),
+            "sameSource" => entry.HasSameAsSourceIssue,
+            "suspicious" => entry.HasSuspiciousLengthIssue || entry.HasProfileRuleIssue,
             _ => IsAnyProblem(entry)
         };
 
-    private static bool IsAnyProblem(LocalizationEntry entry)
-        => string.IsNullOrWhiteSpace(entry.Translation) || entry.HasValidationIssues;
+    private bool IsAnyProblem(LocalizationEntry entry)
+        => string.IsNullOrWhiteSpace(entry.Translation)
+           || entry.HasValidationIssues
+           || IsConsistencyProblem(entry);
 
-    private static bool IsPotentialProblem(LocalizationEntry entry)
-        => entry.HasSameAsSourceIssue
-           || entry.HasSuspiciousLengthIssue
-           || entry.HasProfileRuleIssue
-           || entry.HasSourceMissingIssue;
+    private bool IsConsistencyProblem(LocalizationEntry entry)
+        => !string.IsNullOrWhiteSpace(entry.Original)
+           && _inconsistentOriginals.Contains(entry.Original);
 
     private void IssueGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => ShowDetails(IssueGrid.SelectedItem as LocalizationEntry);
@@ -145,19 +174,52 @@ public partial class QaPage : UserControl
             return;
         }
 
-        DetailStateText.Text = string.IsNullOrWhiteSpace(entry.Translation)
-            ? "Отсутствует перевод"
-            : entry.QaStateText;
+        var categoryId = (CategoryList.SelectedItem as QaCategory)?.Id ?? "all";
+        DetailStateText.Text = GetStateText(entry, categoryId);
         DetailOriginalText.Text = entry.OriginalDisplay;
         DetailKeyText.Text = $"{entry.Namespace} / {entry.Key}";
-        DetailReasonText.Text = string.IsNullOrWhiteSpace(entry.Translation)
-            ? "Строка не переведена."
-            : string.IsNullOrWhiteSpace(entry.ValidationSummary)
-                ? "Проблема требует проверки."
-                : entry.ValidationSummary;
+        DetailReasonText.Text = GetReason(entry, categoryId);
         DetailTranslationText.Text = string.IsNullOrEmpty(entry.Translation)
             ? "— пусто —"
             : entry.Translation;
+    }
+
+    private string GetStateText(LocalizationEntry entry, string categoryId)
+        => categoryId switch
+        {
+            "untranslated" => "Отсутствует перевод",
+            "sourceMissing" => "Original отсутствует",
+            "tags" => "Ошибка тегов",
+            "placeholders" => "Ошибка плейсхолдеров",
+            "newlines" => "Ошибка переносов",
+            "glossary" => "Терминология",
+            "consistency" => "Несогласованный перевод",
+            "sameSource" => "Перевод совпадает с Original",
+            "suspicious" => "Требуется проверка",
+            _ => string.IsNullOrWhiteSpace(entry.Translation) ? "Отсутствует перевод" : entry.QaStateText
+        };
+
+    private string GetReason(LocalizationEntry entry, string categoryId)
+    {
+        if (categoryId == "untranslated")
+            return "Строка не переведена.";
+        if (categoryId == "sourceMissing")
+            return "Исходный текст отсутствует. Структуру тегов и плейсхолдеров сравнить невозможно.";
+        if (categoryId == "consistency")
+        {
+            var variants = _viewModel?.ActiveDocument?.Entries
+                .Where(x => string.Equals(x.Original, entry.Original, StringComparison.Ordinal))
+                .Select(x => x.Translation)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .Take(6)
+                .ToList() ?? [];
+            return "Один и тот же Original имеет несколько вариантов перевода: " + string.Join(" | ", variants);
+        }
+
+        return string.IsNullOrWhiteSpace(entry.ValidationSummary)
+            ? "Проблема требует проверки."
+            : entry.ValidationSummary;
     }
 
     private void OpenInEditor_Click(object sender, RoutedEventArgs e)
